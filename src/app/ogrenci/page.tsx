@@ -6,12 +6,12 @@ import { Card } from "@/components/ui";
 import { sessionsForStudent } from "@/data/accessors";
 import { getClassGroupById } from "@/data/groups";
 import { addDays, formatLongDate, startOfWeekMonday, toISODate, todayISO } from "@/lib/dates";
-import { remainingLabel } from "@/lib/labels";
+import { remainingLabel, postponeRightLabel } from "@/lib/labels";
 import Link from "next/link";
 
 export default function StudentHomePage() {
   const student = useCurrentStudent();
-  const { sessions, remainingFor } = useStudio();
+  const { sessions, remainingFor, remainingPostponeFor } = useStudio();
   if (!student) return null;
 
   const remaining = remainingFor(student.id);
@@ -88,6 +88,12 @@ export default function StudentHomePage() {
           <p className="mt-1 text-sm text-muted">Bekleyen dersin yok.</p>
         )}
         <p className="mt-1 text-sm text-muted">{remainingLabel(remaining)}</p>
+        <p className="text-sm text-muted">
+          {postponeRightLabel(
+            remainingPostponeFor(student.id),
+            student.monthlyPostponeLimit,
+          )}
+        </p>
         <Link
           href="/ogrenci/program"
           className="mt-2 inline-flex text-sm font-medium text-accent"

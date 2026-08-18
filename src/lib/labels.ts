@@ -59,3 +59,15 @@ export function capacityLabel(count: number) {
 export function remainingLabel(count: number) {
   return count === 1 ? "1 ders kaldı" : `${count} ders kaldı`;
 }
+
+export function postponeRightLabel(remaining: number, limit: number) {
+  if (limit <= 0) return "Erteleme hakkı yok.";
+  if (remaining <= 0) return "Bu ay erteleme hakkını kullandın.";
+  return remaining === 1
+    ? "Bu ay 1 erteleme hakkın var."
+    : `Bu ay ${remaining} erteleme hakkın var.`;
+}
+
+export function postponeRightAdminLabel(used: number, limit: number) {
+  return `Bu ay ${used}/${limit} erteleme hakkı`;
+}

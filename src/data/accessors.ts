@@ -1,7 +1,12 @@
 import { getClassGroupById } from "@/data/groups";
-import { todayISO, weekdayFromISO } from "@/lib/dates";
+import { monthKey, todayISO, weekdayFromISO } from "@/lib/dates";
 import { DAY_LABELS } from "@/lib/labels";
-import type { Session, SessionStatus, Student } from "@/types/studio";
+import type {
+  PostponeRequest,
+  Session,
+  SessionStatus,
+  Student,
+} from "@/types/studio";
 
 export type AttendanceBatch = {
   date: string;
@@ -83,6 +88,27 @@ export function pendingAttendanceBatches(sessions: Session[]): AttendanceBatch[]
       };
     })
     .sort((a, b) => a.date.localeCompare(b.date) || a.time.localeCompare(b.time));
+}
+
+export function postponeUsedThisMonth(
+  studentId: string,
+  requests: PostponeRequest[],
+  month = monthKey(todayISO()),
+) {
+  return requests.filter(
+    (request) =>
+      request.studentId === studentId &&
+      request.status !== "rejected" &&
+      monthKey(request.createdAt) === month,
+  ).length;
+}
+
+export function remainingPostponeRights(
+  student: Student,
+  requests: PostponeRequest[],
+) {
+  const limit = Math.max(0, student.monthlyPostponeLimit ?? 1);
+  return Math.max(0, limit - postponeUsedThisMonth(student.id, requests));
 }
 
 export function sessionCounts(studentId: string, sessions: Session[]) {

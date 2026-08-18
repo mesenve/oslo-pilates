@@ -16,11 +16,15 @@ import { useState } from "react";
 export function SessionRow({
   session,
   time,
+  canPostpone,
+  postponeHint,
   onAttend,
   onPostpone,
 }: {
   session: Session;
   time: string;
+  canPostpone: boolean;
+  postponeHint: string;
   onAttend: () => void;
   onPostpone: (reason: string) => void;
 }) {
@@ -54,19 +58,26 @@ export function SessionRow({
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <SessionBadge status={session.status} />
-          {session.status === "attend_pending" ? (
+          {session.status === "attend_pending" ||
+          session.status === "postpone_pending" ? (
             <p className="text-xs text-muted">Hocanın onayı bekleniyor.</p>
           ) : null}
           {!locked ? (
             <>
               <Button onClick={onAttend}>Geldim</Button>
-              <Button variant="secondary" onClick={() => setOpen(true)}>
-                Ertele
-              </Button>
+              {canPostpone ? (
+                <Button variant="secondary" onClick={() => setOpen(true)}>
+                  Ertele
+                </Button>
+              ) : null}
             </>
           ) : null}
         </div>
       </div>
+
+      {!locked && !canPostpone ? (
+        <p className="mt-3 text-sm text-muted">{postponeHint}</p>
+      ) : null}
 
       {open ? (
         <form
@@ -79,7 +90,7 @@ export function SessionRow({
           }}
         >
           <p className="text-sm text-muted">
-            Sadece bu ders ertelenir. Yeni ders için saat seçilmez.
+            {postponeHint} Hoca onaylayınca bu ders ertelenir. Yeni saat seçilmez.
           </p>
           <label className="mt-3 block text-sm text-muted" htmlFor={`reason-${session.id}`}>
             Not (isteğe bağlı)
@@ -103,3 +114,4 @@ export function SessionRow({
     </Card>
   );
 }
+

@@ -1,6 +1,6 @@
 "use client";
 
-import { remainingSessions } from "@/data/accessors";
+import { remainingPostponeRights, remainingSessions } from "@/data/accessors";
 import { getAdminUser } from "@/data/students";
 import { buildSessionsForStudent } from "@/data/seed";
 import { addDays, startOfWeekMonday, toISODate, todayISO } from "@/lib/dates";
@@ -12,7 +12,6 @@ import {
 } from "@/lib/store";
 import type {
   NewStudentInput,
-  PostponeStatus,
   Role,
   Session,
   Student,
@@ -38,12 +37,10 @@ type StudioContextValue = {
   approveAttendance: (sessionIds: string[]) => void;
   rejectAttendance: (sessionIds: string[]) => void;
   requestPostpone: (sessionId: string, reason: string) => void;
-  resolveRequest: (
-    requestId: string,
-    status: Exclude<PostponeStatus, "pending">,
-  ) => void;
+  approveRequest: (requestId: string) => void;
   addStudent: (input: NewStudentInput) => { error: string | null; id: string | null };
   remainingFor: (studentId: string) => number;
+  remainingPostponeFor: (studentId: string) => number;
 };
 
 const StudioContext = createContext<StudioContextValue | null>(null);
@@ -133,6 +130,11 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
     setStudioState((current) => {
       const session = current.sessions.find((item) => item.id === sessionId);
       if (!session || session.status !== "upcoming") return current;
+      const student = current.students.find((item) => item.id === session.studentId);
+      if (!student) return current;
+      if (remainingPostponeRights(student, current.postponeRequests) <= 0) {
+        return current;
+      }
       return {
         ...current,
         sessions: current.sessions.map((item) =>
@@ -153,29 +155,23 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
     });
   }, []);
 
-  const resolveRequest = useCallback(
-    (requestId: string, status: Exclude<PostponeStatus, "pending">) => {
-      setStudioState((current) => {
-        const request = current.postponeRequests.find((item) => item.id === requestId);
-        if (!request || request.status !== "pending") return current;
-        return {
-          ...current,
-          postponeRequests: current.postponeRequests.map((item) =>
-            item.id === requestId ? { ...item, status } : item,
-          ),
-          sessions: current.sessions.map((session) => {
-            if (session.id !== request.sessionId) return session;
-            if (status === "approved") return { ...session, status: "postponed" };
-            if (session.status === "postpone_pending") {
-              return { ...session, status: "upcoming" };
-            }
-            return session;
-          }),
-        };
-      });
-    },
-    [],
-  );
+  const approveRequest = useCallback((requestId: string) => {
+    setStudioState((current) => {
+      const request = current.postponeRequests.find((item) => item.id === requestId);
+      if (!request || request.status !== "pending") return current;
+      return {
+        ...current,
+        postponeRequests: current.postponeRequests.map((item) =>
+          item.id === requestId ? { ...item, status: "approved" } : item,
+        ),
+        sessions: current.sessions.map((session) =>
+          session.id === request.sessionId
+            ? { ...session, status: "postponed" }
+            : session,
+        ),
+      };
+    });
+  }, []);
 
   const addStudent = useCallback((input: NewStudentInput) => {
     const name = input.name.trim();
@@ -218,6 +214,9 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
           paymentStatus: input.paymentStatus,
           isLastWeek: false,
         },
+        monthlyPostponeLimit: Number.isFinite(input.monthlyPostponeLimit)
+          ? Math.max(0, Math.round(input.monthlyPostponeLimit))
+          : 1,
       };
       id = student.id;
 
@@ -239,6 +238,15 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
     [state.sessions, state.students],
   );
 
+  const remainingPostponeFor = useCallback(
+    (studentId: string) => {
+      const student = state.students.find((item) => item.id === studentId);
+      if (!student) return 0;
+      return remainingPostponeRights(student, state.postponeRequests);
+    },
+    [state.postponeRequests, state.students],
+  );
+
   const value = useMemo<StudioContextValue>(
     () => ({
       ready,
@@ -252,12 +260,14 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
       approveAttendance,
       rejectAttendance,
       requestPostpone,
-      resolveRequest,
+      approveRequest,
       addStudent,
       remainingFor,
+      remainingPostponeFor,
     }),
     [
       addStudent,
+      approveRequest,
       loginAs,
       logout,
       markAttended,
@@ -265,8 +275,8 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
       rejectAttendance,
       ready,
       remainingFor,
+      remainingPostponeFor,
       requestPostpone,
-      resolveRequest,
       state.postponeRequests,
       state.sessions,
       state.students,

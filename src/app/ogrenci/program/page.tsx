@@ -7,11 +7,13 @@ import { EmptyState } from "@/components/ui";
 import { sessionsForStudent } from "@/data/accessors";
 import { getClassGroupById } from "@/data/groups";
 import { todayISO } from "@/lib/dates";
+import { postponeRightLabel } from "@/lib/labels";
 import { useMemo, useState } from "react";
 
 export default function ProgramPage() {
   const student = useCurrentStudent();
-  const { sessions, markAttended, requestPostpone } = useStudio();
+  const { sessions, markAttended, requestPostpone, remainingPostponeFor } =
+    useStudio();
   const mine = sessionsForStudent(student?.id ?? "", sessions);
   const today = todayISO();
   const defaultDate =
@@ -25,6 +27,10 @@ export default function ProgramPage() {
   );
   const selected = mine.filter((session) => session.date === selectedDate);
   const group = student ? getClassGroupById(student.groupId) : undefined;
+  const postponeRemaining = student ? remainingPostponeFor(student.id) : 0;
+  const postponeHint = student
+    ? postponeRightLabel(postponeRemaining, student.monthlyPostponeLimit)
+    : "";
 
   if (!student) return null;
 
@@ -36,6 +42,7 @@ export default function ProgramPage() {
         </p>
         <h1 className="mt-1 font-serif text-3xl">Programın</h1>
         <p className="mt-1 text-sm text-muted">{group?.label}</p>
+        <p className="mt-1 text-sm text-muted">{postponeHint}</p>
       </header>
 
       <ClassCalendar
@@ -47,7 +54,8 @@ export default function ProgramPage() {
       <div className="flex flex-wrap gap-3 text-[11px] text-muted">
         <Legend color="bg-accent" label="Ders günü" />
         <Legend color="bg-emerald-500" label="Geldi" />
-        <Legend color="bg-amber-500" label="Onay / erteleme" />
+        <Legend color="bg-amber-500" label="Geldim onayı" />
+        <Legend color="bg-rose-400" label="Erteleme" />
       </div>
 
       {selected.length === 0 ? (
@@ -58,6 +66,8 @@ export default function ProgramPage() {
             key={session.id}
             session={session}
             time={group?.time ?? ""}
+            canPostpone={postponeRemaining > 0}
+            postponeHint={postponeHint}
             onAttend={() => markAttended(session.id)}
             onPostpone={(reason) => requestPostpone(session.id, reason)}
           />

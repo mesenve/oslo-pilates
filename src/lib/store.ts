@@ -2,7 +2,7 @@ import { createSeedState } from "@/data/seed";
 import { getStudents } from "@/data/students";
 import type { StudioState } from "@/types/studio";
 
-export const STORAGE_KEY = "oslo-pilates-demo-v5";
+export const STORAGE_KEY = "oslo-pilates-demo-v7";
 
 let memory: StudioState = createSeedState();
 const serverSnapshot = memory;
@@ -22,6 +22,7 @@ function readStorage(): StudioState {
       students: (parsed.students ?? getStudents()).map((student) => ({
         ...student,
         note: student.note ?? "",
+        monthlyPostponeLimit: student.monthlyPostponeLimit ?? 1,
       })),
     };
   } catch {

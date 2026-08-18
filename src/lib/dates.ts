@@ -43,6 +43,10 @@ export function todayISO(): string {
   return toISODate(new Date());
 }
 
+export function monthKey(iso: string): string {
+  return iso.slice(0, 7);
+}
+
 export function weekdayFromISO(iso: string): DayOfWeek | null {
   const day = parseISODate(iso).getDay();
   const map: Record<number, DayOfWeek> = {

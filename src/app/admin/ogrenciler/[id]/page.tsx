@@ -2,23 +2,25 @@
 
 import { ClassCalendar } from "@/components/class-calendar";
 import { ChevronLeftIcon } from "@/components/icons";
-import { Card, EmptyState, PaymentBadge, RequestBadge, SessionBadge } from "@/components/ui";
+import { Button, Card, EmptyState, PaymentBadge, RequestBadge, SessionBadge } from "@/components/ui";
 import { useStudio } from "@/components/studio-provider";
 import {
   effectiveSessionStatus,
+  remainingPostponeRights,
   sessionCounts,
   sessionsForStudent,
 } from "@/data/accessors";
 import { getClassGroupById } from "@/data/groups";
 import { formatLongDate, todayISO } from "@/lib/dates";
-import { remainingLabel } from "@/lib/labels";
+import { remainingLabel, postponeRightAdminLabel } from "@/lib/labels";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useState } from "react";
 
 export default function StudentDetailPage() {
   const params = useParams<{ id: string }>();
-  const { students, sessions, remainingFor, postponeRequests } = useStudio();
+  const { students, sessions, remainingFor, postponeRequests, approveRequest } =
+    useStudio();
   const student = students.find((item) => item.id === params.id);
   const mine = sessionsForStudent(student?.id ?? "", sessions);
   const today = todayISO();
@@ -78,6 +80,13 @@ export default function StudentDetailPage() {
           <p className="text-sm">{remainingLabel(remainingFor(student.id))}</p>
           <PaymentBadge status={student.package.paymentStatus} />
         </div>
+        <p className="text-sm text-muted">
+          {postponeRightAdminLabel(
+            student.monthlyPostponeLimit -
+              remainingPostponeRights(student, postponeRequests),
+            student.monthlyPostponeLimit,
+          )}
+        </p>
         <p className="text-xs text-muted">
           {student.email} · {student.phone}
         </p>
@@ -123,9 +132,14 @@ export default function StudentDetailPage() {
                   Geldim işaretledi. Grup onayı bekleniyor.
                 </p>
               ) : null}
-              {status === "postponed" || status === "postpone_pending" ? (
+              {status === "postponed" ? (
                 <p className="text-sm text-amber-800">
                   Bu ders ertelendi. Yeni saat seçilmedi.
+                </p>
+              ) : null}
+              {status === "postpone_pending" ? (
+                <p className="text-sm text-amber-800">
+                  Erteleme talebi onay bekliyor. Yeni saat seçilmedi.
                 </p>
               ) : null}
             </Card>
@@ -153,6 +167,9 @@ export default function StudentDetailPage() {
                 <p className="text-sm text-amber-800">
                   Yeni ders için saat seçilmedi.
                 </p>
+                {request.status === "pending" ? (
+                  <Button onClick={() => approveRequest(request.id)}>Onayla</Button>
+                ) : null}
               </Card>
             );
           })

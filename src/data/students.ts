@@ -74,6 +74,7 @@ const FEATURED: Student[] = [
       paymentStatus: "paid",
       isLastWeek: true,
     },
+    monthlyPostponeLimit: 1,
   },
   {
     id: "stu-elif",
@@ -81,7 +82,7 @@ const FEATURED: Student[] = [
     email: "elif@oslo",
     phone: "0533 222 33 44",
     groupId: "sal-per-1100",
-    note: "İş seyahati nedeniyle erteleme talebi gönderebiliyor.",
+    note: "İş seyahati nedeniyle erteleme talebi gönderdi.",
     measurements: {
       weightKg: 62,
       heightCm: 165,
@@ -97,6 +98,7 @@ const FEATURED: Student[] = [
       paymentStatus: "pending",
       isLastWeek: false,
     },
+    monthlyPostponeLimit: 1,
   },
   {
     id: "stu-deniz",
@@ -120,6 +122,7 @@ const FEATURED: Student[] = [
       paymentStatus: "overdue",
       isLastWeek: false,
     },
+    monthlyPostponeLimit: 1,
   },
   {
     id: "stu-ayse",
@@ -143,6 +146,7 @@ const FEATURED: Student[] = [
       paymentStatus: "paid",
       isLastWeek: false,
     },
+    monthlyPostponeLimit: 1,
   },
 ];
 
@@ -234,6 +238,7 @@ function dummyStudent(name: string, index: number): Student {
       paymentStatus: PAYMENTS[index % PAYMENTS.length],
       isLastWeek: remaining <= 3,
     },
+    monthlyPostponeLimit: 1,
   };
 }
 

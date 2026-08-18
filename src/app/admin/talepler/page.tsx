@@ -3,12 +3,13 @@
 import { OpeningsBoard } from "@/components/openings-board";
 import { Button, Card, EmptyState, RequestBadge } from "@/components/ui";
 import { useStudio } from "@/components/studio-provider";
-import { studentName } from "@/data/accessors";
+import { remainingPostponeRights, studentName } from "@/data/accessors";
 import { getClassGroupById } from "@/data/groups";
 import { formatLongDate } from "@/lib/dates";
+import { postponeRightAdminLabel } from "@/lib/labels";
 
 export default function RequestsPage() {
-  const { postponeRequests, sessions, resolveRequest, students } = useStudio();
+  const { postponeRequests, sessions, students, approveRequest } = useStudio();
 
   return (
     <div className="space-y-8">
@@ -17,6 +18,9 @@ export default function RequestsPage() {
           Erteleme
         </p>
         <h1 className="mt-1 font-serif text-3xl">Talepler</h1>
+        <p className="mt-1 text-sm text-muted">
+          Öğrenci aylık hakkıyla talep gönderir; sen onaylarsın.
+        </p>
       </header>
 
       <OpeningsBoard requests={postponeRequests} sessions={sessions} />
@@ -31,6 +35,10 @@ export default function RequestsPage() {
             const student = students.find((item) => item.id === request.studentId);
             const group = session ? getClassGroupById(session.groupId) : undefined;
             const pending = request.status === "pending";
+            const used = student
+              ? student.monthlyPostponeLimit -
+                remainingPostponeRights(student, postponeRequests)
+              : 0;
 
             return (
               <Card key={request.id} className="p-5">
@@ -41,28 +49,30 @@ export default function RequestsPage() {
                     </p>
                     <p className="mt-1 text-sm text-muted">
                       {session
-                        ? `Bu ders erteleniyor: ${formatLongDate(session.date)}`
+                        ? `${pending ? "Bu ders erteleniyor" : "Bu ders ertelendi"}: ${formatLongDate(session.date)}`
                         : "Ders bulunamadı"}
                       {group ? ` · ${group.time}` : ""}
                     </p>
                     <p className="mt-1 text-xs text-muted">
                       Yeni ders için saat seçilmedi.
                     </p>
+                    {student ? (
+                      <p className="mt-1 text-xs text-muted">
+                        {postponeRightAdminLabel(
+                          used,
+                          student.monthlyPostponeLimit,
+                        )}
+                      </p>
+                    ) : null}
                     <p className="mt-3 text-sm">{request.reason}</p>
                     <p className="mt-2 text-xs text-muted">{student?.email}</p>
                   </div>
                   <RequestBadge status={request.status} />
                 </div>
                 {pending ? (
-                  <div className="mt-4 flex flex-wrap gap-2">
-                    <Button onClick={() => resolveRequest(request.id, "approved")}>
+                  <div className="mt-4">
+                    <Button onClick={() => approveRequest(request.id)}>
                       Onayla
-                    </Button>
-                    <Button
-                      variant="danger"
-                      onClick={() => resolveRequest(request.id, "rejected")}
-                    >
-                      Reddet
                     </Button>
                   </div>
                 ) : null}

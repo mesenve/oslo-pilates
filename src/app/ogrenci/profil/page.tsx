@@ -4,11 +4,11 @@ import { useCurrentStudent, useStudio } from "@/components/studio-provider";
 import { Card, PaymentBadge } from "@/components/ui";
 import { getClassGroupById } from "@/data/groups";
 import { formatLongDate } from "@/lib/dates";
-import { remainingLabel } from "@/lib/labels";
+import { postponeRightLabel, remainingLabel } from "@/lib/labels";
 
 export default function ProfilePage() {
   const student = useCurrentStudent();
-  const { remainingFor } = useStudio();
+  const { remainingFor, remainingPostponeFor } = useStudio();
   if (!student) return null;
 
   const group = getClassGroupById(student.groupId);
@@ -37,6 +37,13 @@ export default function ProfilePage() {
         <Field
           label="Paket"
           value={`${remainingLabel(remaining)} / ${student.package.totalSessions} ders`}
+        />
+        <Field
+          label="Erteleme hakkı"
+          value={postponeRightLabel(
+            remainingPostponeFor(student.id),
+            student.monthlyPostponeLimit,
+          )}
         />
         <Field
           label="Bitiş"

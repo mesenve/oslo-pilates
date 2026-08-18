@@ -28,6 +28,7 @@ export function StudentForm({
     totalSessions: "12",
     paymentStatus: "paid" as PaymentStatus,
     note: "",
+    monthlyPostponeLimit: "1",
   });
 
   function update(field: keyof typeof form, value: string) {
@@ -50,6 +51,9 @@ export function StudentForm({
       totalSessions: Number(form.totalSessions) || 12,
       paymentStatus: form.paymentStatus as PaymentStatus,
       note: form.note,
+      monthlyPostponeLimit: Number.isFinite(Number(form.monthlyPostponeLimit))
+        ? Math.max(0, Math.round(Number(form.monthlyPostponeLimit)))
+        : 1,
     });
     if (result.error || !result.id) {
       setError(result.error ?? "Kayıt yapılamadı.");
@@ -131,7 +135,16 @@ export function StudentForm({
           onChange={(value) => update("totalSessions", value)}
           type="number"
         />
+        <Field
+          label="Aylık erteleme hakkı"
+          value={form.monthlyPostponeLimit}
+          onChange={(value) => update("monthlyPostponeLimit", value)}
+          type="number"
+        />
       </div>
+      <p className="-mt-2 text-xs text-muted">
+        Bir takvim ayında kaç ders erteleyebilir. Varsayılan 1.
+      </p>
 
       <label className="block text-sm">
         <span className="text-muted">Ödeme durumu</span>

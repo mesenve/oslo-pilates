@@ -54,6 +54,7 @@ export type Student = {
   note: string;
   measurements: Measurements;
   package: StudentPackage;
+  monthlyPostponeLimit: number;
 };
 
 export type AdminUser = {
@@ -99,6 +100,7 @@ export type NewStudentInput = {
   totalSessions: number;
   paymentStatus: PaymentStatus;
   note: string;
+  monthlyPostponeLimit: number;
 };
 
 export type StudioState = {
