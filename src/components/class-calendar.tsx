@@ -118,7 +118,9 @@ export function ClassCalendar({
 
 function dotClass(mark: CalendarMark) {
   if (mark.status === "attended") return "bg-emerald-500";
-  if (mark.status === "postpone_pending") return "bg-amber-500";
+  if (mark.status === "attend_pending" || mark.status === "postpone_pending") {
+    return "bg-amber-500";
+  }
   if (mark.status === "postponed" || mark.status === "missed") return "bg-rose-400";
   if ((mark.count ?? 0) > 0 || mark.status === "upcoming") return "bg-accent";
   return "bg-accent";

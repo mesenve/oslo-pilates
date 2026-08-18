@@ -80,7 +80,9 @@ export function SessionBadge({ status }: { status: SessionStatus }) {
   const tone =
     status === "attended"
       ? "success"
-      : status === "postpone_pending" || status === "postponed"
+      : status === "attend_pending" ||
+          status === "postpone_pending" ||
+          status === "postponed"
         ? "warning"
         : status === "missed"
           ? "danger"

@@ -36,9 +36,13 @@ export default function StudentsPage() {
       {visible.length === 0 ? (
         <EmptyState>Bu harfte kayıtlı öğrenci yok.</EmptyState>
       ) : (
-        <div className="space-y-2">
+        <div className="flex flex-col gap-3">
           {visible.map((student) => (
-            <Link key={student.id} href={`/admin/ogrenciler/${student.id}`}>
+            <Link
+              key={student.id}
+              href={`/admin/ogrenciler/${student.id}`}
+              className="block"
+            >
               <Card className="flex items-center justify-between px-4 py-4">
                 <div>
                   <p className="font-serif text-xl">{student.name}</p>

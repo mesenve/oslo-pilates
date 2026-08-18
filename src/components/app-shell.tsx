@@ -3,6 +3,7 @@
 import {
   BellIcon,
   CalendarIcon,
+  CheckIcon,
   CloseIcon,
   HomeIcon,
   LogOutIcon,
@@ -16,7 +17,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
-export type NavIcon = "home" | "calendar" | "user" | "users" | "bell";
+export type NavIcon = "home" | "calendar" | "user" | "users" | "bell" | "check";
 
 type NavItem = { href: string; label: string; icon: NavIcon };
 
@@ -26,6 +27,7 @@ const ICONS: Record<NavIcon, typeof HomeIcon> = {
   user: UserIcon,
   users: UsersIcon,
   bell: BellIcon,
+  check: CheckIcon,
 };
 
 export function AppShell({

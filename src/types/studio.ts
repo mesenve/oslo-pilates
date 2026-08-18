@@ -9,6 +9,7 @@ export type Role = "student" | "admin";
 
 export type SessionStatus =
   | "upcoming"
+  | "attend_pending"
   | "attended"
   | "missed"
   | "postpone_pending"

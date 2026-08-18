@@ -86,6 +86,26 @@ export function createSeedState(): StudioState {
     });
   }
 
+  const mondayCheckIn = sessions.find(
+    (session) =>
+      session.groupId === "pzt-car-cum-1000" &&
+      session.status === "upcoming" &&
+      session.date >= todayISO() &&
+      session.studentId !== "stu-merve",
+  );
+  if (mondayCheckIn) {
+    for (const session of sessions) {
+      if (
+        session.groupId === mondayCheckIn.groupId &&
+        session.date === mondayCheckIn.date &&
+        session.status === "upcoming" &&
+        session.studentId !== "stu-merve"
+      ) {
+        session.status = "attend_pending";
+      }
+    }
+  }
+
   return {
     user: null,
     students,

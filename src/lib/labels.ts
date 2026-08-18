@@ -39,6 +39,7 @@ export const PAYMENT_LABELS: Record<PaymentStatus, string> = {
 
 export const SESSION_LABELS: Record<SessionStatus, string> = {
   upcoming: "Bekliyor",
+  attend_pending: "Onay bekliyor",
   attended: "Geldi",
   missed: "Yandı",
   postpone_pending: "Erteleme talebi",

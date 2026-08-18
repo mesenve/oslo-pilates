@@ -54,6 +54,9 @@ export function SessionRow({
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <SessionBadge status={session.status} />
+          {session.status === "attend_pending" ? (
+            <p className="text-xs text-muted">Hocanın onayı bekleniyor.</p>
+          ) : null}
           {!locked ? (
             <>
               <Button onClick={onAttend}>Geldim</Button>

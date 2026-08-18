@@ -1,8 +1,10 @@
 "use client";
 
+import { AttendanceBoard } from "@/components/attendance-board";
+import { GroupClassCard } from "@/components/group-class-card";
 import { Card, RequestBadge } from "@/components/ui";
 import { useStudio } from "@/components/studio-provider";
-import { studentName } from "@/data/accessors";
+import { pendingAttendanceBatches, studentName } from "@/data/accessors";
 import { getClassGroupsForDay } from "@/data/groups";
 import { formatLongDate, todayISO, weekdayFromISO } from "@/lib/dates";
 import { DAY_LABELS } from "@/lib/labels";
@@ -11,24 +13,32 @@ import Link from "next/link";
 export default function AdminHomePage() {
   const { postponeRequests, remainingFor, students, sessions } = useStudio();
   const pending = postponeRequests.filter((request) => request.status === "pending");
-  const overdue = students.filter(
-    (student) => student.package.paymentStatus === "overdue",
-  );
   const today = todayISO();
   const todayDay = weekdayFromISO(today);
   const todayGroups = todayDay ? getClassGroupsForDay(todayDay) : [];
+  const attendancePending = pendingAttendanceBatches(sessions);
 
   return (
     <div className="space-y-8">
       <div className="grid grid-cols-3 gap-3">
         <StatCard label="Öğrenci" value={String(students.length)} href="/admin/ogrenciler" />
-        <StatCard label="Talep" value={String(pending.length)} href="/admin/talepler" />
         <StatCard
-          label="Gecikme"
-          value={String(overdue.length)}
-          href="/admin/ogrenciler"
+          label="Yoklama"
+          value={String(attendancePending.length)}
+          href="/admin/yoklama"
         />
+        <StatCard label="Talep" value={String(pending.length)} href="/admin/talepler" />
       </div>
+
+      <section className="space-y-4">
+        <div className="flex items-baseline justify-between gap-3">
+          <h2 className="font-serif text-2xl">Yoklama onayı</h2>
+          <Link href="/admin/yoklama" className="text-sm font-medium text-accent">
+            Tümünü gör →
+          </Link>
+        </div>
+        <AttendanceBoard />
+      </section>
 
       <section className="space-y-4">
         <div className="flex items-baseline justify-between gap-3">
@@ -42,15 +52,14 @@ export default function AdminHomePage() {
         {todayGroups.length === 0 ? (
           <p className="text-sm text-muted">Bugün grup dersi yok.</p>
         ) : (
-          <div className="grid gap-3 sm:grid-cols-2">
+          <div className="flex flex-col gap-3">
             {todayGroups.map((group) => (
-              <Card key={group.id} className="p-5">
-                <p className="font-medium">{group.label}</p>
-                <p className="mt-1 text-sm text-muted">
-                  {(todayDay && group.timeByDay?.[todayDay]) || group.time} ·{" "}
-                  {group.capacity} kişilik
-                </p>
-              </Card>
+              <GroupClassCard
+                key={group.id}
+                group={group}
+                day={todayDay}
+                students={students}
+              />
             ))}
           </div>
         )}

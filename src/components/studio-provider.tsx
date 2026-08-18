@@ -35,6 +35,8 @@ type StudioContextValue = {
   loginAs: (role: Role) => void;
   logout: () => void;
   markAttended: (sessionId: string) => void;
+  approveAttendance: (sessionIds: string[]) => void;
+  rejectAttendance: (sessionIds: string[]) => void;
   requestPostpone: (sessionId: string, reason: string) => void;
   resolveRequest: (
     requestId: string,
@@ -97,7 +99,31 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
       ...current,
       sessions: current.sessions.map((session) =>
         session.id === sessionId && session.status === "upcoming"
+          ? { ...session, status: "attend_pending" }
+          : session,
+      ),
+    }));
+  }, []);
+
+  const approveAttendance = useCallback((sessionIds: string[]) => {
+    const idSet = new Set(sessionIds);
+    setStudioState((current) => ({
+      ...current,
+      sessions: current.sessions.map((session) =>
+        idSet.has(session.id) && session.status === "attend_pending"
           ? { ...session, status: "attended" }
+          : session,
+      ),
+    }));
+  }, []);
+
+  const rejectAttendance = useCallback((sessionIds: string[]) => {
+    const idSet = new Set(sessionIds);
+    setStudioState((current) => ({
+      ...current,
+      sessions: current.sessions.map((session) =>
+        idSet.has(session.id) && session.status === "attend_pending"
+          ? { ...session, status: "upcoming" }
           : session,
       ),
     }));
@@ -223,6 +249,8 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
       loginAs,
       logout,
       markAttended,
+      approveAttendance,
+      rejectAttendance,
       requestPostpone,
       resolveRequest,
       addStudent,
@@ -233,6 +261,8 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
       loginAs,
       logout,
       markAttended,
+      approveAttendance,
+      rejectAttendance,
       ready,
       remainingFor,
       requestPostpone,

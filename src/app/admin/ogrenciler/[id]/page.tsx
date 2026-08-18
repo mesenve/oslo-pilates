@@ -2,7 +2,7 @@
 
 import { ClassCalendar } from "@/components/class-calendar";
 import { ChevronLeftIcon } from "@/components/icons";
-import { Card, EmptyState, PaymentBadge, SessionBadge } from "@/components/ui";
+import { Card, EmptyState, PaymentBadge, RequestBadge, SessionBadge } from "@/components/ui";
 import { useStudio } from "@/components/studio-provider";
 import {
   effectiveSessionStatus,
@@ -118,6 +118,11 @@ export default function StudentDetailPage() {
               {status === "missed" ? (
                 <p className="text-sm text-rose-700">Bu ders yanmış.</p>
               ) : null}
+              {status === "attend_pending" ? (
+                <p className="text-sm text-amber-800">
+                  Geldim işaretledi. Grup onayı bekleniyor.
+                </p>
+              ) : null}
               {status === "postponed" || status === "postpone_pending" ? (
                 <p className="text-sm text-amber-800">
                   Bu ders ertelendi. Yeni saat seçilmedi.
@@ -128,7 +133,33 @@ export default function StudentDetailPage() {
         })
       )}
 
-      <section className="space-y-2">
+      <section className="space-y-3">
+        <h2 className="font-serif text-xl">Erteleme</h2>
+        {requests.length === 0 ? (
+          <EmptyState>Bu öğrencinin erteleme kaydı yok.</EmptyState>
+        ) : (
+          requests.map((request) => {
+            const session = sessions.find((item) => item.id === request.sessionId);
+            return (
+              <Card key={request.id} className="space-y-2 p-4">
+                <div className="flex items-center justify-between gap-3">
+                  <p className="capitalize">
+                    {session ? formatLongDate(session.date) : "Ders bulunamadı"}
+                  </p>
+                  <RequestBadge status={request.status} />
+                </div>
+                <p className="text-sm text-muted">{group?.time}</p>
+                <p className="text-sm">{request.reason}</p>
+                <p className="text-sm text-amber-800">
+                  Yeni ders için saat seçilmedi.
+                </p>
+              </Card>
+            );
+          })
+        )}
+      </section>
+
+      <section className="space-y-3">
         <h2 className="font-serif text-xl">Tüm dersler</h2>
         {mine.map((session) => {
           const status = effectiveSessionStatus(session);

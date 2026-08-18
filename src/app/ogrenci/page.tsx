@@ -2,7 +2,7 @@
 
 import { LastWeekCta } from "@/components/last-week-cta";
 import { useCurrentStudent, useStudio } from "@/components/studio-provider";
-import { Card, PaymentBadge } from "@/components/ui";
+import { Card } from "@/components/ui";
 import { sessionsForStudent } from "@/data/accessors";
 import { getClassGroupById } from "@/data/groups";
 import { addDays, formatLongDate, startOfWeekMonday, toISODate, todayISO } from "@/lib/dates";
@@ -19,35 +19,15 @@ export default function StudentHomePage() {
   const mine = sessionsForStudent(student.id, sessions);
   const upcoming = mine.find(
     (session) =>
-      session.status === "upcoming" || session.status === "postpone_pending",
+      session.status === "upcoming" ||
+      session.status === "attend_pending" ||
+      session.status === "postpone_pending",
   );
   const monday = startOfWeekMonday();
   const today = todayISO();
 
   return (
     <div className="space-y-4">
-      <section className="overflow-hidden rounded-3xl bg-gradient-to-br from-[#f48fb1] via-[#ec407a] to-accent px-4 py-3.5 text-white shadow-[0_10px_24px_rgba(194,24,91,0.22)]">
-        <p className="text-xs text-white/80">Merhaba</p>
-        <h1 className="font-serif text-2xl leading-tight">{student.name}</h1>
-        <p className="mt-0.5 text-xs text-white/80">{group?.label}</p>
-        <div className="mt-3 grid grid-cols-2 gap-2">
-          <div className="rounded-xl bg-white/15 px-3 py-2 backdrop-blur">
-            <p className="text-[10px] uppercase tracking-[0.14em] text-white/70">
-              Kalan
-            </p>
-            <p className="font-serif text-xl leading-tight">{remaining}</p>
-          </div>
-          <div className="rounded-xl bg-white/15 px-3 py-2 backdrop-blur">
-            <p className="text-[10px] uppercase tracking-[0.14em] text-white/70">
-              Ödeme
-            </p>
-            <div className="mt-1">
-              <PaymentBadge status={student.package.paymentStatus} />
-            </div>
-          </div>
-        </div>
-      </section>
-
       {student.package.isLastWeek ? (
         <LastWeekCta studentName={student.name} />
       ) : null}
@@ -83,7 +63,10 @@ export default function StudentHomePage() {
                     session
                       ? session.status === "attended"
                         ? "bg-emerald-500"
-                        : "bg-accent"
+                        : session.status === "attend_pending" ||
+                            session.status === "postpone_pending"
+                          ? "bg-amber-500"
+                          : "bg-accent"
                       : "bg-transparent"
                   }`}
                 />

@@ -47,7 +47,7 @@ export default function ProgramPage() {
       <div className="flex flex-wrap gap-3 text-[11px] text-muted">
         <Legend color="bg-accent" label="Ders günü" />
         <Legend color="bg-emerald-500" label="Geldi" />
-        <Legend color="bg-amber-500" label="Erteleme" />
+        <Legend color="bg-amber-500" label="Onay / erteleme" />
       </div>
 
       {selected.length === 0 ? (

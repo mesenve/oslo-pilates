@@ -65,7 +65,7 @@ function GirisForm() {
 
   const cat =
     role === "admin"
-      ? { src: "/kediler/hoca.png", alt: "Pilates hocası kedi" }
+      ? { src: "/kediler/hoca.png", alt: "Admin girişi kedisi" }
       : { src: "/kediler/ogrenci.png", alt: "Pilates öğrencisi kedi" };
 
   return (
@@ -103,7 +103,7 @@ function GirisForm() {
                 role === "admin" ? "bg-white text-accent shadow-sm" : "text-muted"
               }`}
             >
-              Hoca
+              Admin
             </button>
           </div>
 

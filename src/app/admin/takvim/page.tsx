@@ -1,11 +1,11 @@
 "use client";
 
-import { CalendarIcon, ClockIcon, UsersIcon } from "@/components/icons";
 import { ClassCalendar } from "@/components/class-calendar";
-import { Card, EmptyState } from "@/components/ui";
+import { GroupClassCard } from "@/components/group-class-card";
+import { EmptyState } from "@/components/ui";
 import { useStudio } from "@/components/studio-provider";
 import { getClassGroups, getClassGroupsForDay } from "@/data/groups";
-import { capacityLabel, DAY_LABELS } from "@/lib/labels";
+import { DAY_LABELS } from "@/lib/labels";
 import {
   addDays,
   startOfWeekMonday,
@@ -37,11 +37,6 @@ export default function CalendarPage() {
     return result;
   }, []);
 
-  const occupancy = groups.map((group) => ({
-    group,
-    enrolled: students.filter((student) => student.groupId === group.id).length,
-  }));
-
   return (
     <div className="space-y-5">
       <header>
@@ -64,34 +59,20 @@ export default function CalendarPage() {
         <p className="text-xs text-muted">Bugünün programı</p>
       ) : null}
 
-      {occupancy.length === 0 ? (
+      {groups.length === 0 ? (
         <EmptyState>Bu günde grup dersi yok.</EmptyState>
       ) : (
-        <div className="space-y-3">
-          {occupancy.map(({ group, enrolled }) => {
-            const time = (day && group.timeByDay?.[day]) || group.time;
-            return (
-              <Card key={group.id} className="space-y-3 px-4 py-4">
-                <Row icon={<CalendarIcon />} text={group.label} />
-                <Row icon={<ClockIcon />} text={time} />
-                <Row
-                  icon={<UsersIcon />}
-                  text={`${capacityLabel(group.capacity)} · ${enrolled} kayıtlı`}
-                />
-              </Card>
-            );
-          })}
+        <div className="flex flex-col gap-3">
+          {groups.map((group) => (
+            <GroupClassCard
+              key={group.id}
+              group={group}
+              day={day}
+              students={students}
+            />
+          ))}
         </div>
       )}
-    </div>
-  );
-}
-
-function Row({ icon, text }: { icon: React.ReactNode; text: string }) {
-  return (
-    <div className="flex items-center gap-3 text-sm">
-      <span className="text-accent">{icon}</span>
-      <span>{text}</span>
     </div>
   );
 }

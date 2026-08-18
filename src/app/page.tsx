@@ -13,17 +13,17 @@ export default function HomePage() {
           </p>
           <h1 className="mt-3 font-serif text-5xl">{STUDIO_NAME}</h1>
           <p className="mt-3 max-w-xl text-white/85">
-            Öğrenci veya hoca kartından panele gir.
+            Öğrenci veya admin kartından panele gir.
           </p>
         </section>
 
         <div className="mt-8 grid gap-6 md:grid-cols-2">
           <EntryCard
-            title="Hoca girişi"
+            title="Admin girişi"
             body="Öğrenciler, takvim ve talepler."
             href="/giris?rol=admin"
             image="/kediler/hoca.png"
-            imageAlt="Pilates hocası kedi"
+            imageAlt="Admin girişi kedisi"
           />
           <EntryCard
             title="Öğrenci girişi"

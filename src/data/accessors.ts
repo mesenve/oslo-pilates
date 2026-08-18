@@ -1,6 +1,16 @@
 import { getClassGroupById } from "@/data/groups";
-import { todayISO } from "@/lib/dates";
+import { todayISO, weekdayFromISO } from "@/lib/dates";
+import { DAY_LABELS } from "@/lib/labels";
 import type { Session, SessionStatus, Student } from "@/types/studio";
+
+export type AttendanceBatch = {
+  date: string;
+  groupId: string;
+  groupLabel: string;
+  dayLabel: string;
+  time: string;
+  sessions: Session[];
+};
 
 export function remainingSessions(
   student: Student,
@@ -46,6 +56,33 @@ export function effectiveSessionStatus(session: Session): SessionStatus {
     return "missed";
   }
   return session.status;
+}
+
+export function pendingAttendanceBatches(sessions: Session[]): AttendanceBatch[] {
+  const pending = sessions.filter((session) => session.status === "attend_pending");
+  const grouped = new Map<string, Session[]>();
+  for (const session of pending) {
+    const key = `${session.date}|${session.groupId}`;
+    const list = grouped.get(key) ?? [];
+    list.push(session);
+    grouped.set(key, list);
+  }
+
+  return [...grouped.entries()]
+    .map(([key, list]) => {
+      const [date, groupId] = key.split("|");
+      const group = getClassGroupById(groupId);
+      const day = weekdayFromISO(date);
+      return {
+        date,
+        groupId,
+        groupLabel: group?.label ?? groupId,
+        dayLabel: day ? DAY_LABELS[day] : "",
+        time: (day && group?.timeByDay?.[day]) || group?.time || "",
+        sessions: list,
+      };
+    })
+    .sort((a, b) => a.date.localeCompare(b.date) || a.time.localeCompare(b.time));
 }
 
 export function sessionCounts(studentId: string, sessions: Session[]) {

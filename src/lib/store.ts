@@ -2,7 +2,7 @@ import { createSeedState } from "@/data/seed";
 import { getStudents } from "@/data/students";
 import type { StudioState } from "@/types/studio";
 
-export const STORAGE_KEY = "oslo-pilates-demo-v4";
+export const STORAGE_KEY = "oslo-pilates-demo-v5";
 
 let memory: StudioState = createSeedState();
 const serverSnapshot = memory;
