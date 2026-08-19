@@ -147,3 +147,13 @@ export function TrashIcon(props: IconProps) {
     </svg>
   );
 }
+
+export function ArchiveIcon(props: IconProps) {
+  return (
+    <svg {...base(props)}>
+      <path d="M4 7h16v3H4z" />
+      <path d="M6 10v9h12v-9" />
+      <path d="M10 14h4" />
+    </svg>
+  );
+}

@@ -10,6 +10,7 @@ import {
   MenuIcon,
   UserIcon,
   UsersIcon,
+  ArchiveIcon,
 } from "@/components/icons";
 import { useStudio } from "@/components/studio-provider";
 import { STUDIO_NAME } from "@/lib/studio";
@@ -17,7 +18,14 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
-export type NavIcon = "home" | "calendar" | "user" | "users" | "bell" | "check";
+export type NavIcon =
+  | "home"
+  | "calendar"
+  | "user"
+  | "users"
+  | "bell"
+  | "check"
+  | "archive";
 
 type NavItem = { href: string; label: string; icon: NavIcon };
 
@@ -28,6 +36,7 @@ const ICONS: Record<NavIcon, typeof HomeIcon> = {
   users: UsersIcon,
   bell: BellIcon,
   check: CheckIcon,
+  archive: ArchiveIcon,
 };
 
 export function AppShell({

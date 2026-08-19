@@ -16,7 +16,7 @@ export default function RestoreStudentPage() {
   return (
     <div className="space-y-5">
       <Link
-        href="/admin/ogrenciler"
+        href="/admin/arsiv"
         className="inline-flex items-center gap-1 text-sm text-muted"
       >
         <ChevronLeftIcon className="h-4 w-4" />

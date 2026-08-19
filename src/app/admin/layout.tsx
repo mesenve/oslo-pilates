@@ -7,6 +7,7 @@ const ITEMS = [
   { href: "/admin", label: "Özet", icon: "home" as const },
   { href: "/admin/yoklama", label: "Yoklama", icon: "check" as const },
   { href: "/admin/ogrenciler", label: "Kayıt", icon: "users" as const },
+  { href: "/admin/arsiv", label: "Arşiv", icon: "archive" as const },
   { href: "/admin/takvim", label: "Takvim", icon: "calendar" as const },
   { href: "/admin/talepler", label: "Talep", icon: "bell" as const },
 ];

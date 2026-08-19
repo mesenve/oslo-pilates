@@ -216,7 +216,7 @@ export default function StudentDetailPage() {
           onCancel={() => setConfirmDelete(false)}
           onConfirm={() => {
             archiveStudent(student.id);
-            router.replace("/admin/ogrenciler");
+            router.replace("/admin/arsiv");
           }}
         />
       ) : null}
