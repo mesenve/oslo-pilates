@@ -65,7 +65,7 @@ export function buildSessionsForStudent(
 
 export function createSeedState(): StudioState {
   const students = getStudents();
-  const sessions = students.flatMap(buildSessionsForStudent);
+  const sessions = students.flatMap((student) => buildSessionsForStudent(student));
   const postponeRequests: PostponeRequest[] = [];
   const currentMondayISO = toISODate(startOfWeekMonday());
   const elifUpcoming =
