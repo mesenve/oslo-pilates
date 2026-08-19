@@ -67,7 +67,17 @@ export default function StudentDetailPage() {
         <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-accent">
           Öğrenci detayı
         </p>
-        <h1 className="mt-1 font-serif text-3xl">{student.name}</h1>
+        <div className="mt-1 flex items-center justify-between gap-3">
+          <h1 className="min-w-0 font-serif text-3xl leading-none">{student.name}</h1>
+          <Button
+            variant="secondary"
+            className="shrink-0 px-3 py-1.5"
+            onClick={() => setConfirmDelete(true)}
+          >
+            <TrashIcon className="h-4 w-4" />
+            Sil
+          </Button>
+        </div>
         <p className="mt-1 text-sm text-muted">{group?.label}</p>
       </header>
 
@@ -100,14 +110,6 @@ export default function StudentDetailPage() {
             <p className="mt-1 text-sm">{student.note}</p>
           </div>
         ) : null}
-        <Button
-          variant="secondary"
-          className="w-full"
-          onClick={() => setConfirmDelete(true)}
-        >
-          <TrashIcon className="h-4 w-4" />
-          Sil
-        </Button>
       </Card>
 
       <ClassCalendar
