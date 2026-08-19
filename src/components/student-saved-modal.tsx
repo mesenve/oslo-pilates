@@ -1,23 +1,21 @@
 "use client";
 
 import { CloseIcon, WhatsAppIcon } from "@/components/icons";
-import { Button } from "@/components/ui";
-import { getWelcomeWhatsAppUrl, WELCOME_WHATSAPP_TEXT } from "@/lib/studio";
+import { getWelcomeWhatsAppUrl } from "@/lib/studio";
 
-export function WelcomeWhatsAppModal({
+export function StudentSavedModal({
   phone,
-  onClose,
+  onContinue,
 }: {
-  studentName?: string;
   phone: string;
-  onClose: () => void;
+  onContinue: () => void;
 }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center px-5">
       <button
         type="button"
         aria-label="Kapat"
-        onClick={onClose}
+        onClick={onContinue}
         className="absolute inset-0 bg-[#2b1a22]/35 backdrop-blur-[2px]"
       />
       <div
@@ -28,13 +26,13 @@ export function WelcomeWhatsAppModal({
         <div className="flex items-start justify-between gap-3">
           <div>
             <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-accent">
-              WhatsApp
+              Kayıt
             </p>
-            <p className="mt-1 font-serif text-2xl">Bilgilendirme</p>
+            <p className="mt-1 font-serif text-2xl">Başarılı</p>
           </div>
           <button
             type="button"
-            onClick={onClose}
+            onClick={onContinue}
             aria-label="Kapat"
             className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-surface-muted text-foreground"
           >
@@ -42,10 +40,10 @@ export function WelcomeWhatsAppModal({
           </button>
         </div>
         <p className="mt-2 text-sm text-muted">
-          Hoş geldin mesajını WhatsApp’tan gönderebilirsin.
+          Öğrenci başarılı bir şekilde kaydedildi.
         </p>
-        <p className="mt-3 rounded-2xl bg-surface-muted px-3 py-3 text-sm">
-          {WELCOME_WHATSAPP_TEXT}
+        <p className="mt-3 text-sm">
+          Öğrenciye bilgilendirme göndermek ister misin?
         </p>
         <a
           href={getWelcomeWhatsAppUrl(phone)}
@@ -54,11 +52,8 @@ export function WelcomeWhatsAppModal({
           className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-full bg-[#25d366] px-4 py-3 text-center text-sm font-medium text-white"
         >
           <WhatsAppIcon className="h-4 w-4" />
-          Kayıtlı öğrenciye WhatsApp bilgilendirme mesajı gönder
+          Bilgilendirme mesajı gönder
         </a>
-        <Button variant="ghost" className="mt-2 w-full" onClick={onClose}>
-          Kapat
-        </Button>
       </div>
     </div>
   );

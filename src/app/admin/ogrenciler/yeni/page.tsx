@@ -2,7 +2,7 @@
 
 import { ChevronLeftIcon } from "@/components/icons";
 import { StudentForm } from "@/components/student-form";
-import { WelcomeWhatsAppModal } from "@/components/welcome-whatsapp-modal";
+import { StudentSavedModal } from "@/components/student-saved-modal";
 import { Card } from "@/components/ui";
 import { useStudio } from "@/components/studio-provider";
 import Link from "next/link";
@@ -12,14 +12,8 @@ import { useState } from "react";
 export default function NewStudentPage() {
   const router = useRouter();
   const { students } = useStudio();
-  const [welcome, setWelcome] = useState<{
-    id: string | null;
-    name: string;
-    phone: string;
-  } | null>(null);
-  const saved = welcome?.id
-    ? students.find((student) => student.id === welcome.id)
-    : null;
+  const [savedId, setSavedId] = useState<string | null>(null);
+  const saved = students.find((student) => student.id === savedId);
 
   return (
     <div className="space-y-5">
@@ -37,19 +31,12 @@ export default function NewStudentPage() {
         <h1 className="mt-1 font-serif text-3xl">Öğrenci kaydet</h1>
       </header>
       <Card className="p-5">
-        <StudentForm onSubmitted={setWelcome} />
+        <StudentForm onSaved={setSavedId} />
       </Card>
-      {welcome ? (
-        <WelcomeWhatsAppModal
-          studentName={saved?.name ?? welcome.name}
-          phone={saved?.phone ?? welcome.phone}
-          onClose={() => {
-            if (welcome.id) {
-              router.replace(`/admin/ogrenciler/${welcome.id}`);
-              return;
-            }
-            setWelcome(null);
-          }}
+      {saved ? (
+        <StudentSavedModal
+          phone={saved.phone}
+          onContinue={() => router.replace(`/admin/ogrenciler/${saved.id}`)}
         />
       ) : null}
     </div>

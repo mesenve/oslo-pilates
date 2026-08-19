@@ -11,12 +11,10 @@ export function StudentForm({
   student,
   submitLabel = "Öğrenciyi kaydet",
   onSaved,
-  onSubmitted,
 }: {
   student?: Student;
   submitLabel?: string;
   onSaved?: (studentId: string) => void;
-  onSubmitted?: (result: { id: string | null; name: string; phone: string }) => void;
 }) {
   const { addStudent, restoreStudent } = useStudio();
   const groups = getClassGroups();
@@ -36,19 +34,9 @@ export function StudentForm({
       : addStudent(input);
     if (result.error || !result.id) {
       setError(result.error ?? "Kayıt yapılamadı.");
-      onSubmitted?.({
-        id: null,
-        name: input.name.trim() || "Öğrenci",
-        phone: input.phone,
-      });
       return;
     }
     onSaved?.(result.id);
-    onSubmitted?.({
-      id: result.id,
-      name: input.name.trim() || "Öğrenci",
-      phone: input.phone,
-    });
   }
 
   return (
@@ -57,7 +45,7 @@ export function StudentForm({
         label="Ad soyad"
         value={form.name}
         onChange={(value) => update("name", value)}
-        required={Boolean(student)}
+        required
       />
       <div className="grid grid-cols-2 gap-4">
         <Field
@@ -175,15 +163,15 @@ function formFromStudent(student: Student | undefined, fallbackGroupId: string) 
     email: student?.email ?? "",
     phone: student?.phone === "—" ? "" : (student?.phone ?? ""),
     groupId: student?.groupId ?? fallbackGroupId,
-    weightKg: String(student?.measurements.weightKg ?? 58),
-    heightCm: String(student?.measurements.heightCm ?? 165),
-    waistCm: String(student?.measurements.waistCm ?? 70),
-    hipCm: String(student?.measurements.hipCm ?? 95),
-    chestCm: String(student?.measurements.chestCm ?? 86),
-    totalSessions: String(student?.package.totalSessions ?? 12),
+    weightKg: student ? String(student.measurements.weightKg) : "",
+    heightCm: student ? String(student.measurements.heightCm) : "",
+    waistCm: student ? String(student.measurements.waistCm) : "",
+    hipCm: student ? String(student.measurements.hipCm) : "",
+    chestCm: student ? String(student.measurements.chestCm) : "",
+    totalSessions: student ? String(student.package.totalSessions) : "",
     paymentStatus: (student?.package.paymentStatus ?? "paid") as PaymentStatus,
     note: student?.note ?? "",
-    monthlyPostponeLimit: String(student?.monthlyPostponeLimit ?? 1),
+    monthlyPostponeLimit: student ? String(student.monthlyPostponeLimit) : "",
   };
 }
 
