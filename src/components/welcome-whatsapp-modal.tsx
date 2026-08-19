@@ -5,11 +5,10 @@ import { Button } from "@/components/ui";
 import { getWelcomeWhatsAppUrl, WELCOME_WHATSAPP_TEXT } from "@/lib/studio";
 
 export function WelcomeWhatsAppModal({
-  studentName,
   phone,
   onClose,
 }: {
-  studentName: string;
+  studentName?: string;
   phone: string;
   onClose: () => void;
 }) {
