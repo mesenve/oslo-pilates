@@ -244,9 +244,8 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
           return current;
         }
 
-        const student = studentFromInput(studentId, input, email, archived);
+        const student = studentFromInput(studentId, input, email);
         id = student.id;
-        const groupChanged = archived.groupId !== student.groupId;
 
         return {
           ...current,
@@ -254,18 +253,13 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
             (item) => item.id !== studentId,
           ),
           students: [student, ...current.students],
-          sessions: current.sessions.map((session) => {
-            if (session.studentId !== studentId) return session;
-            if (!groupChanged) return session;
-            if (
-              session.status === "upcoming" ||
-              session.status === "attend_pending" ||
-              session.status === "postpone_pending"
-            ) {
-              return { ...session, groupId: student.groupId };
-            }
-            return session;
-          }),
+          postponeRequests: current.postponeRequests.filter(
+            (request) => request.studentId !== studentId,
+          ),
+          sessions: [
+            ...current.sessions.filter((session) => session.studentId !== studentId),
+            ...buildSessionsForStudent(student, { fromToday: true }),
+          ],
         };
       });
       return { error, id };

@@ -12,11 +12,36 @@ import type { PostponeRequest, Session, Student, StudioState } from "@/types/stu
 
 const WEEK_COUNT = 4;
 
-export function buildSessionsForStudent(student: Student): Session[] {
+export function buildSessionsForStudent(
+  student: Student,
+  options?: { fromToday?: boolean },
+): Session[] {
   const group = getClassGroupById(student.groupId);
   if (!group) return [];
 
   const currentMonday = startOfWeekMonday();
+  const today = todayISO();
+
+  if (options?.fromToday) {
+    const dates: string[] = [];
+    for (let week = 0; dates.length < student.package.totalSessions && week < 40; week += 1) {
+      const monday = addDays(currentMonday, 7 * week);
+      for (const day of group.days) {
+        const iso = toISODate(dateForWeekDay(monday, day));
+        if (iso < today) continue;
+        dates.push(iso);
+        if (dates.length >= student.package.totalSessions) break;
+      }
+    }
+    return dates.map((date) => ({
+      id: `${student.id}-${date}`,
+      studentId: student.id,
+      groupId: student.groupId,
+      date,
+      status: "upcoming" as const,
+    }));
+  }
+
   const dates: string[] = [];
   for (let week = WEEK_COUNT - 1; week >= 0; week -= 1) {
     const monday = addDays(currentMonday, -7 * week);
