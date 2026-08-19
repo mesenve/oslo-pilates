@@ -109,6 +109,7 @@ export function createSeedState(): StudioState {
   return {
     user: null,
     students,
+    archivedStudents: [],
     sessions,
     postponeRequests,
   };

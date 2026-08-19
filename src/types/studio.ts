@@ -106,6 +106,7 @@ export type NewStudentInput = {
 export type StudioState = {
   user: AuthUser | null;
   students: Student[];
+  archivedStudents: Student[];
   sessions: Session[];
   postponeRequests: PostponeRequest[];
 };

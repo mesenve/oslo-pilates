@@ -137,3 +137,13 @@ export function CloseIcon(props: IconProps) {
     </svg>
   );
 }
+
+export function TrashIcon(props: IconProps) {
+  return (
+    <svg {...base(props)}>
+      <path d="M5 7h14" />
+      <path d="M10 7V5h4v2" />
+      <path d="M8 7l1 13h6l1-13" />
+    </svg>
+  );
+}

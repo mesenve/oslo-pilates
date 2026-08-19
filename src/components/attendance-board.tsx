@@ -7,7 +7,10 @@ import { formatLongDate } from "@/lib/dates";
 
 export function AttendanceBoard() {
   const { sessions, students, approveAttendance, rejectAttendance } = useStudio();
-  const batches = pendingAttendanceBatches(sessions);
+  const batches = pendingAttendanceBatches(
+    sessions,
+    new Set(students.map((student) => student.id)),
+  );
 
   if (batches.length === 0) {
     return <EmptyState>Bekleyen yoklama onayı yok.</EmptyState>;

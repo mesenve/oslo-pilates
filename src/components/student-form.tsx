@@ -4,32 +4,22 @@ import { Button } from "@/components/ui";
 import { useStudio } from "@/components/studio-provider";
 import { getClassGroups } from "@/data/groups";
 import { PAYMENT_LABELS } from "@/lib/labels";
-import type { PaymentStatus } from "@/types/studio";
+import type { NewStudentInput, PaymentStatus, Student } from "@/types/studio";
 import { useState } from "react";
 
 export function StudentForm({
+  student,
+  submitLabel = "Öğrenciyi kaydet",
   onSaved,
 }: {
+  student?: Student;
+  submitLabel?: string;
   onSaved?: (studentId: string) => void;
 }) {
-  const { addStudent } = useStudio();
+  const { addStudent, restoreStudent } = useStudio();
   const groups = getClassGroups();
   const [error, setError] = useState<string | null>(null);
-  const [form, setForm] = useState({
-    name: "",
-    email: "",
-    phone: "",
-    groupId: groups[0]?.id ?? "",
-    weightKg: "58",
-    heightCm: "165",
-    waistCm: "70",
-    hipCm: "95",
-    chestCm: "86",
-    totalSessions: "12",
-    paymentStatus: "paid" as PaymentStatus,
-    note: "",
-    monthlyPostponeLimit: "1",
-  });
+  const [form, setForm] = useState(() => formFromStudent(student, groups[0]?.id ?? ""));
 
   function update(field: keyof typeof form, value: string) {
     setForm((current) => ({ ...current, [field]: value }));
@@ -38,23 +28,10 @@ export function StudentForm({
 
   function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
-    const result = addStudent({
-      name: form.name,
-      email: form.email,
-      phone: form.phone,
-      groupId: form.groupId,
-      weightKg: Number(form.weightKg) || 0,
-      heightCm: Number(form.heightCm) || 0,
-      waistCm: Number(form.waistCm) || 0,
-      hipCm: Number(form.hipCm) || 0,
-      chestCm: Number(form.chestCm) || 0,
-      totalSessions: Number(form.totalSessions) || 12,
-      paymentStatus: form.paymentStatus as PaymentStatus,
-      note: form.note,
-      monthlyPostponeLimit: Number.isFinite(Number(form.monthlyPostponeLimit))
-        ? Math.max(0, Math.round(Number(form.monthlyPostponeLimit)))
-        : 1,
-    });
+    const input = toInput(form);
+    const result = student
+      ? restoreStudent(student.id, input)
+      : addStudent(input);
     if (result.error || !result.id) {
       setError(result.error ?? "Kayıt yapılamadı.");
       return;
@@ -174,10 +151,48 @@ export function StudentForm({
 
       {error ? <p className="text-sm text-red-700">{error}</p> : null}
       <Button type="submit" className="w-full">
-        Öğrenciyi kaydet
+        {submitLabel}
       </Button>
     </form>
   );
+}
+
+function formFromStudent(student: Student | undefined, fallbackGroupId: string) {
+  return {
+    name: student?.name ?? "",
+    email: student?.email ?? "",
+    phone: student?.phone === "—" ? "" : (student?.phone ?? ""),
+    groupId: student?.groupId ?? fallbackGroupId,
+    weightKg: String(student?.measurements.weightKg ?? 58),
+    heightCm: String(student?.measurements.heightCm ?? 165),
+    waistCm: String(student?.measurements.waistCm ?? 70),
+    hipCm: String(student?.measurements.hipCm ?? 95),
+    chestCm: String(student?.measurements.chestCm ?? 86),
+    totalSessions: String(student?.package.totalSessions ?? 12),
+    paymentStatus: (student?.package.paymentStatus ?? "paid") as PaymentStatus,
+    note: student?.note ?? "",
+    monthlyPostponeLimit: String(student?.monthlyPostponeLimit ?? 1),
+  };
+}
+
+function toInput(form: ReturnType<typeof formFromStudent>): NewStudentInput {
+  return {
+    name: form.name,
+    email: form.email,
+    phone: form.phone,
+    groupId: form.groupId,
+    weightKg: Number(form.weightKg) || 0,
+    heightCm: Number(form.heightCm) || 0,
+    waistCm: Number(form.waistCm) || 0,
+    hipCm: Number(form.hipCm) || 0,
+    chestCm: Number(form.chestCm) || 0,
+    totalSessions: Number(form.totalSessions) || 12,
+    paymentStatus: form.paymentStatus,
+    note: form.note,
+    monthlyPostponeLimit: Number.isFinite(Number(form.monthlyPostponeLimit))
+      ? Math.max(0, Math.round(Number(form.monthlyPostponeLimit)))
+      : 1,
+  };
 }
 
 function Field({

@@ -10,6 +10,10 @@ import { postponeRightAdminLabel } from "@/lib/labels";
 
 export default function RequestsPage() {
   const { postponeRequests, sessions, students, approveRequest } = useStudio();
+  const activeIds = new Set(students.map((student) => student.id));
+  const visibleRequests = postponeRequests.filter((request) =>
+    activeIds.has(request.studentId),
+  );
 
   return (
     <div className="space-y-8">
@@ -23,14 +27,14 @@ export default function RequestsPage() {
         </p>
       </header>
 
-      <OpeningsBoard requests={postponeRequests} sessions={sessions} />
+      <OpeningsBoard requests={visibleRequests} sessions={sessions} />
 
       <section className="space-y-3">
         <h2 className="font-serif text-2xl">Erteleme talepleri</h2>
-        {postponeRequests.length === 0 ? (
+        {visibleRequests.length === 0 ? (
           <EmptyState>Henüz erteleme talebi yok.</EmptyState>
         ) : (
-          postponeRequests.map((request) => {
+          visibleRequests.map((request) => {
             const session = sessions.find((item) => item.id === request.sessionId);
             const student = students.find((item) => item.id === request.studentId);
             const group = session ? getClassGroupById(session.groupId) : undefined;

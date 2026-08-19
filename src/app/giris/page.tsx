@@ -46,10 +46,10 @@ function GirisForm() {
 
   useEffect(() => {
     if (!ready) return;
-    if (user) {
-      router.replace(user.role === "admin" ? "/admin" : "/ogrenci");
+    if (user && user.role === role) {
+      router.replace(role === "admin" ? "/admin" : "/ogrenci");
     }
-  }, [ready, router, user]);
+  }, [ready, role, router, user]);
 
   function switchRole(next: Role) {
     setRole(next);

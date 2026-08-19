@@ -107,3 +107,48 @@ export function EmptyState({ children }: { children: React.ReactNode }) {
     </div>
   );
 }
+
+export function ConfirmDialog({
+  title,
+  body,
+  confirmLabel,
+  cancelLabel = "Vazgeç",
+  variant = "danger",
+  onConfirm,
+  onCancel,
+}: {
+  title: string;
+  body: string;
+  confirmLabel: string;
+  cancelLabel?: string;
+  variant?: "primary" | "danger";
+  onConfirm: () => void;
+  onCancel: () => void;
+}) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center px-5">
+      <button
+        type="button"
+        aria-label="Kapat"
+        onClick={onCancel}
+        className="absolute inset-0 bg-[#2b1a22]/35 backdrop-blur-[2px]"
+      />
+      <div
+        role="dialog"
+        aria-modal="true"
+        className="relative z-10 w-full max-w-sm rounded-3xl border border-white/80 bg-white p-5 shadow-[0_18px_40px_rgba(194,24,91,0.18)]"
+      >
+        <p className="font-serif text-2xl">{title}</p>
+        <p className="mt-2 text-sm text-muted">{body}</p>
+        <div className="mt-5 flex flex-wrap justify-end gap-2">
+          <Button variant="ghost" onClick={onCancel}>
+            {cancelLabel}
+          </Button>
+          <Button variant={variant} onClick={onConfirm}>
+            {confirmLabel}
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}

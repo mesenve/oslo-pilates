@@ -12,11 +12,14 @@ import Link from "next/link";
 
 export default function AdminHomePage() {
   const { postponeRequests, remainingFor, students, sessions } = useStudio();
-  const pending = postponeRequests.filter((request) => request.status === "pending");
+  const activeIds = new Set(students.map((student) => student.id));
+  const pending = postponeRequests.filter(
+    (request) => request.status === "pending" && activeIds.has(request.studentId),
+  );
   const today = todayISO();
   const todayDay = weekdayFromISO(today);
   const todayGroups = todayDay ? getClassGroupsForDay(todayDay) : [];
-  const attendancePending = pendingAttendanceBatches(sessions);
+  const attendancePending = pendingAttendanceBatches(sessions, activeIds);
 
   return (
     <div className="space-y-8">

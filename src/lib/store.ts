@@ -1,8 +1,8 @@
 import { createSeedState } from "@/data/seed";
 import { getStudents } from "@/data/students";
-import type { StudioState } from "@/types/studio";
+import type { Student, StudioState } from "@/types/studio";
 
-export const STORAGE_KEY = "oslo-pilates-demo-v7";
+export const STORAGE_KEY = "oslo-pilates-demo-v8";
 
 let memory: StudioState = createSeedState();
 const serverSnapshot = memory;
@@ -19,11 +19,8 @@ function readStorage(): StudioState {
     }
     return {
       ...parsed,
-      students: (parsed.students ?? getStudents()).map((student) => ({
-        ...student,
-        note: student.note ?? "",
-        monthlyPostponeLimit: student.monthlyPostponeLimit ?? 1,
-      })),
+      students: (parsed.students ?? getStudents()).map(hydrateStudent),
+      archivedStudents: (parsed.archivedStudents ?? []).map(hydrateStudent),
     };
   } catch {
     return createSeedState();
@@ -56,4 +53,12 @@ export function setStudioState(
     hydrated = true;
   }
   listeners.forEach((listener) => listener());
+}
+
+function hydrateStudent(student: Student) {
+  return {
+    ...student,
+    note: student.note ?? "",
+    monthlyPostponeLimit: student.monthlyPostponeLimit ?? 1,
+  };
 }

@@ -63,8 +63,15 @@ export function effectiveSessionStatus(session: Session): SessionStatus {
   return session.status;
 }
 
-export function pendingAttendanceBatches(sessions: Session[]): AttendanceBatch[] {
-  const pending = sessions.filter((session) => session.status === "attend_pending");
+export function pendingAttendanceBatches(
+  sessions: Session[],
+  activeStudentIds?: Set<string>,
+): AttendanceBatch[] {
+  const pending = sessions.filter((session) => {
+    if (session.status !== "attend_pending") return false;
+    if (!activeStudentIds) return true;
+    return activeStudentIds.has(session.studentId);
+  });
   const grouped = new Map<string, Session[]>();
   for (const session of pending) {
     const key = `${session.date}|${session.groupId}`;
