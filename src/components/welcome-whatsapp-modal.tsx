@@ -43,7 +43,7 @@ export function WelcomeWhatsAppModal({
           </button>
         </div>
         <p className="mt-2 text-sm text-muted">
-          {studentName} kaydı tamamlandı. Hoş geldin mesajını WhatsApp’tan gönderebilirsin.
+          Hoş geldin mesajını WhatsApp’tan gönderebilirsin.
         </p>
         <p className="mt-3 rounded-2xl bg-surface-muted px-3 py-3 text-sm">
           {WELCOME_WHATSAPP_TEXT}

@@ -11,10 +11,12 @@ export function StudentForm({
   student,
   submitLabel = "Öğrenciyi kaydet",
   onSaved,
+  onSubmitted,
 }: {
   student?: Student;
   submitLabel?: string;
   onSaved?: (studentId: string) => void;
+  onSubmitted?: (result: { id: string | null; name: string; phone: string }) => void;
 }) {
   const { addStudent, restoreStudent } = useStudio();
   const groups = getClassGroups();
@@ -34,9 +36,19 @@ export function StudentForm({
       : addStudent(input);
     if (result.error || !result.id) {
       setError(result.error ?? "Kayıt yapılamadı.");
+      onSubmitted?.({
+        id: null,
+        name: input.name.trim() || "Öğrenci",
+        phone: input.phone,
+      });
       return;
     }
     onSaved?.(result.id);
+    onSubmitted?.({
+      id: result.id,
+      name: input.name.trim() || "Öğrenci",
+      phone: input.phone,
+    });
   }
 
   return (
@@ -45,7 +57,7 @@ export function StudentForm({
         label="Ad soyad"
         value={form.name}
         onChange={(value) => update("name", value)}
-        required
+        required={Boolean(student)}
       />
       <div className="grid grid-cols-2 gap-4">
         <Field

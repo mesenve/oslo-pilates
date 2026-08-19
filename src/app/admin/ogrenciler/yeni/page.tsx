@@ -12,8 +12,14 @@ import { useState } from "react";
 export default function NewStudentPage() {
   const router = useRouter();
   const { students } = useStudio();
-  const [savedId, setSavedId] = useState<string | null>(null);
-  const saved = students.find((student) => student.id === savedId);
+  const [welcome, setWelcome] = useState<{
+    id: string | null;
+    name: string;
+    phone: string;
+  } | null>(null);
+  const saved = welcome?.id
+    ? students.find((student) => student.id === welcome.id)
+    : null;
 
   return (
     <div className="space-y-5">
@@ -31,13 +37,19 @@ export default function NewStudentPage() {
         <h1 className="mt-1 font-serif text-3xl">Öğrenci kaydet</h1>
       </header>
       <Card className="p-5">
-        <StudentForm onSaved={setSavedId} />
+        <StudentForm onSubmitted={setWelcome} />
       </Card>
-      {saved ? (
+      {welcome ? (
         <WelcomeWhatsAppModal
-          studentName={saved.name}
-          phone={saved.phone}
-          onClose={() => router.replace(`/admin/ogrenciler/${saved.id}`)}
+          studentName={saved?.name ?? welcome.name}
+          phone={saved?.phone ?? welcome.phone}
+          onClose={() => {
+            if (welcome.id) {
+              router.replace(`/admin/ogrenciler/${welcome.id}`);
+              return;
+            }
+            setWelcome(null);
+          }}
         />
       ) : null}
     </div>
