@@ -1,8 +1,8 @@
 "use client";
 
 import { ClassCalendar } from "@/components/class-calendar";
-import { ChevronLeftIcon } from "@/components/icons";
-import { Button, Card, EmptyState, PaymentBadge, RequestBadge, SessionBadge } from "@/components/ui";
+import { ChevronLeftIcon, TrashIcon } from "@/components/icons";
+import { Button, Card, ConfirmDialog, EmptyState, PaymentBadge, RequestBadge, SessionBadge } from "@/components/ui";
 import { useStudio } from "@/components/studio-provider";
 import {
   effectiveSessionStatus,
@@ -14,13 +14,14 @@ import { getClassGroupById } from "@/data/groups";
 import { formatLongDate, todayISO } from "@/lib/dates";
 import { remainingLabel, postponeRightAdminLabel } from "@/lib/labels";
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { useState } from "react";
 
 export default function StudentDetailPage() {
   const params = useParams<{ id: string }>();
-  const { students, sessions, remainingFor, postponeRequests, approveRequest } =
+  const { students, sessions, remainingFor, postponeRequests, approveRequest, archiveStudent } =
     useStudio();
+  const router = useRouter();
   const student = students.find((item) => item.id === params.id);
   const mine = sessionsForStudent(student?.id ?? "", sessions);
   const today = todayISO();
@@ -29,6 +30,7 @@ export default function StudentDetailPage() {
     mine.at(-1)?.date ??
     today;
   const [selectedDate, setSelectedDate] = useState(defaultDate);
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const marks = mine.map((session) => ({
     date: session.date,
     status: effectiveSessionStatus(session),
@@ -98,6 +100,14 @@ export default function StudentDetailPage() {
             <p className="mt-1 text-sm">{student.note}</p>
           </div>
         ) : null}
+        <Button
+          variant="secondary"
+          className="w-full"
+          onClick={() => setConfirmDelete(true)}
+        >
+          <TrashIcon className="h-4 w-4" />
+          Sil
+        </Button>
       </Card>
 
       <ClassCalendar
@@ -195,6 +205,19 @@ export default function StudentDetailPage() {
           );
         })}
       </section>
+
+      {confirmDelete ? (
+        <ConfirmDialog
+          title="Öğrenciyi sil"
+          body="Bu öğrenciyi silmek istediğine emin misin?"
+          confirmLabel="Sil"
+          onCancel={() => setConfirmDelete(false)}
+          onConfirm={() => {
+            archiveStudent(student.id);
+            router.replace("/admin/ogrenciler");
+          }}
+        />
+      ) : null}
     </div>
   );
 }

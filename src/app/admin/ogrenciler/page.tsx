@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronRightIcon, PlusIcon, TrashIcon } from "@/components/icons";
+import { ChevronRightIcon, PlusIcon } from "@/components/icons";
 import { LetterIndex } from "@/components/letter-index";
 import { Button, Card, ConfirmDialog, EmptyState } from "@/components/ui";
 import { useStudio } from "@/components/studio-provider";
@@ -14,15 +14,9 @@ import { useMemo, useState } from "react";
 type Tab = "aktif" | "arsiv";
 
 export default function StudentsPage() {
-  const {
-    students,
-    archivedStudents,
-    archiveStudent,
-    permanentlyDeleteStudent,
-  } = useStudio();
+  const { students, archivedStudents, permanentlyDeleteStudent } = useStudio();
   const router = useRouter();
   const [tab, setTab] = useState<Tab>("aktif");
-  const [pendingArchive, setPendingArchive] = useState<Student | null>(null);
   const [pendingDelete, setPendingDelete] = useState<Student | null>(null);
 
   const list = tab === "aktif" ? students : archivedStudents;
@@ -87,33 +81,21 @@ export default function StudentsPage() {
         <div className="flex flex-col gap-3">
           {visible.map((student) =>
             tab === "aktif" ? (
-              <Card
+              <Link
                 key={student.id}
-                className="flex items-center justify-between gap-3 px-4 py-4"
+                href={`/admin/ogrenciler/${student.id}`}
+                className="block"
               >
-                <Link
-                  href={`/admin/ogrenciler/${student.id}`}
-                  className="min-w-0 flex-1"
-                >
-                  <p className="font-serif text-xl">{student.name}</p>
-                  <p className="mt-1 text-xs text-muted">
-                    {getClassGroupById(student.groupId)?.label}
-                  </p>
-                </Link>
-                <div className="flex shrink-0 items-center gap-2">
-                  <Button
-                    variant="ghost"
-                    className="px-3 text-accent"
-                    onClick={() => setPendingArchive(student)}
-                  >
-                    <TrashIcon className="h-4 w-4" />
-                    Sil
-                  </Button>
-                  <Link href={`/admin/ogrenciler/${student.id}`}>
-                    <ChevronRightIcon className="h-5 w-5 text-muted" />
-                  </Link>
-                </div>
-              </Card>
+                <Card className="flex items-center justify-between px-4 py-4">
+                  <div>
+                    <p className="font-serif text-xl">{student.name}</p>
+                    <p className="mt-1 text-xs text-muted">
+                      {getClassGroupById(student.groupId)?.label}
+                    </p>
+                  </div>
+                  <ChevronRightIcon className="h-5 w-5 text-muted" />
+                </Card>
+              </Link>
             ) : (
               <Card key={student.id} className="space-y-3 px-4 py-4">
                 <div>
@@ -142,19 +124,6 @@ export default function StudentsPage() {
           )}
         </div>
       )}
-
-      {pendingArchive ? (
-        <ConfirmDialog
-          title="Öğrenciyi sil"
-          body="Bu öğrenciyi silmek istediğine emin misin?"
-          confirmLabel="Sil"
-          onCancel={() => setPendingArchive(null)}
-          onConfirm={() => {
-            archiveStudent(pendingArchive.id);
-            setPendingArchive(null);
-          }}
-        />
-      ) : null}
 
       {pendingDelete ? (
         <ConfirmDialog
