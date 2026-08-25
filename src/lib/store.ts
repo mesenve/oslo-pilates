@@ -1,8 +1,9 @@
 import { createSeedState } from "@/data/seed";
 import { getStudents } from "@/data/students";
+import { DEFAULT_INSTRUCTOR_ID } from "@/data/staff";
 import type { Student, StudioState } from "@/types/studio";
 
-export const STORAGE_KEY = "oslo-pilates-demo-v8";
+export const STORAGE_KEY = "oslo-pilates-demo-v9";
 
 let memory: StudioState = createSeedState();
 const serverSnapshot = memory;
@@ -58,6 +59,7 @@ export function setStudioState(
 function hydrateStudent(student: Student) {
   return {
     ...student,
+    instructorId: student.instructorId ?? DEFAULT_INSTRUCTOR_ID,
     note: student.note ?? "",
     monthlyPostponeLimit: student.monthlyPostponeLimit ?? 1,
   };

@@ -5,10 +5,10 @@ import { pendingAttendanceBatches } from "@/data/accessors";
 import { useStudio } from "@/components/studio-provider";
 
 export default function AttendancePage() {
-  const { sessions, students } = useStudio();
+  const { visibleSessions, visibleStudents } = useStudio();
   const pending = pendingAttendanceBatches(
-    sessions,
-    new Set(students.map((student) => student.id)),
+    visibleSessions,
+    new Set(visibleStudents.map((student) => student.id)),
   ).length;
 
   return (

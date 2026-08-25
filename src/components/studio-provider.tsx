@@ -1,8 +1,9 @@
 "use client";
 
 import { remainingPostponeRights, remainingSessions } from "@/data/accessors";
-import { getAdminUser } from "@/data/students";
+import { DEFAULT_INSTRUCTOR_ID, getStaffById } from "@/data/staff";
 import { buildSessionsForStudent } from "@/data/seed";
+import { studentsForUser, sessionsForUser } from "@/lib/access";
 import { addDays, startOfWeekMonday, toISODate, todayISO } from "@/lib/dates";
 import {
   getServerStudioSnapshot,
@@ -29,10 +30,13 @@ type StudioContextValue = {
   ready: boolean;
   user: StudioState["user"];
   students: Student[];
+  visibleStudents: Student[];
   archivedStudents: Student[];
   sessions: Session[];
+  visibleSessions: Session[];
   postponeRequests: StudioState["postponeRequests"];
-  loginAs: (role: Role) => void;
+  isSuperAdmin: boolean;
+  loginAs: (role: Role, staffId?: string) => void;
   logout: () => void;
   markAttended: (sessionId: string) => void;
   approveAttendance: (sessionIds: string[]) => void;
@@ -62,16 +66,17 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
     getServerStudioSnapshot,
   );
 
-  const loginAs = useCallback((role: Role) => {
-    if (role === "admin") {
-      const admin = getAdminUser();
+  const loginAs = useCallback((role: Role, staffId?: string) => {
+    if (role === "super_admin" || role === "instructor") {
+      const staff = staffId ? getStaffById(staffId) : undefined;
+      if (!staff || staff.role !== role) return;
       setStudioState((current) => ({
         ...current,
         user: {
-          id: admin.id,
-          name: admin.name,
-          email: admin.email,
-          role: "admin",
+          id: staff.id,
+          name: staff.name,
+          email: staff.email,
+          role: staff.role,
         },
       }));
       return;
@@ -298,14 +303,29 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
     [state.postponeRequests, state.students],
   );
 
+  const visibleStudents = useMemo(
+    () => studentsForUser(state.user, state.students),
+    [state.students, state.user],
+  );
+
+  const visibleSessions = useMemo(
+    () => sessionsForUser(state.user, state.sessions, state.students),
+    [state.sessions, state.students, state.user],
+  );
+
+  const isSuperAdmin = state.user?.role === "super_admin";
+
   const value = useMemo<StudioContextValue>(
     () => ({
       ready,
       user: state.user,
       students: state.students,
+      visibleStudents,
       archivedStudents: state.archivedStudents,
       sessions: state.sessions,
+      visibleSessions,
       postponeRequests: state.postponeRequests,
+      isSuperAdmin,
       loginAs,
       logout,
       markAttended,
@@ -340,6 +360,9 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
       state.sessions,
       state.students,
       state.user,
+      visibleSessions,
+      visibleStudents,
+      isSuperAdmin,
     ],
   );
 
@@ -388,6 +411,7 @@ function studentFromInput(
     email,
     phone: input.phone.trim() || "—",
     groupId: input.groupId,
+    instructorId: input.instructorId?.trim() || DEFAULT_INSTRUCTOR_ID,
     note: input.note?.trim() ?? "",
     measurements: {
       weightKg: input.weightKg,

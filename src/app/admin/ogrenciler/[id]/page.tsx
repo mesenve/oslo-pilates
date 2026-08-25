@@ -11,6 +11,7 @@ import {
   sessionsForStudent,
 } from "@/data/accessors";
 import { getClassGroupById } from "@/data/groups";
+import { getStaffById } from "@/data/staff";
 import { formatLongDate, todayISO } from "@/lib/dates";
 import { remainingLabel, postponeRightAdminLabel } from "@/lib/labels";
 import Link from "next/link";
@@ -19,11 +20,18 @@ import { useState } from "react";
 
 export default function StudentDetailPage() {
   const params = useParams<{ id: string }>();
-  const { students, sessions, remainingFor, postponeRequests, approveRequest, archiveStudent } =
-    useStudio();
+  const {
+    visibleStudents,
+    visibleSessions,
+    remainingFor,
+    postponeRequests,
+    approveRequest,
+    archiveStudent,
+    isSuperAdmin,
+  } = useStudio();
   const router = useRouter();
-  const student = students.find((item) => item.id === params.id);
-  const mine = sessionsForStudent(student?.id ?? "", sessions);
+  const student = visibleStudents.find((item) => item.id === params.id);
+  const mine = sessionsForStudent(student?.id ?? "", visibleSessions);
   const today = todayISO();
   const defaultDate =
     mine.find((session) => session.date >= today)?.date ??
@@ -36,7 +44,7 @@ export default function StudentDetailPage() {
     status: effectiveSessionStatus(session),
   }));
   const selected = mine.filter((session) => session.date === selectedDate);
-  const counts = sessionCounts(student?.id ?? "", sessions);
+  const counts = sessionCounts(student?.id ?? "", visibleSessions);
   const group = student ? getClassGroupById(student.groupId) : undefined;
   const requests = postponeRequests.filter(
     (request) => request.studentId === student?.id,
@@ -48,7 +56,9 @@ export default function StudentDetailPage() {
         <Link href="/admin/ogrenciler" className="text-sm text-muted">
           ← Öğrenciler
         </Link>
-        <EmptyState>Öğrenci bulunamadı.</EmptyState>
+        <EmptyState>
+          {isSuperAdmin ? "Öğrenci bulunamadı." : "Bu öğrenci sana atanmamış."}
+        </EmptyState>
       </div>
     );
   }
@@ -69,16 +79,23 @@ export default function StudentDetailPage() {
         </p>
         <div className="mt-1 flex items-center justify-between gap-3">
           <h1 className="min-w-0 font-serif text-3xl leading-none">{student.name}</h1>
-          <Button
-            variant="secondary"
-            className="shrink-0 px-3 py-1.5"
-            onClick={() => setConfirmDelete(true)}
-          >
-            <TrashIcon className="h-4 w-4" />
-            Sil
-          </Button>
+          {isSuperAdmin ? (
+            <Button
+              variant="secondary"
+              className="shrink-0 px-3 py-1.5"
+              onClick={() => setConfirmDelete(true)}
+            >
+              <TrashIcon className="h-4 w-4" />
+              Sil
+            </Button>
+          ) : null}
         </div>
-        <p className="mt-1 text-sm text-muted">{group?.label}</p>
+        <p className="mt-1 text-sm text-muted">
+          {group?.label}
+          {getStaffById(student.instructorId)
+            ? ` · Eğitmen: ${getStaffById(student.instructorId)?.name}`
+            : ""}
+        </p>
       </header>
 
       <div className="grid grid-cols-3 gap-2">
@@ -165,7 +182,7 @@ export default function StudentDetailPage() {
           <EmptyState>Bu öğrencinin erteleme kaydı yok.</EmptyState>
         ) : (
           requests.map((request) => {
-            const session = sessions.find((item) => item.id === request.sessionId);
+            const session = visibleSessions.find((item) => item.id === request.sessionId);
             return (
               <Card key={request.id} className="space-y-2 p-4">
                 <div className="flex items-center justify-between gap-3">

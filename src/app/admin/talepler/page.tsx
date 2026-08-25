@@ -9,8 +9,8 @@ import { formatLongDate } from "@/lib/dates";
 import { postponeRightAdminLabel } from "@/lib/labels";
 
 export default function RequestsPage() {
-  const { postponeRequests, sessions, students, approveRequest } = useStudio();
-  const activeIds = new Set(students.map((student) => student.id));
+  const { postponeRequests, visibleSessions, visibleStudents, approveRequest } = useStudio();
+  const activeIds = new Set(visibleStudents.map((student) => student.id));
   const visibleRequests = postponeRequests.filter((request) =>
     activeIds.has(request.studentId),
   );
@@ -27,7 +27,7 @@ export default function RequestsPage() {
         </p>
       </header>
 
-      <OpeningsBoard requests={visibleRequests} sessions={sessions} />
+      <OpeningsBoard requests={visibleRequests} sessions={visibleSessions} />
 
       <section className="space-y-3">
         <h2 className="font-serif text-2xl">Erteleme talepleri</h2>
@@ -35,8 +35,8 @@ export default function RequestsPage() {
           <EmptyState>Henüz erteleme talebi yok.</EmptyState>
         ) : (
           visibleRequests.map((request) => {
-            const session = sessions.find((item) => item.id === request.sessionId);
-            const student = students.find((item) => item.id === request.studentId);
+            const session = visibleSessions.find((item) => item.id === request.sessionId);
+            const student = visibleStudents.find((item) => item.id === request.studentId);
             const group = session ? getClassGroupById(session.groupId) : undefined;
             const pending = request.status === "pending";
             const used = student
@@ -49,7 +49,7 @@ export default function RequestsPage() {
                 <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                   <div>
                     <p className="font-serif text-2xl">
-                      {studentName(request.studentId, students)}
+                      {studentName(request.studentId, visibleStudents)}
                     </p>
                     <p className="mt-1 text-sm text-muted">
                       {session

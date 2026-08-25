@@ -6,10 +6,11 @@ import { pendingAttendanceBatches, studentName } from "@/data/accessors";
 import { formatLongDate } from "@/lib/dates";
 
 export function AttendanceBoard() {
-  const { sessions, students, approveAttendance, rejectAttendance } = useStudio();
+  const { visibleSessions, visibleStudents, approveAttendance, rejectAttendance } =
+    useStudio();
   const batches = pendingAttendanceBatches(
-    sessions,
-    new Set(students.map((student) => student.id)),
+    visibleSessions,
+    new Set(visibleStudents.map((student) => student.id)),
   );
 
   if (batches.length === 0) {
@@ -34,7 +35,7 @@ export function AttendanceBoard() {
                 <ul className="mt-3 space-y-1 text-sm">
                   {batch.sessions.map((session) => (
                     <li key={session.id}>
-                      {studentName(session.studentId, students)}
+                      {studentName(session.studentId, visibleStudents)}
                     </li>
                   ))}
                 </ul>

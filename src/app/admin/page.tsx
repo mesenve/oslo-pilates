@@ -11,20 +11,32 @@ import { DAY_LABELS } from "@/lib/labels";
 import Link from "next/link";
 
 export default function AdminHomePage() {
-  const { postponeRequests, remainingFor, students, sessions } = useStudio();
-  const activeIds = new Set(students.map((student) => student.id));
+  const { postponeRequests, remainingFor, visibleStudents, visibleSessions, isSuperAdmin, user } =
+    useStudio();
+  const activeIds = new Set(visibleStudents.map((student) => student.id));
   const pending = postponeRequests.filter(
     (request) => request.status === "pending" && activeIds.has(request.studentId),
   );
   const today = todayISO();
   const todayDay = weekdayFromISO(today);
   const todayGroups = todayDay ? getClassGroupsForDay(todayDay) : [];
-  const attendancePending = pendingAttendanceBatches(sessions, activeIds);
+  const attendancePending = pendingAttendanceBatches(visibleSessions, activeIds);
+  const groupsWithStudents = todayGroups.filter((group) =>
+    visibleStudents.some((student) => student.groupId === group.id),
+  );
 
   return (
     <div className="space-y-8">
+      <header>
+        <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-accent">
+          {isSuperAdmin ? "Yönetici özeti" : "Bugünkü derslerim"}
+        </p>
+        <h1 className="mt-1 font-serif text-3xl">
+          {isSuperAdmin ? "Ana sayfa" : user?.name ?? "Eğitmen"}
+        </h1>
+      </header>
       <div className="grid grid-cols-3 gap-3">
-        <StatCard label="Öğrenci" value={String(students.length)} href="/admin/ogrenciler" />
+        <StatCard label="Öğrenci" value={String(visibleStudents.length)} href="/admin/ogrenciler" />
         <StatCard
           label="Yoklama"
           value={String(attendancePending.length)}
@@ -52,16 +64,16 @@ export default function AdminHomePage() {
             Takvime git →
           </Link>
         </div>
-        {todayGroups.length === 0 ? (
-          <p className="text-sm text-muted">Bugün grup dersi yok.</p>
+        {groupsWithStudents.length === 0 ? (
+          <p className="text-sm text-muted">Bugün dersin yok.</p>
         ) : (
           <div className="flex flex-col gap-3">
-            {todayGroups.map((group) => (
+            {groupsWithStudents.map((group) => (
               <GroupClassCard
                 key={group.id}
                 group={group}
                 day={todayDay}
-                students={students}
+                students={visibleStudents}
               />
             ))}
           </div>
@@ -79,7 +91,7 @@ export default function AdminHomePage() {
           <p className="text-sm text-muted">Bekleyen erteleme talebi yok.</p>
         ) : (
           pending.slice(0, 3).map((request) => {
-            const session = sessions.find((item) => item.id === request.sessionId);
+            const session = visibleSessions.find((item) => item.id === request.sessionId);
             return (
               <Card
                 key={request.id}
@@ -87,7 +99,7 @@ export default function AdminHomePage() {
               >
                 <div>
                   <p className="font-medium">
-                    {studentName(request.studentId, students)}
+                    {studentName(request.studentId, visibleStudents)}
                   </p>
                   <p className="mt-1 text-sm text-muted">
                     {session

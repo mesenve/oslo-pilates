@@ -1,6 +1,7 @@
 import { sortByName } from "@/lib/alphabet";
 import { addDays, startOfWeekMonday, toISODate } from "@/lib/dates";
-import type { AdminUser, PaymentStatus, Student } from "@/types/studio";
+import { DEFAULT_INSTRUCTOR_ID, getStaffById } from "@/data/staff";
+import type { PaymentStatus, Student } from "@/types/studio";
 
 const currentMonday = startOfWeekMonday();
 const packageStart = addDays(currentMonday, -21);
@@ -8,7 +9,9 @@ const packageEnd = addDays(currentMonday, 4);
 
 export const DEMO_ACCOUNTS = {
   student: { email: "merve@oslo", password: "pilates" },
-  admin: { email: "admin@oslo", password: "studio" },
+  super_admin: { email: "ece@oslo", password: "studio" },
+  instructor_elif: { email: "elif.hoca@oslo", password: "studio" },
+  instructor_delfin: { email: "delfin.hoca@oslo", password: "studio" },
 } as const;
 
 export function getStudents(): Student[] {
@@ -25,8 +28,8 @@ export function getStudentByEmail(email: string): Student | undefined {
   );
 }
 
-export function getAdminUser(): AdminUser {
-  return ADMIN;
+export function getAdminUser() {
+  return getStaffById("staff-ece")!;
 }
 
 const GROUP_IDS = [
@@ -58,6 +61,7 @@ const FEATURED: Student[] = [
     email: "merve@oslo",
     phone: "0532 111 22 33",
     groupId: "pzt-car-cum-1000",
+    instructorId: "staff-delfin",
     note: "Son haftası. Paket uzatma konuşulacak.",
     measurements: {
       weightKg: 58,
@@ -82,6 +86,7 @@ const FEATURED: Student[] = [
     email: "elif@oslo",
     phone: "0533 222 33 44",
     groupId: "sal-per-1100",
+    instructorId: "staff-elif",
     note: "İş seyahati nedeniyle erteleme talebi gönderdi.",
     measurements: {
       weightKg: 62,
@@ -106,6 +111,7 @@ const FEATURED: Student[] = [
     email: "deniz@oslo",
     phone: "0534 333 44 55",
     groupId: "sal-per-1800",
+    instructorId: "staff-delfin",
     note: "Ödeme gecikmesi hatırlatılacak.",
     measurements: {
       weightKg: 74,
@@ -130,6 +136,7 @@ const FEATURED: Student[] = [
     email: "ayse@oslo",
     phone: "0535 444 55 66",
     groupId: "pzt-car-cum-0915",
+    instructorId: "staff-elif",
     note: "Sabah grubu, düzenli devam ediyor.",
     measurements: {
       weightKg: 55,
@@ -222,6 +229,7 @@ function dummyStudent(name: string, index: number): Student {
     email: `${first}@oslo`,
     phone: `053${2 + (index % 8)} ${String(500 + index).padStart(3, "0")} ${String(10 + index).padStart(2, "0")} ${String(20 + index).padStart(2, "0")}`,
     groupId: GROUP_IDS[index % GROUP_IDS.length],
+    instructorId: index % 2 === 0 ? "staff-elif" : "staff-delfin",
     note: NOTES[index % NOTES.length],
     measurements: {
       weightKg: 52 + (index % 24),
@@ -246,9 +254,3 @@ const STUDENTS: Student[] = sortByName([
   ...FEATURED,
   ...DUMMY_NAMES.map(dummyStudent),
 ]);
-
-const ADMIN: AdminUser = {
-  id: "admin-1",
-  name: "Oslo Hoca",
-  email: "admin@oslo",
-};

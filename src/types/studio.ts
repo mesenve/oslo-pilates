@@ -5,7 +5,9 @@ export type DayOfWeek =
   | "thursday"
   | "friday";
 
-export type Role = "student" | "admin";
+export type Role = "student" | "super_admin" | "instructor";
+
+export type StaffRole = "super_admin" | "instructor";
 
 export type SessionStatus =
   | "upcoming"
@@ -51,17 +53,22 @@ export type Student = {
   email: string;
   phone: string;
   groupId: string;
+  instructorId: string;
   note: string;
   measurements: Measurements;
   package: StudentPackage;
   monthlyPostponeLimit: number;
 };
 
-export type AdminUser = {
+export type StaffUser = {
   id: string;
   name: string;
   email: string;
+  role: StaffRole;
 };
+
+/** @deprecated Use StaffUser */
+export type AdminUser = StaffUser;
 
 export type Session = {
   id: string;
@@ -92,6 +99,7 @@ export type NewStudentInput = {
   email: string;
   phone: string;
   groupId: string;
+  instructorId: string;
   weightKg: number;
   heightCm: number;
   waistCm: number;

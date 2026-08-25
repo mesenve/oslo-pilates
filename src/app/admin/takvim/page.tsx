@@ -16,7 +16,7 @@ import {
 import { useMemo, useState } from "react";
 
 export default function CalendarPage() {
-  const { students } = useStudio();
+  const { visibleStudents } = useStudio();
   const today = todayISO();
   const todayDay = weekdayFromISO(today);
   const [selectedDate, setSelectedDate] = useState(today);
@@ -68,7 +68,7 @@ export default function CalendarPage() {
               key={group.id}
               group={group}
               day={day}
-              students={students}
+              students={visibleStudents}
             />
           ))}
         </div>

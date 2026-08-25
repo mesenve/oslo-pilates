@@ -11,9 +11,9 @@ import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 
 export default function StudentsPage() {
-  const { students } = useStudio();
+  const { visibleStudents, isSuperAdmin } = useStudio();
   const router = useRouter();
-  const sorted = useMemo(() => sortByName(students), [students]);
+  const sorted = useMemo(() => sortByName(visibleStudents), [visibleStudents]);
   const initial =
     sorted.length > 0 ? firstLetter(sorted[0].name) : ("A" as TurkishLetter);
   const [letter, setLetter] = useState<TurkishLetter>(initial);
@@ -23,12 +23,16 @@ export default function StudentsPage() {
     <div className="space-y-5">
       <header className="flex items-start justify-between gap-3">
         <div>
-          <h1 className="font-serif text-3xl">Öğrenciler</h1>
+          <h1 className="font-serif text-3xl">
+            {isSuperAdmin ? "Öğrenciler" : "Öğrencilerim"}
+          </h1>
         </div>
-        <Button onClick={() => router.push("/admin/ogrenciler/yeni")}>
-          <PlusIcon className="h-4 w-4" />
-          Kaydet
-        </Button>
+        {isSuperAdmin ? (
+          <Button onClick={() => router.push("/admin/ogrenciler/yeni")}>
+            <PlusIcon className="h-4 w-4" />
+            Kaydet
+          </Button>
+        ) : null}
       </header>
 
       <LetterIndex students={sorted} selected={letter} onSelect={setLetter} />

@@ -3,6 +3,7 @@
 import { Button } from "@/components/ui";
 import { useStudio } from "@/components/studio-provider";
 import { getClassGroups } from "@/data/groups";
+import { DEFAULT_INSTRUCTOR_ID, getInstructors } from "@/data/staff";
 import { PAYMENT_LABELS } from "@/lib/labels";
 import type { NewStudentInput, PaymentStatus, Student } from "@/types/studio";
 import { useState } from "react";
@@ -60,6 +61,20 @@ export function StudentForm({
           onChange={(value) => update("phone", value)}
         />
       </div>
+      <label className="block text-sm">
+        <span className="text-muted">Eğitmen</span>
+        <select
+          value={form.instructorId}
+          onChange={(event) => update("instructorId", event.target.value)}
+          className="mt-1 w-full rounded-xl border border-border bg-white px-3 py-2.5 text-sm outline-none focus:border-accent"
+        >
+          {getInstructors().map((instructor) => (
+            <option key={instructor.id} value={instructor.id}>
+              {instructor.name}
+            </option>
+          ))}
+        </select>
+      </label>
       <label className="block text-sm">
         <span className="text-muted">Grup</span>
         <select
@@ -163,6 +178,7 @@ function formFromStudent(student: Student | undefined, fallbackGroupId: string) 
     email: student?.email ?? "",
     phone: student?.phone === "—" ? "" : (student?.phone ?? ""),
     groupId: student?.groupId ?? fallbackGroupId,
+    instructorId: student?.instructorId ?? DEFAULT_INSTRUCTOR_ID,
     weightKg: student ? String(student.measurements.weightKg) : "",
     heightCm: student ? String(student.measurements.heightCm) : "",
     waistCm: student ? String(student.measurements.waistCm) : "",
@@ -181,6 +197,7 @@ function toInput(form: ReturnType<typeof formFromStudent>): NewStudentInput {
     email: form.email,
     phone: form.phone,
     groupId: form.groupId,
+    instructorId: form.instructorId,
     weightKg: Number(form.weightKg) || 0,
     heightCm: Number(form.heightCm) || 0,
     waistCm: Number(form.waistCm) || 0,
