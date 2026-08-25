@@ -121,17 +121,9 @@ function GirisForm() {
               />
             </div>
             <div>
-              <div className="flex items-center justify-between gap-2">
-                <label className="text-sm text-muted" htmlFor="password">
-                  Şifre
-                </label>
-                <Link
-                  href="/giris/sifremi-unuttum"
-                  className="text-sm text-accent hover:text-accent-hover"
-                >
-                  Şifremi unuttum
-                </Link>
-              </div>
+              <label className="text-sm text-muted" htmlFor="password">
+                Şifre
+              </label>
               <input
                 id="password"
                 type="password"
@@ -140,6 +132,14 @@ function GirisForm() {
                 className="mt-1 w-full rounded-xl border border-border bg-white px-3 py-2.5 text-sm outline-none focus:border-accent"
                 autoComplete="current-password"
               />
+              <div className="mt-2 text-right">
+                <Link
+                  href="/giris/sifremi-unuttum"
+                  className="text-sm text-accent hover:text-accent-hover"
+                >
+                  Şifremi unuttum
+                </Link>
+              </div>
             </div>
             <Button type="submit" className="w-full">
               Giriş yap
