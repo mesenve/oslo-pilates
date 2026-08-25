@@ -7,7 +7,7 @@ import Link from "next/link";
 import { useState } from "react";
 
 export default function SifremiUnuttumPage() {
-  const [email, setEmail] = useState(DEMO_ACCOUNTS.student.email);
+  const [email, setEmail] = useState<string>(DEMO_ACCOUNTS.student.email);
   const [sent, setSent] = useState(false);
 
   function handleSubmit(event: React.FormEvent) {
