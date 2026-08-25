@@ -43,6 +43,10 @@ type StudioContextValue = {
   rejectAttendance: (sessionIds: string[]) => void;
   requestPostpone: (sessionId: string, reason: string) => void;
   approveRequest: (requestId: string) => void;
+  markSessionByInstructor: (
+    sessionId: string,
+    outcome: "attended" | "postponed" | "missed",
+  ) => void;
   addStudent: (input: NewStudentInput) => { error: string | null; id: string | null };
   archiveStudent: (studentId: string) => void;
   restoreStudent: (
@@ -184,6 +188,87 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
       };
     });
   }, []);
+
+  const markSessionByInstructor = useCallback(
+    (sessionId: string, outcome: "attended" | "postponed" | "missed") => {
+      setStudioState((current) => {
+        const session = current.sessions.find((item) => item.id === sessionId);
+        if (!session) return current;
+        const status = session.status;
+        if (
+          status !== "upcoming" &&
+          status !== "attend_pending" &&
+          status !== "postpone_pending"
+        ) {
+          return current;
+        }
+
+        if (outcome === "attended") {
+          return {
+            ...current,
+            sessions: current.sessions.map((item) =>
+              item.id === sessionId ? { ...item, status: "attended" } : item,
+            ),
+            postponeRequests: current.postponeRequests.map((request) =>
+              request.sessionId === sessionId && request.status === "pending"
+                ? { ...request, status: "rejected" }
+                : request,
+            ),
+          };
+        }
+
+        if (outcome === "missed") {
+          return {
+            ...current,
+            sessions: current.sessions.map((item) =>
+              item.id === sessionId ? { ...item, status: "missed" } : item,
+            ),
+            postponeRequests: current.postponeRequests.map((request) =>
+              request.sessionId === sessionId && request.status === "pending"
+                ? { ...request, status: "rejected" }
+                : request,
+            ),
+          };
+        }
+
+        const pendingRequest = current.postponeRequests.find(
+          (request) => request.sessionId === sessionId && request.status === "pending",
+        );
+        if (pendingRequest) {
+          return {
+            ...current,
+            sessions: current.sessions.map((item) =>
+              item.id === sessionId ? { ...item, status: "postponed" } : item,
+            ),
+            postponeRequests: current.postponeRequests.map((request) =>
+              request.id === pendingRequest.id
+                ? { ...request, status: "approved" }
+                : request,
+            ),
+          };
+        }
+
+        return {
+          ...current,
+          sessions: current.sessions.map((item) =>
+            item.id === sessionId ? { ...item, status: "postponed" } : item,
+          ),
+          postponeRequests: [
+            {
+              id: `req-${sessionId}-inst-${Date.now()}`,
+              studentId: session.studentId,
+              sessionId,
+              reason: "Eğitmen erteleme işaretledi.",
+              status: "approved" as const,
+              createdAt: `${todayISO()}T12:00:00`,
+            },
+            ...current.postponeRequests,
+          ],
+        };
+      });
+    },
+    [],
+  );
 
   const addStudent = useCallback((input: NewStudentInput) => {
     const name = input.name.trim();
@@ -333,6 +418,7 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
       rejectAttendance,
       requestPostpone,
       approveRequest,
+      markSessionByInstructor,
       addStudent,
       archiveStudent,
       restoreStudent,
@@ -349,6 +435,7 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
       markAttended,
       approveAttendance,
       rejectAttendance,
+      markSessionByInstructor,
       permanentlyDeleteStudent,
       ready,
       remainingFor,

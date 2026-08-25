@@ -2,6 +2,7 @@
 
 import { AttendanceBoard } from "@/components/attendance-board";
 import { GroupClassCard } from "@/components/group-class-card";
+import { InstructorHome } from "@/components/instructor-home";
 import { Card, RequestBadge } from "@/components/ui";
 import { useStudio } from "@/components/studio-provider";
 import { pendingAttendanceBatches, studentName } from "@/data/accessors";
@@ -13,6 +14,11 @@ import Link from "next/link";
 export default function AdminHomePage() {
   const { postponeRequests, remainingFor, visibleStudents, visibleSessions, isSuperAdmin, user } =
     useStudio();
+
+  if (!isSuperAdmin && user) {
+    return <InstructorHome userName={user.name} />;
+  }
+
   const activeIds = new Set(visibleStudents.map((student) => student.id));
   const pending = postponeRequests.filter(
     (request) => request.status === "pending" && activeIds.has(request.studentId),
@@ -29,11 +35,9 @@ export default function AdminHomePage() {
     <div className="space-y-8">
       <header>
         <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-accent">
-          {isSuperAdmin ? "Yönetici özeti" : "Bugünkü derslerim"}
+          Yönetici özeti
         </p>
-        <h1 className="mt-1 font-serif text-3xl">
-          {isSuperAdmin ? "Ana sayfa" : user?.name ?? "Eğitmen"}
-        </h1>
+        <h1 className="mt-1 font-serif text-3xl">Ana sayfa</h1>
       </header>
       <div className="grid grid-cols-3 gap-3">
         <StatCard label="Öğrenci" value={String(visibleStudents.length)} href="/admin/ogrenciler" />
