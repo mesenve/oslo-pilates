@@ -121,9 +121,17 @@ function GirisForm() {
               />
             </div>
             <div>
-              <label className="text-sm text-muted" htmlFor="password">
-                Şifre
-              </label>
+              <div className="flex items-center justify-between gap-2">
+                <label className="text-sm text-muted" htmlFor="password">
+                  Şifre
+                </label>
+                <Link
+                  href="/giris/sifremi-unuttum"
+                  className="text-sm text-accent hover:text-accent-hover"
+                >
+                  Şifremi unuttum
+                </Link>
+              </div>
               <input
                 id="password"
                 type="password"
