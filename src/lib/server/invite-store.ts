@@ -15,12 +15,24 @@ type InviteStore = {
   invites: Record<string, StoredInvite>;
 };
 
-const DATA_DIR = path.join(process.cwd(), ".data");
-const STORE_PATH = path.join(DATA_DIR, "invites.json");
+function getDataDir() {
+  if (
+    process.env.NETLIFY ||
+    process.env.AWS_LAMBDA_FUNCTION_NAME ||
+    process.env.VERCEL
+  ) {
+    return path.join("/tmp", "oslo-pilates");
+  }
+  return path.join(process.cwd(), ".data");
+}
+
+function getStorePath() {
+  return path.join(getDataDir(), "invites.json");
+}
 
 async function readStore(): Promise<InviteStore> {
   try {
-    const raw = await readFile(STORE_PATH, "utf8");
+    const raw = await readFile(getStorePath(), "utf8");
     return JSON.parse(raw) as InviteStore;
   } catch {
     return { invites: {} };
@@ -28,8 +40,9 @@ async function readStore(): Promise<InviteStore> {
 }
 
 async function writeStore(store: InviteStore) {
-  await mkdir(DATA_DIR, { recursive: true });
-  await writeFile(STORE_PATH, JSON.stringify(store, null, 2), "utf8");
+  const dataDir = getDataDir();
+  await mkdir(dataDir, { recursive: true });
+  await writeFile(getStorePath(), JSON.stringify(store, null, 2), "utf8");
 }
 
 export async function saveInvite(invite: StoredInvite) {

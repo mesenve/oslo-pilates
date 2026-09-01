@@ -1,13 +1,12 @@
 "use client";
 
 import { Button, Card } from "@/components/ui";
-import { DEMO_ACCOUNTS } from "@/data/students";
 import { STUDIO_NAME } from "@/lib/studio";
 import Link from "next/link";
 import { useState } from "react";
 
 export default function SifremiUnuttumPage() {
-  const [email, setEmail] = useState<string>(DEMO_ACCOUNTS.student.email);
+  const [email, setEmail] = useState("");
   const [sent, setSent] = useState(false);
 
   function handleSubmit(event: React.FormEvent) {
@@ -50,8 +49,8 @@ export default function SifremiUnuttumPage() {
               <div>
                 <h1 className="font-serif text-2xl">Şifremi unuttum</h1>
                 <p className="mt-2 text-sm text-muted">
-                  E-posta adresini yaz; demo olarak sıfırlama adımına
-                  geçebilirsin.
+                  E-posta adresini yaz; e-posta adresine sıfırlama bağlantısı
+                  gelecektir.
                 </p>
               </div>
               <div>

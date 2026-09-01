@@ -76,15 +76,28 @@ export async function POST(request: Request) {
   }
 
   if (student && sessions && expiresAt) {
-    await saveInvite({
-      token,
-      student,
-      sessions,
-      expiresAt,
-    });
+    try {
+      await saveInvite({
+        token,
+        student,
+        sessions,
+        expiresAt,
+      });
+    } catch (error) {
+      console.error("Invite store save failed:", error);
+    }
   }
 
-  const result = await sendWelcomeInviteEmail({ name, email }, inviteUrl);
+  let result: Awaited<ReturnType<typeof sendWelcomeInviteEmail>>;
+  try {
+    result = await sendWelcomeInviteEmail({ name, email }, inviteUrl);
+  } catch (error) {
+    console.error("Invite email send failed:", error);
+    return NextResponse.json(
+      { error: "Davet maili gönderilemedi. Lütfen tekrar dene." },
+      { status: 502 },
+    );
+  }
 
   if (!result.ok) {
     return NextResponse.json({ error: result.error }, { status: 502 });

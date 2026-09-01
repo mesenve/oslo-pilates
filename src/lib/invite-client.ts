@@ -92,6 +92,19 @@ export type SendInviteEmailInput = {
   expiresAt: string;
 };
 
+async function readJsonResponse<T>(response: Response): Promise<T> {
+  const text = await response.text();
+  if (!text.trim()) {
+    throw new Error("Sunucudan geçerli yanıt alınamadı.");
+  }
+
+  try {
+    return JSON.parse(text) as T;
+  } catch {
+    throw new Error("Sunucudan geçerli yanıt alınamadı.");
+  }
+}
+
 export async function sendInviteEmail(input: SendInviteEmailInput) {
   const response = await fetch("/api/invite", {
     method: "POST",
@@ -99,7 +112,7 @@ export async function sendInviteEmail(input: SendInviteEmailInput) {
     body: JSON.stringify(input),
   });
 
-  const data = (await response.json()) as { error?: string };
+  const data = await readJsonResponse<{ error?: string }>(response);
 
   if (!response.ok) {
     throw new Error(data.error ?? "Davet maili gönderilemedi.");
