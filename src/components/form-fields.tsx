@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronDownIcon } from "@/components/icons";
+import { ChevronDownIcon, EyeIcon, EyeOffIcon } from "@/components/icons";
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
@@ -12,6 +12,57 @@ export function FormSubheading({ children }: { children: React.ReactNode }) {
     <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-accent">
       {children}
     </p>
+  );
+}
+
+export function PasswordField({
+  id,
+  label,
+  value,
+  onChange,
+  required,
+  autoComplete,
+}: {
+  id?: string;
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  required?: boolean;
+  autoComplete?: string;
+}) {
+  const generatedId = useId();
+  const inputId = id ?? generatedId;
+  const [visible, setVisible] = useState(false);
+
+  return (
+    <div>
+      <label className="text-sm text-muted" htmlFor={inputId}>
+        {label}
+      </label>
+      <div className="relative mt-1">
+        <input
+          id={inputId}
+          type={visible ? "text" : "password"}
+          value={value}
+          required={required}
+          autoComplete={autoComplete}
+          onChange={(event) => onChange(event.target.value)}
+          className={`${fieldControlClass} pr-10`}
+        />
+        <button
+          type="button"
+          onClick={() => setVisible((current) => !current)}
+          className="absolute inset-y-0 right-0 flex w-10 items-center justify-center text-muted transition-colors hover:text-accent"
+          aria-label={visible ? "Şifreyi gizle" : "Şifreyi göster"}
+        >
+          {visible ? (
+            <EyeOffIcon className="h-4 w-4" />
+          ) : (
+            <EyeIcon className="h-4 w-4" />
+          )}
+        </button>
+      </div>
+    </div>
   );
 }
 

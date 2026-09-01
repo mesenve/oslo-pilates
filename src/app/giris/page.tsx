@@ -1,5 +1,6 @@
 "use client";
 
+import { PasswordField } from "@/components/form-fields";
 import { Button, Card } from "@/components/ui";
 import { useStudio } from "@/components/studio-provider";
 import { adminHomeFor, isStaffRole } from "@/lib/access";
@@ -237,15 +238,11 @@ function GirisForm() {
               />
             </div>
             <div>
-              <label className="text-sm text-muted" htmlFor="password">
-                Şifre
-              </label>
-              <input
+              <PasswordField
                 id="password"
-                type="password"
+                label="Şifre"
                 value={password}
-                onChange={(event) => setPassword(event.target.value)}
-                className="mt-1 w-full rounded-xl border border-border bg-white px-3 py-2.5 text-sm outline-none focus:border-accent"
+                onChange={setPassword}
                 autoComplete="current-password"
                 required
               />
