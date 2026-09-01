@@ -164,7 +164,7 @@ function DavetForm() {
     <InviteShell>
       <form className="space-y-4" onSubmit={handleSubmit}>
         <div className="text-center">
-          <h1 className="font-serif text-2xl">{STUDIO_NAME} ailesine hoş geldin</h1>
+          <h1 className="font-serif text-2xl">{STUDIO_NAME}&apos;e Hoşgeldin!</h1>
           <p className="mt-2 text-sm text-muted">
             Merhaba {studentName}, üyelik adımını tamamlamak için şifreni belirle.
           </p>
