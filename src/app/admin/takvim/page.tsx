@@ -40,10 +40,7 @@ export default function CalendarPage() {
   return (
     <div className="space-y-5">
       <header>
-        <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-accent">
-          Grup dersleri
-        </p>
-        <h1 className="mt-1 font-serif text-3xl">Takvim</h1>
+        <h1 className="font-serif text-3xl">Takvim</h1>
       </header>
 
       <ClassCalendar

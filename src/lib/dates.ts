@@ -74,6 +74,14 @@ export function formatShortDate(iso: string): string {
   });
 }
 
+export function formatInputDate(iso: string): string {
+  return parseISODate(iso).toLocaleDateString("tr-TR", {
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  });
+}
+
 export function formatWeekRange(monday: Date): string {
   const friday = addDays(monday, 4);
   const start = monday.toLocaleDateString("tr-TR", {

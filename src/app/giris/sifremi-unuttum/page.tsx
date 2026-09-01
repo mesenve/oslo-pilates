@@ -19,17 +19,13 @@ export default function SifremiUnuttumPage() {
   return (
     <div className="flex min-h-dvh items-center justify-center px-4 py-10">
       <div className="w-full max-w-md">
-        <Link href="/" className="mb-5 block text-center">
+        <Link href="/giris" className="mb-5 block text-center">
           <p className="font-serif text-3xl">{STUDIO_NAME}</p>
-          <p className="mt-1 text-sm text-muted">Şifre sıfırlama</p>
         </Link>
 
         <Card className="p-6">
           {sent ? (
             <div className="space-y-4">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-accent">
-                Demo
-              </p>
               <h1 className="font-serif text-2xl">Mail gönderildi</h1>
               <p className="text-sm text-muted">
                 <span className="font-medium text-foreground">{email.trim()}</span>{" "}

@@ -3,7 +3,7 @@
 import { AppShell, type NavIcon } from "@/components/app-shell";
 import { AdminGuard } from "@/components/role-guard";
 import { useStudio } from "@/components/studio-provider";
-import { canAccessAdminRoute, staffTitle } from "@/lib/access";
+import { canAccessAdminRoute } from "@/lib/access";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect } from "react";
 
@@ -16,12 +16,15 @@ const SUPER_ADMIN_ITEMS: NavItem[] = [
   { href: "/admin/arsiv", label: "Arşiv", icon: "archive" },
   { href: "/admin/takvim", label: "Takvim", icon: "calendar" },
   { href: "/admin/talepler", label: "Talep", icon: "bell" },
+  { href: "/admin/profil", label: "Profil", icon: "user" },
 ];
 
 const INSTRUCTOR_ITEMS: NavItem[] = [
-  { href: "/admin", label: "Bugün", icon: "home" },
-  { href: "/admin/takvim", label: "Takvimim", icon: "calendar" },
-  { href: "/admin/ogrenciler", label: "Öğrencilerim", icon: "users" },
+  { href: "/admin", label: "Özet", icon: "home" },
+  { href: "/admin/yoklama", label: "Yoklama", icon: "check" },
+  { href: "/admin/ogrenciler", label: "Kayıt", icon: "users" },
+  { href: "/admin/takvim", label: "Takvim", icon: "calendar" },
+  { href: "/admin/talepler", label: "Talep", icon: "bell" },
   { href: "/admin/profil", label: "Profil", icon: "user" },
 ];
 
@@ -42,7 +45,6 @@ function AdminShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
   const items = isSuperAdmin ? SUPER_ADMIN_ITEMS : INSTRUCTOR_ITEMS;
-  const title = user ? `${staffTitle(user)} · ${user.name}` : "Admin";
 
   useEffect(() => {
     if (!user || isSuperAdmin) return;
@@ -61,7 +63,7 @@ function AdminShell({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <AppShell title={title} items={items}>
+    <AppShell items={items}>
       {children}
     </AppShell>
   );

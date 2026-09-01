@@ -1,9 +1,11 @@
 import { createSeedState } from "@/data/seed";
 import { getStudents } from "@/data/students";
 import { DEFAULT_INSTRUCTOR_ID } from "@/data/staff";
-import type { Student, StudioState } from "@/types/studio";
+import { hydrateStaffPasswords } from "@/lib/staff-auth";
+import { hydrateStudentPasswords } from "@/lib/student-auth";
+import type { AuthUser, Student, StudioState } from "@/types/studio";
 
-export const STORAGE_KEY = "oslo-pilates-demo-v9";
+export const STORAGE_KEY = "oslo-pilates-demo-v11";
 
 let memory: StudioState = createSeedState();
 const serverSnapshot = memory;
@@ -18,10 +20,17 @@ function readStorage(): StudioState {
     if (!parsed.sessions || !parsed.postponeRequests) {
       return createSeedState();
     }
+    const students = (parsed.students?.length ? parsed.students : getStudents()).map(
+      hydrateStudent,
+    );
+    const user = hydrateUser(parsed.user);
     return {
       ...parsed,
-      students: (parsed.students ?? getStudents()).map(hydrateStudent),
+      user,
+      students,
       archivedStudents: (parsed.archivedStudents ?? []).map(hydrateStudent),
+      staffPasswords: hydrateStaffPasswords(parsed.staffPasswords),
+      studentPasswords: hydrateStudentPasswords(parsed.studentPasswords),
     };
   } catch {
     return createSeedState();
@@ -56,11 +65,20 @@ export function setStudioState(
   listeners.forEach((listener) => listener());
 }
 
-function hydrateStudent(student: Student) {
+function hydrateStudent(student: Student): Student {
   return {
     ...student,
     instructorId: student.instructorId ?? DEFAULT_INSTRUCTOR_ID,
     note: student.note ?? "",
     monthlyPostponeLimit: student.monthlyPostponeLimit ?? 1,
+    accountStatus: student.accountStatus ?? "active",
   };
+}
+
+function hydrateUser(user: AuthUser | null | undefined): AuthUser | null {
+  if (!user) return null;
+  if ((user.role as string) === "admin") {
+    return { ...user, role: "super_admin" };
+  }
+  return user;
 }

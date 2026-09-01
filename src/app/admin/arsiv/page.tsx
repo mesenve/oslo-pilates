@@ -25,10 +25,7 @@ export default function ArchivePage() {
   return (
     <div className="space-y-5">
       <header>
-        <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-accent">
-          Arşiv
-        </p>
-        <h1 className="mt-1 font-serif text-3xl">Silinen öğrenciler</h1>
+        <h1 className="font-serif text-3xl">Silinen öğrenciler</h1>
       </header>
 
       {sorted.length === 0 ? (

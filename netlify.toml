@@ -1,9 +1,27 @@
 [build]
   command = "npm run build"
-  publish = ".next"
 
 [build.environment]
   NODE_VERSION = "22"
+  NEXT_PUBLIC_APP_URL = "https://www.oslopilates.com"
 
 [[plugins]]
   package = "@netlify/plugin-nextjs"
+
+[[redirects]]
+  from = "https://oslopilates.com/*"
+  to = "https://www.oslopilates.com/:splat"
+  status = 301
+  force = true
+
+[[redirects]]
+  from = "http://oslopilates.com/*"
+  to = "https://www.oslopilates.com/:splat"
+  status = 301
+  force = true
+
+[[redirects]]
+  from = "http://www.oslopilates.com/*"
+  to = "https://www.oslopilates.com/:splat"
+  status = 301
+  force = true

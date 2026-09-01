@@ -2,18 +2,39 @@
 
 import { Button, Card } from "@/components/ui";
 import { useStudio } from "@/components/studio-provider";
-import { DEMO_ACCOUNTS } from "@/data/students";
-import { getInstructors } from "@/data/staff";
-import { adminHomeFor } from "@/lib/access";
+import { adminHomeFor, isStaffRole } from "@/lib/access";
 import { STUDIO_NAME } from "@/lib/studio";
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
-import type { Role, StaffRole } from "@/types/studio";
+
+const REMEMBER_KEY = "oslo-pilates-remember-login";
 
 type PortalRole = "student" | "staff";
-type StaffChoice = StaffRole | "staff-elif" | "staff-delfin";
+
+type RememberData = {
+  remember: boolean;
+  studentEmail?: string;
+  staffEmail?: string;
+};
+
+function readRememberData(): RememberData {
+  if (typeof window === "undefined") {
+    return { remember: true };
+  }
+  try {
+    const raw = window.localStorage.getItem(REMEMBER_KEY);
+    if (!raw) return { remember: true };
+    return JSON.parse(raw) as RememberData;
+  } catch {
+    return { remember: true };
+  }
+}
+
+function writeRememberData(data: RememberData) {
+  window.localStorage.setItem(REMEMBER_KEY, JSON.stringify(data));
+}
 
 export default function GirisPage() {
   return (
@@ -32,113 +53,160 @@ export default function GirisPage() {
 function GirisForm() {
   const searchParams = useSearchParams();
   const router = useRouter();
-  const { loginAs, user, ready } = useStudio();
+  const { loginStaff, loginStudent, user, ready } = useStudio();
   const initialPortal: PortalRole =
     searchParams.get("rol") === "admin" ? "staff" : "student";
   const [portal, setPortal] = useState<PortalRole>(initialPortal);
-  const [staffChoice, setStaffChoice] = useState<StaffChoice>("super_admin");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [rememberMe, setRememberMe] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [pendingLogin, setPendingLogin] = useState(false);
 
   useEffect(() => {
     const nextPortal: PortalRole =
       searchParams.get("rol") === "admin" ? "staff" : "student";
     setPortal(nextPortal);
-    applyAccount(nextPortal, staffChoice);
   }, [searchParams]);
 
   useEffect(() => {
-    applyAccount(portal, staffChoice);
-  }, [portal, staffChoice]);
+    const saved = readRememberData();
+    setRememberMe(saved.remember);
+    setEmail(
+      nextPortalEmail(
+        searchParams.get("rol") === "admin" ? "staff" : "student",
+        saved,
+      ),
+    );
+    setPassword("");
+  }, [searchParams]);
+
+  useEffect(() => {
+    const saved = readRememberData();
+    setEmail(nextPortalEmail(portal, saved));
+    setPassword("");
+  }, [portal]);
 
   useEffect(() => {
     if (!ready || !user) return;
-    if (portal === "student" && user.role === "student") {
+
+    if (user.role === "student") {
       router.replace("/ogrenci");
       return;
     }
-    if (portal === "staff" && (user.role === "super_admin" || user.role === "instructor")) {
+    if (isStaffRole(user.role)) {
       router.replace(adminHomeFor(user));
     }
-  }, [portal, ready, router, user]);
+  }, [ready, router, user]);
 
-  function applyAccount(nextPortal: PortalRole, nextStaff: StaffChoice) {
-    if (nextPortal === "student") {
-      setEmail(DEMO_ACCOUNTS.student.email);
-      setPassword(DEMO_ACCOUNTS.student.password);
+  useEffect(() => {
+    if (!ready || !user || !pendingLogin) return;
+
+    if (portal === "student") {
+      if (user.role === "student") {
+        persistRememberChoice(email);
+        setPendingLogin(false);
+        router.replace("/ogrenci");
+        return;
+      }
+      setPendingLogin(false);
+      setError("Öğrenci girişi yapılamadı. Sayfayı yenileyip tekrar dene.");
       return;
     }
-    if (nextStaff === "super_admin") {
-      setEmail(DEMO_ACCOUNTS.super_admin.email);
-      setPassword(DEMO_ACCOUNTS.super_admin.password);
+
+    if (user.role === "super_admin" || user.role === "instructor") {
+      persistRememberChoice(email);
+      setPendingLogin(false);
+      router.replace(adminHomeFor(user));
       return;
     }
-    if (nextStaff === "staff-elif") {
-      setEmail(DEMO_ACCOUNTS.instructor_elif.email);
-      setPassword(DEMO_ACCOUNTS.instructor_elif.password);
+
+    setPendingLogin(false);
+    setError("Admin girişi yapılamadı. Sayfayı yenileyip tekrar dene.");
+  }, [email, pendingLogin, portal, ready, router, user]);
+
+  function nextPortalEmail(nextPortal: PortalRole, saved: RememberData) {
+    if (!saved.remember) return "";
+    return nextPortal === "student"
+      ? (saved.studentEmail ?? "")
+      : (saved.staffEmail ?? "");
+  }
+
+  function persistRememberChoice(currentEmail: string) {
+    if (!rememberMe) {
+      writeRememberData({ remember: false });
       return;
     }
-    setEmail(DEMO_ACCOUNTS.instructor_delfin.email);
-    setPassword(DEMO_ACCOUNTS.instructor_delfin.password);
+
+    const existing = readRememberData();
+    writeRememberData({
+      remember: true,
+      studentEmail:
+        portal === "student" ? currentEmail.trim() : existing.studentEmail,
+      staffEmail: portal === "staff" ? currentEmail.trim() : existing.staffEmail,
+    });
   }
 
   function switchPortal(next: PortalRole) {
     setPortal(next);
-    if (next === "student") {
-      applyAccount("student", staffChoice);
-    } else {
-      applyAccount("staff", staffChoice);
-    }
+    setError(null);
   }
 
-  function handleSubmit(event: React.FormEvent) {
+  async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
+    setError(null);
+    setPendingLogin(true);
+
     if (portal === "student") {
-      loginAs("student");
-      router.replace("/ogrenci");
+      const result = await loginStudent(email, password);
+      if (result.error) {
+        setPendingLogin(false);
+        setError(result.error);
+      }
       return;
     }
-    if (staffChoice === "super_admin") {
-      loginAs("super_admin", "staff-ece");
-    } else if (staffChoice === "staff-elif") {
-      loginAs("instructor", "staff-elif");
-    } else {
-      loginAs("instructor", "staff-delfin");
+
+    const result = loginStaff(email, password);
+    if (result.error) {
+      setPendingLogin(false);
+      setError(result.error);
     }
-    router.replace("/admin");
   }
 
-  const cat =
+  const illustration =
     portal === "staff"
-      ? { src: "/kediler/hoca.png", alt: "Admin girişi kedisi" }
-      : { src: "/kediler/ogrenci.png", alt: "Pilates öğrencisi kedi" };
-
-  const instructors = getInstructors();
+      ? { src: "/giris/moon.png", alt: "Ay illüstrasyonu" }
+      : { src: "/giris/sun.png", alt: "Güneş illüstrasyonu" };
 
   return (
     <div className="flex min-h-dvh items-center justify-center px-4 py-10">
       <div className="w-full max-w-md">
-        <Link href="/" className="mb-5 block text-center">
+        <Link href="/giris" className="mb-5 block text-center">
           <p className="font-serif text-3xl">{STUDIO_NAME}</p>
-          <p className="mt-1 text-sm text-muted">Hesabınla panele gir</p>
         </Link>
 
         <Card className="h-fit p-6">
           <Image
-            src={cat.src}
-            alt={cat.alt}
+            src={illustration.src}
+            alt={illustration.alt}
             width={1024}
             height={1024}
             className="mx-auto mb-4 h-40 w-auto object-contain"
             priority
           />
 
-          <div className="mb-5 grid grid-cols-2 gap-2 rounded-full bg-surface-muted p-1">
+          <div className="relative mb-5 grid grid-cols-2 rounded-full bg-surface-muted p-1">
+            <span
+              aria-hidden
+              className={`pointer-events-none absolute inset-y-1 left-1 w-[calc(50%-0.25rem)] rounded-full bg-white shadow-[0_1px_4px_rgba(194,24,91,0.08)] transition-transform duration-200 ease-out ${
+                portal === "staff" ? "translate-x-full" : "translate-x-0"
+              }`}
+            />
             <button
               type="button"
               onClick={() => switchPortal("student")}
-              className={`rounded-full px-3 py-2 text-sm ${
-                portal === "student" ? "bg-white text-accent shadow-sm" : "text-muted"
+              className={`relative z-10 rounded-full px-3 py-2 text-sm font-medium transition-colors ${
+                portal === "student" ? "text-accent" : "text-muted"
               }`}
             >
               Öğrenci
@@ -146,67 +214,13 @@ function GirisForm() {
             <button
               type="button"
               onClick={() => switchPortal("staff")}
-              className={`rounded-full px-3 py-2 text-sm ${
-                portal === "staff" ? "bg-white text-accent shadow-sm" : "text-muted"
+              className={`relative z-10 rounded-full px-3 py-2 text-sm font-medium transition-colors ${
+                portal === "staff" ? "text-accent" : "text-muted"
               }`}
             >
               Admin
             </button>
           </div>
-
-          {portal === "staff" ? (
-            <div className="mb-5 space-y-3">
-              <p className="text-sm text-muted">Admin türü</p>
-              <div className="grid grid-cols-2 gap-2">
-                <button
-                  type="button"
-                  onClick={() => setStaffChoice("super_admin")}
-                  className={`rounded-2xl border px-3 py-3 text-left text-sm ${
-                    staffChoice === "super_admin"
-                      ? "border-accent bg-accent-soft text-accent"
-                      : "border-border bg-white text-muted"
-                  }`}
-                >
-                  <span className="block font-medium text-foreground">Süper admin</span>
-                  <span className="mt-0.5 block text-xs">Ece · tüm stüdyo</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setStaffChoice("staff-elif")}
-                  className={`rounded-2xl border px-3 py-3 text-left text-sm ${
-                    staffChoice === "staff-elif" || staffChoice === "staff-delfin"
-                      ? "border-accent bg-accent-soft text-accent"
-                      : "border-border bg-white text-muted"
-                  }`}
-                >
-                  <span className="block font-medium text-foreground">Eğitmen</span>
-                  <span className="mt-0.5 block text-xs">Elif & Delfin</span>
-                </button>
-              </div>
-              {staffChoice !== "super_admin" ? (
-                <div className="grid grid-cols-2 gap-2">
-                  {instructors.map((instructor) => (
-                    <button
-                      key={instructor.id}
-                      type="button"
-                      onClick={() =>
-                        setStaffChoice(
-                          instructor.id as "staff-elif" | "staff-delfin",
-                        )
-                      }
-                      className={`rounded-full px-3 py-2 text-sm ${
-                        staffChoice === instructor.id
-                          ? "bg-white text-accent shadow-sm ring-1 ring-accent/30"
-                          : "bg-surface-muted text-muted"
-                      }`}
-                    >
-                      {instructor.name}
-                    </button>
-                  ))}
-                </div>
-              ) : null}
-            </div>
-          ) : null}
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
@@ -219,6 +233,7 @@ function GirisForm() {
                 onChange={(event) => setEmail(event.target.value)}
                 className="mt-1 w-full rounded-xl border border-border bg-white px-3 py-2.5 text-sm outline-none focus:border-accent"
                 autoComplete="username"
+                required
               />
             </div>
             <div>
@@ -232,6 +247,7 @@ function GirisForm() {
                 onChange={(event) => setPassword(event.target.value)}
                 className="mt-1 w-full rounded-xl border border-border bg-white px-3 py-2.5 text-sm outline-none focus:border-accent"
                 autoComplete="current-password"
+                required
               />
               <div className="mt-2 text-right">
                 <Link
@@ -242,8 +258,39 @@ function GirisForm() {
                 </Link>
               </div>
             </div>
-            <Button type="submit" className="w-full">
-              Giriş yap
+            <label className="group flex cursor-pointer items-center gap-2.5 text-sm text-muted has-[:checked]:text-foreground">
+              <input
+                type="checkbox"
+                checked={rememberMe}
+                onChange={(event) => setRememberMe(event.target.checked)}
+                className="peer sr-only"
+              />
+              <span
+                aria-hidden
+                className="inline-flex h-4 w-4 shrink-0 items-center justify-center rounded border border-accent/30 bg-accent-soft/40 transition-colors peer-checked:border-transparent peer-checked:bg-gradient-to-br peer-checked:from-[#ec407a] peer-checked:to-accent peer-focus-visible:ring-2 peer-focus-visible:ring-accent/20"
+              >
+                <svg
+                  viewBox="0 0 12 10"
+                  fill="none"
+                  className={`h-2.5 w-2.5 text-white transition-opacity ${
+                    rememberMe ? "opacity-100" : "opacity-0"
+                  }`}
+                  aria-hidden
+                >
+                  <path
+                    d="M1 5.5 4.5 9 11 1"
+                    stroke="currentColor"
+                    strokeWidth="1.75"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+              </span>
+              Beni hatırla
+            </label>
+            {error ? <p className="text-sm text-red-700">{error}</p> : null}
+            <Button type="submit" className="w-full" disabled={pendingLogin}>
+              {pendingLogin ? "Giriş yapılıyor…" : "Giriş yap"}
             </Button>
           </form>
         </Card>

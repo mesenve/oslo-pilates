@@ -3,17 +3,21 @@
 import { ChevronLeftIcon } from "@/components/icons";
 import { StudentForm } from "@/components/student-form";
 import { StudentSavedModal } from "@/components/student-saved-modal";
-import { Card } from "@/components/ui";
 import { useStudio } from "@/components/studio-provider";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 
 export default function NewStudentPage() {
   const router = useRouter();
-  const { students } = useStudio();
+  const { students, sessions } = useStudio();
   const [savedId, setSavedId] = useState<string | null>(null);
+  const [savedInviteUrl, setSavedInviteUrl] = useState<string | null>(null);
   const saved = students.find((student) => student.id === savedId);
+  const savedSessions = useMemo(
+    () => (savedId ? sessions.filter((session) => session.studentId === savedId) : []),
+    [savedId, sessions],
+  );
 
   return (
     <div className="space-y-5">
@@ -25,16 +29,19 @@ export default function NewStudentPage() {
         Öğrenciler
       </Link>
       <header>
-        <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-accent">
-          Yeni kayıt
-        </p>
-        <h1 className="mt-1 font-serif text-3xl">Öğrenci kaydet</h1>
+        <h1 className="font-serif text-3xl">Öğrenci kaydet</h1>
       </header>
-      <Card className="p-5">
-        <StudentForm onSaved={setSavedId} />
-      </Card>
-      {saved ? (
+      <StudentForm
+        onSaved={(studentId, inviteUrl) => {
+          setSavedId(studentId);
+          setSavedInviteUrl(inviteUrl ?? null);
+        }}
+      />
+      {saved && savedInviteUrl ? (
         <StudentSavedModal
+          student={saved}
+          sessions={savedSessions}
+          inviteUrl={savedInviteUrl}
           phone={saved.phone}
           onContinue={() => router.replace(`/admin/ogrenciler/${saved.id}`)}
         />

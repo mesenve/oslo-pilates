@@ -1,0 +1,21 @@
+# Spaceship DNS — Netlify site bağlantısı (oslopilates.com)
+# Resend kayıtlarına DOKUNMA; bunlar site için ek kayıtlar.
+
+# 1) www alt domaini
+# Type: CNAME
+# Host: www
+# Value: oslo-pilates.netlify.app
+
+# 2) Kök domain (oslopilates.com)
+# Type: A
+# Host: @
+# Value: 75.2.60.5
+
+# 3) Opsiyonel IPv6
+# Type: AAAA
+# Host: @
+# Value: 2600:1f18:cd41:8f00:fe9f:9c02:8b3b:ee2d
+
+# Netlify panel:
+# https://app.netlify.com/projects/oslo-pilates/domain-management
+# "Add a domain" -> www.oslopilates.com ve oslopilates.com

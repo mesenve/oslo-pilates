@@ -1,3 +1,4 @@
+import { inferPackageType } from "@/data/packages";
 import { sortByName } from "@/lib/alphabet";
 import { addDays, startOfWeekMonday, toISODate } from "@/lib/dates";
 import { DEFAULT_INSTRUCTOR_ID, getStaffById } from "@/data/staff";
@@ -9,9 +10,9 @@ const packageEnd = addDays(currentMonday, 4);
 
 export const DEMO_ACCOUNTS = {
   student: { email: "merve@oslo", password: "pilates" },
-  super_admin: { email: "ece@oslo", password: "studio" },
-  instructor_elif: { email: "elif.hoca@oslo", password: "studio" },
-  instructor_delfin: { email: "delfin.hoca@oslo", password: "studio" },
+  super_admin: { email: "ecenazkara@hotmail.com", password: "ece123" },
+  instructor_elif: { email: "elifbeytas86@gmail.com", password: "elif123" },
+  instructor_delfin: { email: "21141025@lhu.edu.tr", password: "delfin123" },
 } as const;
 
 export function getStudents(): Student[] {
@@ -62,6 +63,7 @@ const FEATURED: Student[] = [
     phone: "0532 111 22 33",
     groupId: "pzt-car-cum-1000",
     instructorId: "staff-delfin",
+    packageType: "duet_2",
     note: "Son haftası. Paket uzatma konuşulacak.",
     measurements: {
       weightKg: 58,
@@ -79,6 +81,7 @@ const FEATURED: Student[] = [
       isLastWeek: true,
     },
     monthlyPostponeLimit: 1,
+    accountStatus: "active",
   },
   {
     id: "stu-elif",
@@ -87,6 +90,7 @@ const FEATURED: Student[] = [
     phone: "0533 222 33 44",
     groupId: "sal-per-1100",
     instructorId: "staff-elif",
+    packageType: "group_5",
     note: "İş seyahati nedeniyle erteleme talebi gönderdi.",
     measurements: {
       weightKg: 62,
@@ -104,6 +108,7 @@ const FEATURED: Student[] = [
       isLastWeek: false,
     },
     monthlyPostponeLimit: 1,
+    accountStatus: "active",
   },
   {
     id: "stu-deniz",
@@ -112,6 +117,7 @@ const FEATURED: Student[] = [
     phone: "0534 333 44 55",
     groupId: "sal-per-1800",
     instructorId: "staff-delfin",
+    packageType: "duet_2",
     note: "Ödeme gecikmesi hatırlatılacak.",
     measurements: {
       weightKg: 74,
@@ -129,6 +135,7 @@ const FEATURED: Student[] = [
       isLastWeek: false,
     },
     monthlyPostponeLimit: 1,
+    accountStatus: "active",
   },
   {
     id: "stu-ayse",
@@ -137,6 +144,7 @@ const FEATURED: Student[] = [
     phone: "0535 444 55 66",
     groupId: "pzt-car-cum-0915",
     instructorId: "staff-elif",
+    packageType: "duet_2",
     note: "Sabah grubu, düzenli devam ediyor.",
     measurements: {
       weightKg: 55,
@@ -154,6 +162,7 @@ const FEATURED: Student[] = [
       isLastWeek: false,
     },
     monthlyPostponeLimit: 1,
+    accountStatus: "active",
   },
 ];
 
@@ -223,13 +232,15 @@ function dummyStudent(name: string, index: number): Student {
   const first = slug.split("-")[0] ?? slug;
   const remaining = 3 + (index % 8);
   const total = remaining > 8 ? 12 : 8;
+  const groupId = GROUP_IDS[index % GROUP_IDS.length];
   return {
     id: `stu-${slug}`,
     name,
     email: `${first}@oslo`,
     phone: `053${2 + (index % 8)} ${String(500 + index).padStart(3, "0")} ${String(10 + index).padStart(2, "0")} ${String(20 + index).padStart(2, "0")}`,
-    groupId: GROUP_IDS[index % GROUP_IDS.length],
+    groupId,
     instructorId: index % 2 === 0 ? "staff-elif" : "staff-delfin",
+    packageType: inferPackageType(groupId),
     note: NOTES[index % NOTES.length],
     measurements: {
       weightKg: 52 + (index % 24),
@@ -247,6 +258,7 @@ function dummyStudent(name: string, index: number): Student {
       isLastWeek: remaining <= 3,
     },
     monthlyPostponeLimit: 1,
+    accountStatus: "active",
   };
 }
 

@@ -1,7 +1,7 @@
 "use client";
 
 import { ClassCalendar } from "@/components/class-calendar";
-import { ChevronLeftIcon, TrashIcon } from "@/components/icons";
+import { ChevronLeftIcon, PencilIcon, TrashIcon } from "@/components/icons";
 import { Button, Card, ConfirmDialog, EmptyState, PaymentBadge, RequestBadge, SessionBadge } from "@/components/ui";
 import { useStudio } from "@/components/studio-provider";
 import {
@@ -13,6 +13,8 @@ import {
 import { getClassGroupById } from "@/data/groups";
 import { getStaffById } from "@/data/staff";
 import { formatLongDate, todayISO } from "@/lib/dates";
+import { inviteUrl, isInviteValid } from "@/lib/student-auth";
+import { sendInviteEmail } from "@/lib/invite-client";
 import { remainingLabel, postponeRightAdminLabel } from "@/lib/labels";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
@@ -24,12 +26,18 @@ export default function StudentDetailPage() {
     visibleStudents,
     visibleSessions,
     remainingFor,
-    postponeRequests,
+    visiblePostponeRequests,
     approveRequest,
     archiveStudent,
+    resendStudentInvite,
     isSuperAdmin,
   } = useStudio();
   const router = useRouter();
+  const [copiedInvite, setCopiedInvite] = useState(false);
+  const [resendStatus, setResendStatus] = useState<"idle" | "sending" | "sent" | "error">(
+    "idle",
+  );
+  const [resendError, setResendError] = useState<string | null>(null);
   const student = visibleStudents.find((item) => item.id === params.id);
   const mine = sessionsForStudent(student?.id ?? "", visibleSessions);
   const today = todayISO();
@@ -46,7 +54,7 @@ export default function StudentDetailPage() {
   const selected = mine.filter((session) => session.date === selectedDate);
   const counts = sessionCounts(student?.id ?? "", visibleSessions);
   const group = student ? getClassGroupById(student.groupId) : undefined;
-  const requests = postponeRequests.filter(
+  const requests = visiblePostponeRequests.filter(
     (request) => request.studentId === student?.id,
   );
 
@@ -74,21 +82,26 @@ export default function StudentDetailPage() {
       </Link>
 
       <header>
-        <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-accent">
-          Öğrenci detayı
-        </p>
-        <div className="mt-1 flex items-center justify-between gap-3">
+        <div className="flex items-center justify-between gap-3">
           <h1 className="min-w-0 font-serif text-3xl leading-none">{student.name}</h1>
-          {isSuperAdmin ? (
-            <Button
-              variant="secondary"
-              className="shrink-0 px-3 py-1.5"
-              onClick={() => setConfirmDelete(true)}
-            >
-              <TrashIcon className="h-4 w-4" />
-              Sil
-            </Button>
-          ) : null}
+          <div className="flex shrink-0 items-center gap-2">
+            <Link href={`/admin/ogrenciler/${student.id}/duzenle`}>
+              <Button variant="secondary" className="px-3 py-1.5">
+                <PencilIcon className="h-4 w-4" />
+                Düzenle
+              </Button>
+            </Link>
+            {isSuperAdmin ? (
+              <Button
+                variant="secondary"
+                className="px-3 py-1.5"
+                onClick={() => setConfirmDelete(true)}
+              >
+                <TrashIcon className="h-4 w-4" />
+                Sil
+              </Button>
+            ) : null}
+          </div>
         </div>
         <p className="mt-1 text-sm text-muted">
           {group?.label}
@@ -112,7 +125,7 @@ export default function StudentDetailPage() {
         <p className="text-sm text-muted">
           {postponeRightAdminLabel(
             student.monthlyPostponeLimit -
-              remainingPostponeRights(student, postponeRequests),
+              remainingPostponeRights(student, visiblePostponeRequests),
             student.monthlyPostponeLimit,
           )}
         </p>
@@ -128,6 +141,83 @@ export default function StudentDetailPage() {
           </div>
         ) : null}
       </Card>
+
+      {student.accountStatus === "invited" ? (
+        <Card className="space-y-3 p-4">
+          <p className="text-sm font-medium text-amber-800">Davet bekliyor</p>
+          <p className="text-sm text-muted">
+            Öğrenci henüz maildeki linkten şifresini oluşturmadı.
+            {!isInviteValid(student) ? " Davet süresi dolmuş olabilir." : ""}
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {student.inviteToken ? (
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={async () => {
+                  const link = inviteUrl(student.inviteToken!);
+                  try {
+                    await navigator.clipboard.writeText(link);
+                    setCopiedInvite(true);
+                    window.setTimeout(() => setCopiedInvite(false), 2000);
+                  } catch {
+                    setCopiedInvite(false);
+                  }
+                }}
+              >
+                {copiedInvite ? "Link kopyalandı" : "Davet linkini kopyala"}
+              </Button>
+            ) : null}
+            <Button
+              type="button"
+              disabled={resendStatus === "sending"}
+              onClick={async () => {
+                setResendStatus("sending");
+                setResendError(null);
+                const result = resendStudentInvite(student.id);
+                if (result.error || !result.inviteUrl) {
+                  setResendStatus("error");
+                  setResendError(result.error ?? "Davet linki oluşturulamadı.");
+                  return;
+                }
+                try {
+                  await sendInviteEmail({
+                    name: student.name,
+                    email: student.email,
+                    inviteUrl: result.inviteUrl,
+                    student: {
+                      ...student,
+                      inviteToken: result.inviteToken,
+                      inviteExpiresAt: result.inviteExpiresAt,
+                      invitedAt: result.invitedAt,
+                    },
+                    sessions: visibleSessions.filter(
+                      (session) => session.studentId === student.id,
+                    ),
+                    expiresAt: result.inviteExpiresAt ?? student.inviteExpiresAt ?? "",
+                  });
+                  setResendStatus("sent");
+                  window.setTimeout(() => setResendStatus("idle"), 3000);
+                } catch (error) {
+                  setResendStatus("error");
+                  setResendError(
+                    error instanceof Error ? error.message : "Davet maili gönderilemedi.",
+                  );
+                }
+              }}
+            >
+              {resendStatus === "sending"
+                ? "Mail gönderiliyor…"
+                : resendStatus === "sent"
+                  ? "Mail gönderildi"
+                  : "Davet mailini yeniden gönder"}
+            </Button>
+          </div>
+          {resendStatus === "error" && resendError ? (
+            <p className="text-sm text-red-700">{resendError}</p>
+          ) : null}
+        </Card>
+      ) : null}
 
       <ClassCalendar
         marks={marks}
@@ -162,13 +252,11 @@ export default function StudentDetailPage() {
                 </p>
               ) : null}
               {status === "postponed" ? (
-                <p className="text-sm text-amber-800">
-                  Bu ders ertelendi. Yeni saat seçilmedi.
-                </p>
+                <p className="text-sm text-amber-800">Bu ders ertelendi.</p>
               ) : null}
               {status === "postpone_pending" ? (
                 <p className="text-sm text-amber-800">
-                  Erteleme talebi onay bekliyor. Yeni saat seçilmedi.
+                  Erteleme talebi onay bekliyor.
                 </p>
               ) : null}
             </Card>
@@ -193,9 +281,6 @@ export default function StudentDetailPage() {
                 </div>
                 <p className="text-sm text-muted">{group?.time}</p>
                 <p className="text-sm">{request.reason}</p>
-                <p className="text-sm text-amber-800">
-                  Yeni ders için saat seçilmedi.
-                </p>
                 {request.status === "pending" ? (
                   <Button onClick={() => approveRequest(request.id)}>Onayla</Button>
                 ) : null}

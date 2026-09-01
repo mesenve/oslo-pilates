@@ -1,36 +1,48 @@
 "use client";
 
+import { DailyQuoteCard } from "@/components/daily-quote-card";
 import { LastWeekCta } from "@/components/last-week-cta";
+import { PilatesIcon } from "@/components/icons";
 import { useCurrentStudent, useStudio } from "@/components/studio-provider";
-import { Card } from "@/components/ui";
-import { sessionsForStudent } from "@/data/accessors";
+import { Card, SessionBadge } from "@/components/ui";
+import { effectiveSessionStatus, sessionsForStudent } from "@/data/accessors";
 import { getClassGroupById } from "@/data/groups";
 import { addDays, formatLongDate, startOfWeekMonday, toISODate, todayISO } from "@/lib/dates";
 import { remainingLabel, postponeRightLabel } from "@/lib/labels";
 import Link from "next/link";
+import { useState } from "react";
 
 export default function StudentHomePage() {
   const student = useCurrentStudent();
   const { sessions, remainingFor, remainingPostponeFor } = useStudio();
+  const today = todayISO();
+  const [selectedDate, setSelectedDate] = useState(today);
+
   if (!student) return null;
 
   const remaining = remainingFor(student.id);
   const group = getClassGroupById(student.groupId);
   const mine = sessionsForStudent(student.id, sessions);
-  const upcoming = mine.find(
-    (session) =>
-      session.status === "upcoming" ||
-      session.status === "attend_pending" ||
-      session.status === "postpone_pending",
-  );
   const monday = startOfWeekMonday();
-  const today = todayISO();
+  const selectedSession = mine.find((session) => session.date === selectedDate);
+  const selectedStatus = selectedSession
+    ? effectiveSessionStatus(selectedSession)
+    : null;
+  const isActiveSelected =
+    selectedStatus === "upcoming" ||
+    selectedStatus === "attend_pending" ||
+    selectedStatus === "postpone_pending";
 
   return (
     <div className="space-y-4">
-      {student.package.isLastWeek ? (
-        <LastWeekCta studentName={student.name} />
-      ) : null}
+      <section
+        className={`grid gap-3 ${student.package.isLastWeek ? "md:grid-cols-2" : ""}`}
+      >
+        <DailyQuoteCard date={today} />
+        {student.package.isLastWeek ? (
+          <LastWeekCta studentName={student.name} />
+        ) : null}
+      </section>
 
       <section>
         <div className="mb-3 flex items-end justify-between">
@@ -43,17 +55,24 @@ export default function StudentHomePage() {
           {Array.from({ length: 7 }, (_, index) => {
             const iso = toISODate(addDays(monday, index));
             const session = mine.find((item) => item.date === iso);
+            const isSelected = iso === selectedDate;
             const isToday = iso === today;
             const label = addDays(monday, index).toLocaleDateString("tr-TR", {
               weekday: "short",
             });
             return (
-              <div
+              <button
                 key={iso}
-                className={`rounded-2xl px-1 py-2 text-center ${
-                  isToday
-                    ? "bg-gradient-to-b from-[#f8bbd0] to-accent-soft"
-                    : "bg-white/70"
+                type="button"
+                onClick={() => setSelectedDate(iso)}
+                aria-pressed={isSelected}
+                aria-label={`${label} ${iso.slice(8)}`}
+                className={`rounded-2xl px-1 py-2 text-center transition-colors ${
+                  isSelected
+                    ? "bg-gradient-to-b from-[#f8bbd0] to-accent-soft ring-1 ring-accent/25"
+                    : isToday
+                      ? "bg-white/90 ring-1 ring-accent/15"
+                      : "bg-white/70 hover:bg-white/90"
                 }`}
               >
                 <p className="text-[10px] capitalize text-muted">{label}</p>
@@ -70,36 +89,74 @@ export default function StudentHomePage() {
                       : "bg-transparent"
                   }`}
                 />
-              </div>
+              </button>
             );
           })}
         </div>
       </section>
 
-      <Card className="p-4">
-        <p className="text-[10px] uppercase tracking-[0.16em] text-muted">
-          Sıradaki ders
-        </p>
-        {upcoming ? (
-          <p className="mt-1 font-serif text-xl capitalize">
-            {formatLongDate(upcoming.date)} · {group?.time}
-          </p>
+      <Card className="overflow-hidden">
+        {selectedSession && selectedStatus ? (
+          <>
+            <p className="px-4 pt-4 text-[10px] uppercase tracking-[0.16em] text-muted">
+              {selectedDate === today ? "Bugünkü ders" : "Dersin"}
+            </p>
+            <div className="flex items-center gap-4 px-4 py-3">
+              <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-accent-soft">
+                <PilatesIcon className="h-8 w-8" />
+              </div>
+              <div className="min-w-0 flex-1 border-l border-border/60 pl-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="font-serif text-2xl leading-none tracking-tight tabular-nums">
+                      {group?.time}
+                    </p>
+                    <p className="mt-1 capitalize text-sm text-muted">
+                      {formatLongDate(selectedSession.date)}
+                    </p>
+                  </div>
+                  <SessionBadge status={selectedStatus} />
+                </div>
+              </div>
+            </div>
+            {isActiveSelected ? (
+              <div className="border-t border-border/60 px-4 py-3">
+                <p className="text-sm text-muted">{remainingLabel(remaining)}</p>
+                <p className="text-sm text-muted">
+                  {postponeRightLabel(
+                    remainingPostponeFor(student.id),
+                    student.monthlyPostponeLimit,
+                  )}
+                </p>
+              </div>
+            ) : null}
+            <div className="border-t border-border/60 px-4 py-3">
+              <Link
+                href="/ogrenci/program"
+                className="inline-flex text-sm font-medium text-accent"
+              >
+                Takvimde aç →
+              </Link>
+            </div>
+          </>
         ) : (
-          <p className="mt-1 text-sm text-muted">Bekleyen dersin yok.</p>
+          <div className="p-4">
+            <p className="font-serif text-xl">
+              {selectedDate === today ? "Bugün ders yok" : "Bu günde ders yok"}
+            </p>
+            <p className="mt-1 text-sm text-muted">
+              {selectedDate === today
+                ? "Bugün programında ders görünmüyor. Haftadan başka bir güne tıklayabilirsin."
+                : "Seçtiğin günde ders görünmüyor. Pembe noktalı günlere tıkla."}
+            </p>
+            <Link
+              href="/ogrenci/program"
+              className="mt-3 inline-flex text-sm font-medium text-accent"
+            >
+              Takvime git →
+            </Link>
+          </div>
         )}
-        <p className="mt-1 text-sm text-muted">{remainingLabel(remaining)}</p>
-        <p className="text-sm text-muted">
-          {postponeRightLabel(
-            remainingPostponeFor(student.id),
-            student.monthlyPostponeLimit,
-          )}
-        </p>
-        <Link
-          href="/ogrenci/program"
-          className="mt-2 inline-flex text-sm font-medium text-accent"
-        >
-          Takvimde aç →
-        </Link>
       </Card>
     </div>
   );

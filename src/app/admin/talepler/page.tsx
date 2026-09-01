@@ -9,19 +9,14 @@ import { formatLongDate } from "@/lib/dates";
 import { postponeRightAdminLabel } from "@/lib/labels";
 
 export default function RequestsPage() {
-  const { postponeRequests, visibleSessions, visibleStudents, approveRequest } = useStudio();
-  const activeIds = new Set(visibleStudents.map((student) => student.id));
-  const visibleRequests = postponeRequests.filter((request) =>
-    activeIds.has(request.studentId),
-  );
+  const { visiblePostponeRequests, visibleSessions, visibleStudents, approveRequest } =
+    useStudio();
+  const visibleRequests = visiblePostponeRequests;
 
   return (
     <div className="space-y-8">
       <header>
-        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-accent">
-          Erteleme
-        </p>
-        <h1 className="mt-1 font-serif text-3xl">Talepler</h1>
+        <h1 className="font-serif text-3xl">Talepler</h1>
         <p className="mt-1 text-sm text-muted">
           Öğrenci aylık hakkıyla talep gönderir; sen onaylarsın.
         </p>
@@ -41,7 +36,7 @@ export default function RequestsPage() {
             const pending = request.status === "pending";
             const used = student
               ? student.monthlyPostponeLimit -
-                remainingPostponeRights(student, postponeRequests)
+                remainingPostponeRights(student, visiblePostponeRequests)
               : 0;
 
             return (
@@ -56,9 +51,6 @@ export default function RequestsPage() {
                         ? `${pending ? "Bu ders erteleniyor" : "Bu ders ertelendi"}: ${formatLongDate(session.date)}`
                         : "Ders bulunamadı"}
                       {group ? ` · ${group.time}` : ""}
-                    </p>
-                    <p className="mt-1 text-xs text-muted">
-                      Yeni ders için saat seçilmedi.
                     </p>
                     {student ? (
                       <p className="mt-1 text-xs text-muted">

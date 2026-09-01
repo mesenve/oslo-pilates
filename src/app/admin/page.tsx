@@ -2,27 +2,27 @@
 
 import { AttendanceBoard } from "@/components/attendance-board";
 import { GroupClassCard } from "@/components/group-class-card";
-import { InstructorHome } from "@/components/instructor-home";
 import { Card, RequestBadge } from "@/components/ui";
 import { useStudio } from "@/components/studio-provider";
 import { pendingAttendanceBatches, studentName } from "@/data/accessors";
+import { getInstructors } from "@/data/staff";
 import { getClassGroupsForDay } from "@/data/groups";
 import { formatLongDate, todayISO, weekdayFromISO } from "@/lib/dates";
 import { DAY_LABELS } from "@/lib/labels";
 import Link from "next/link";
 
 export default function AdminHomePage() {
-  const { postponeRequests, remainingFor, visibleStudents, visibleSessions, isSuperAdmin, user } =
-    useStudio();
-
-  if (!isSuperAdmin && user) {
-    return <InstructorHome userName={user.name} />;
-  }
+  const {
+    postponeRequests,
+    visiblePostponeRequests,
+    remainingFor,
+    visibleStudents,
+    visibleSessions,
+    isSuperAdmin,
+  } = useStudio();
 
   const activeIds = new Set(visibleStudents.map((student) => student.id));
-  const pending = postponeRequests.filter(
-    (request) => request.status === "pending" && activeIds.has(request.studentId),
-  );
+  const pending = visiblePostponeRequests.filter((request) => request.status === "pending");
   const today = todayISO();
   const todayDay = weekdayFromISO(today);
   const todayGroups = todayDay ? getClassGroupsForDay(todayDay) : [];
@@ -30,16 +30,16 @@ export default function AdminHomePage() {
   const groupsWithStudents = todayGroups.filter((group) =>
     visibleStudents.some((student) => student.groupId === group.id),
   );
+  const teamCount = getInstructors().length;
 
   return (
     <div className="space-y-8">
       <header>
-        <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-accent">
-          Yönetici özeti
-        </p>
-        <h1 className="mt-1 font-serif text-3xl">Ana sayfa</h1>
+        <h1 className="font-serif text-3xl">Ana sayfa</h1>
       </header>
-      <div className="grid grid-cols-3 gap-3">
+      <div
+        className={`grid grid-cols-2 gap-3 ${isSuperAdmin ? "sm:grid-cols-4" : "sm:grid-cols-3"}`}
+      >
         <StatCard label="Öğrenci" value={String(visibleStudents.length)} href="/admin/ogrenciler" />
         <StatCard
           label="Yoklama"
@@ -47,6 +47,9 @@ export default function AdminHomePage() {
           href="/admin/yoklama"
         />
         <StatCard label="Talep" value={String(pending.length)} href="/admin/talepler" />
+        {isSuperAdmin ? (
+          <StatCard label="Ekip" value={String(teamCount)} href="/admin/ekip" />
+        ) : null}
       </div>
 
       <section className="space-y-4">

@@ -53,10 +53,7 @@ export default function InstructorLessonPage() {
       </Link>
 
       <header>
-        <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-accent">
-          Yoklama
-        </p>
-        <h1 className="mt-1 font-serif text-3xl capitalize">
+        <h1 className="font-serif text-3xl capitalize">
           {formatLongDate(date)}
         </h1>
         <p className="mt-1 text-sm text-muted">

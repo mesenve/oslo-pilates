@@ -21,10 +21,7 @@ export function OpeningsBoard({
     <section className="space-y-4">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-accent">
-            WhatsApp
-          </p>
-          <h2 className="mt-1 font-serif text-2xl">Müsaitlik duyurusu</h2>
+          <h2 className="font-serif text-2xl">Müsaitlik duyurusu</h2>
           <p className="mt-1 text-sm text-muted">
             Onaylanan ertelemeler boşluk açar. Karta tıklayınca duyuru gider.
           </p>

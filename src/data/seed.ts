@@ -8,19 +8,58 @@ import {
   toISODate,
   todayISO,
 } from "@/lib/dates";
+import { DEFAULT_STAFF_PASSWORDS } from "@/lib/staff-auth";
+import { DEFAULT_STUDENT_PASSWORDS } from "@/lib/student-auth";
 import type { PostponeRequest, Session, Student, StudioState } from "@/types/studio";
 
 const WEEK_COUNT = 4;
 
+export function collectSessionDates(
+  startDateISO: string,
+  groupId: string,
+  totalSessions: number,
+): string[] {
+  const group = getClassGroupById(groupId);
+  if (!group || group.days.length === 0) return [];
+
+  const startMonday = startOfWeekMonday(parseISODate(startDateISO));
+  const dates: string[] = [];
+  for (let week = 0; dates.length < totalSessions && week < 52; week += 1) {
+    const monday = addDays(startMonday, 7 * week);
+    for (const day of group.days) {
+      const iso = toISODate(dateForWeekDay(monday, day));
+      if (iso < startDateISO) continue;
+      dates.push(iso);
+      if (dates.length >= totalSessions) break;
+    }
+  }
+  return dates;
+}
+
 export function buildSessionsForStudent(
   student: Student,
-  options?: { fromToday?: boolean },
+  options?: { fromToday?: boolean; fromPackageStart?: boolean },
 ): Session[] {
   const group = getClassGroupById(student.groupId);
-  if (!group) return [];
+  if (!group || group.days.length === 0) return [];
 
   const currentMonday = startOfWeekMonday();
   const today = todayISO();
+
+  if (options?.fromPackageStart) {
+    const dates = collectSessionDates(
+      student.package.startDate,
+      student.groupId,
+      student.package.totalSessions,
+    );
+    return dates.map((date) => ({
+      id: `${student.id}-${date}`,
+      studentId: student.id,
+      groupId: student.groupId,
+      date,
+      status: "upcoming" as const,
+    }));
+  }
 
   if (options?.fromToday) {
     const dates: string[] = [];
@@ -111,25 +150,36 @@ export function createSeedState(): StudioState {
     });
   }
 
-  const mondayCheckIn = sessions.find(
+  const merveUpcoming = sessions.find(
     (session) =>
-      session.groupId === "pzt-car-cum-1000" &&
+      session.studentId === "stu-merve" &&
       session.status === "upcoming" &&
-      session.date >= todayISO() &&
-      session.studentId !== "stu-merve",
+      session.date >= todayISO(),
   );
-  if (mondayCheckIn) {
-    for (const session of sessions) {
-      if (
-        session.groupId === mondayCheckIn.groupId &&
-        session.date === mondayCheckIn.date &&
-        session.status === "upcoming" &&
-        session.studentId !== "stu-merve"
-      ) {
-        session.status = "attend_pending";
-      }
-    }
+  if (merveUpcoming) {
+    merveUpcoming.status = "postpone_pending";
+    postponeRequests.push({
+      id: `req-${merveUpcoming.id}`,
+      studentId: merveUpcoming.studentId,
+      sessionId: merveUpcoming.id,
+      reason: "Son hafta, bu dersi ertelemek istiyorum.",
+      status: "pending",
+      createdAt: `${todayISO()}T10:00:00`,
+    });
   }
+
+  function markAttendPending(studentId: string) {
+    const session = sessions.find(
+      (item) =>
+        item.studentId === studentId &&
+        item.status === "upcoming" &&
+        item.date >= todayISO(),
+    );
+    if (session) session.status = "attend_pending";
+  }
+
+  markAttendPending("stu-ayse");
+  markAttendPending("stu-deniz");
 
   return {
     user: null,
@@ -137,5 +187,7 @@ export function createSeedState(): StudioState {
     archivedStudents: [],
     sessions,
     postponeRequests,
+    staffPasswords: { ...DEFAULT_STAFF_PASSWORDS },
+    studentPasswords: { ...DEFAULT_STUDENT_PASSWORDS },
   };
 }

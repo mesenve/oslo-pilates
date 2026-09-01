@@ -1,9 +1,9 @@
 "use client";
 
-import { CalendarIcon, ChevronRightIcon, ClockIcon, UsersIcon } from "@/components/icons";
+import { ChevronRightIcon, PilatesIcon, SeatIcon, UsersIcon } from "@/components/icons";
 import { Card } from "@/components/ui";
 import { sortByName } from "@/lib/alphabet";
-import { capacityLabel } from "@/lib/labels";
+import { DAY_LABELS } from "@/lib/labels";
 import type { ClassGroup, DayOfWeek, Student } from "@/types/studio";
 import Link from "next/link";
 import { useState } from "react";
@@ -20,31 +20,58 @@ export function GroupClassCard({
   const [open, setOpen] = useState(false);
   const members = sortByName(students.filter((student) => student.groupId === group.id));
   const time = (day && group.timeByDay?.[day]) || group.time;
+  const daysLabel = group.days.map((item) => DAY_LABELS[item]).join(" · ");
+  const spotsLeft = Math.max(0, group.capacity - members.length);
+  const isFull = spotsLeft === 0;
+  const showSpots = members.length > 0;
 
   return (
-    <Card className="overflow-hidden">
+    <Card className="overflow-hidden transition-shadow hover:shadow-[0_12px_28px_rgba(194,24,91,0.1)]">
       <button
         type="button"
         onClick={() => setOpen((current) => !current)}
         aria-expanded={open}
-        className="flex w-full items-start justify-between gap-3 px-4 py-4 text-left"
+        className="flex w-full items-center gap-4 px-4 py-4 text-left transition-colors hover:bg-white/40"
       >
-        <div className="space-y-3">
-          <Row icon={<CalendarIcon />} text={group.label} />
-          <Row icon={<ClockIcon />} text={time} />
-          <Row
-            icon={<UsersIcon />}
-            text={`${capacityLabel(group.capacity)} · ${members.length} kayıtlı`}
-          />
+        <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-accent-soft">
+          <PilatesIcon className="h-8 w-8" />
         </div>
+
+        <div className="min-w-0 flex-1 border-l border-border/60 pl-4">
+          <p className="font-serif text-2xl leading-none tracking-tight">{time}</p>
+          <p className="mt-1 text-sm text-muted">{daysLabel}</p>
+          <div className="mt-2.5 flex flex-wrap items-center gap-2">
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-accent-soft px-2.5 py-1 text-xs font-medium text-accent/75">
+              <UsersIcon className="h-3.5 w-3.5" />
+              {members.length} kayıtlı
+            </span>
+            {showSpots ? (
+              isFull ? (
+                <span className="rounded-full bg-accent px-2.5 py-1 text-xs font-medium text-white">
+                  Dolu
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-accent-soft px-2.5 py-1 text-xs font-medium text-accent">
+                  <SeatIcon className="h-3.5 w-3.5" />
+                  {spotsLeft} boş yer
+                </span>
+              )
+            ) : null}
+          </div>
+        </div>
+
         <ChevronRightIcon
-          className={`mt-1 h-5 w-5 shrink-0 text-muted transition-transform ${
+          className={`h-5 w-5 shrink-0 text-muted transition-transform ${
             open ? "rotate-90" : ""
           }`}
         />
       </button>
+
       {open ? (
-        <div className="border-t border-border px-4 py-3">
+        <div className="border-t border-border/70 bg-surface-muted/25 px-4 py-3">
+          <p className="mb-2 text-xs font-medium uppercase tracking-[0.12em] text-muted">
+            {group.label}
+          </p>
           {members.length === 0 ? (
             <p className="text-sm text-muted">Bu grupta kayıtlı öğrenci yok.</p>
           ) : (
@@ -53,7 +80,7 @@ export function GroupClassCard({
                 <li key={student.id}>
                   <Link
                     href={`/admin/ogrenciler/${student.id}`}
-                    className="block rounded-xl px-2 py-1.5 text-sm hover:bg-accent-soft/60"
+                    className="block rounded-xl px-2 py-1.5 text-sm hover:bg-white/80"
                   >
                     {student.name}
                   </Link>
@@ -64,14 +91,5 @@ export function GroupClassCard({
         </div>
       ) : null}
     </Card>
-  );
-}
-
-function Row({ icon, text }: { icon: React.ReactNode; text: string }) {
-  return (
-    <div className="flex items-center gap-3 text-sm">
-      <span className="text-accent">{icon}</span>
-      <span>{text}</span>
-    </div>
   );
 }

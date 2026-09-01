@@ -40,11 +40,9 @@ const ICONS: Record<NavIcon, typeof HomeIcon> = {
 };
 
 export function AppShell({
-  title,
   items,
   children,
 }: {
-  title: string;
   items: NavItem[];
   children: React.ReactNode;
 }) {
@@ -75,7 +73,7 @@ export function AppShell({
   function handleLogout() {
     setMenuOpen(false);
     logout();
-    router.replace("/");
+    router.replace("/giris");
   }
 
   function isActive(href: string) {
@@ -87,27 +85,26 @@ export function AppShell({
 
   return (
     <div className="flex min-h-dvh flex-col">
-      <header className="sticky top-0 z-20 border-b border-white/60 bg-white/55 backdrop-blur-xl">
-        <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-4 md:px-6">
-          <div className="flex min-w-0 items-center gap-3">
+      <header className="sticky top-0 z-20 px-4 pt-4 md:px-6">
+        <div className="mx-auto flex max-w-6xl items-center justify-between gap-2 rounded-full border border-white/80 bg-white/78 px-2 py-2 shadow-[0_10px_36px_rgba(194,24,91,0.14)] backdrop-blur-xl md:gap-3 md:px-3 md:py-2.5">
+          <div className="flex min-w-0 items-center gap-2 md:gap-3">
             <button
               type="button"
               onClick={() => setMenuOpen(true)}
               aria-label="Menüyü aç"
               aria-expanded={menuOpen}
               aria-controls="app-menu"
-              className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white/80 text-foreground shadow-sm md:hidden"
+              className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-surface-muted/80 text-foreground md:hidden"
             >
               <MenuIcon className="h-5 w-5" />
             </button>
-            <div className="min-w-0">
-              <p className="font-serif text-xl leading-none">{STUDIO_NAME}</p>
-              <p className="mt-1 text-[11px] font-semibold uppercase tracking-[0.2em] text-accent">
-                {title}
+            <div className="min-w-0 pl-1">
+              <p className="truncate font-serif text-lg leading-none md:text-xl">
+                {STUDIO_NAME}
               </p>
             </div>
           </div>
-          <nav className="hidden items-center gap-1 md:flex">
+          <nav className="hidden items-center gap-1 p-1 md:flex">
             {items.map((item) => (
               <NavLink
                 key={item.href}
@@ -119,7 +116,7 @@ export function AppShell({
           <button
             type="button"
             onClick={handleLogout}
-            className="inline-flex shrink-0 items-center gap-2 rounded-full bg-white/80 px-3 py-2 text-sm text-muted shadow-sm hover:text-foreground"
+            className="inline-flex shrink-0 items-center gap-2 rounded-full bg-gradient-to-r from-[#ec407a] to-accent px-3 py-2 text-sm font-medium text-white shadow-[0_6px_18px_rgba(194,24,91,0.28)] hover:from-accent hover:to-accent-hover"
           >
             <LogOutIcon className="h-4 w-4" />
             <span className="hidden sm:inline">{user?.name ?? "Çıkış"}</span>
@@ -153,9 +150,6 @@ export function AppShell({
           <div className="flex items-center justify-between border-b border-border px-5 py-4">
             <div>
               <p className="font-serif text-lg leading-none">{STUDIO_NAME}</p>
-              <p className="mt-1 text-[11px] font-semibold uppercase tracking-[0.2em] text-accent">
-                {title}
-              </p>
             </div>
             <button
               type="button"
@@ -189,7 +183,7 @@ export function AppShell({
         </aside>
       </div>
 
-      <main className="mx-auto w-full max-w-6xl flex-1 px-5 py-8 md:px-6">{children}</main>
+      <main className="mx-auto w-full max-w-6xl flex-1 px-5 py-6 md:px-6 md:py-8">{children}</main>
     </div>
   );
 }
@@ -207,14 +201,14 @@ function NavLink({
   return (
     <Link
       href={item.href}
-      className={`inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm ${
+      className={`inline-flex items-center gap-2 rounded-full px-3.5 py-2 text-sm transition-all duration-200 md:px-4 ${
         stacked ? "w-full" : ""
       } ${
         active
-          ? "bg-gradient-to-r from-[#f8bbd0] to-accent-soft font-medium text-accent"
+          ? "bg-white font-medium text-accent shadow-[0_4px_14px_rgba(43,26,34,0.06)]"
           : stacked
-            ? "text-muted hover:bg-surface-muted hover:text-foreground"
-            : "text-muted hover:bg-white/80 hover:text-foreground"
+            ? "text-muted hover:bg-white/60 hover:text-foreground"
+            : "text-muted hover:bg-white/50 hover:text-foreground"
       }`}
     >
       <Icon className="h-4 w-4" />

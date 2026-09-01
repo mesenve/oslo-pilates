@@ -92,14 +92,14 @@ export function ClassCalendar({
               key={iso}
               type="button"
               onClick={() => onSelectDate(iso)}
-              className={`relative flex h-10 items-center justify-center rounded-2xl text-sm ${
+              className={`relative flex h-10 items-center justify-center rounded-2xl text-sm transition-colors ${
                 selected
                   ? "bg-gradient-to-br from-[#f06292] to-accent text-white shadow-md"
                   : isToday
                     ? "bg-accent-soft text-accent"
-                    : mark
-                      ? "bg-white/80 text-foreground"
-                      : "text-muted"
+                    : `bg-white/80 hover:bg-surface-muted ${
+                        mark ? "text-foreground" : "text-muted"
+                      }`
               }`}
             >
               {day}

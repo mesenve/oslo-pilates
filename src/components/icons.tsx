@@ -1,4 +1,4 @@
-import type { SVGProps } from "react";
+import type { HTMLAttributes, SVGProps } from "react";
 
 type IconProps = SVGProps<SVGSVGElement>;
 
@@ -35,6 +35,29 @@ export function ClockIcon(props: IconProps) {
   );
 }
 
+export function PilatesIcon({
+  className = "",
+  ...props
+}: HTMLAttributes<HTMLSpanElement>) {
+  return (
+    <span
+      aria-hidden
+      className={`inline-block shrink-0 bg-accent ${className}`}
+      style={{
+        WebkitMaskImage: "url(/icons/pilates-ball.png)",
+        maskImage: "url(/icons/pilates-ball.png)",
+        WebkitMaskSize: "contain",
+        maskSize: "contain",
+        WebkitMaskRepeat: "no-repeat",
+        maskRepeat: "no-repeat",
+        WebkitMaskPosition: "center",
+        maskPosition: "center",
+      }}
+      {...props}
+    />
+  );
+}
+
 export function UsersIcon(props: IconProps) {
   return (
     <svg {...base(props)}>
@@ -42,6 +65,16 @@ export function UsersIcon(props: IconProps) {
       <circle cx="9" cy="8" r="3" />
       <path d="M20 19v-1a3 3 0 0 0-2.2-2.9" />
       <path d="M16 5.1a3 3 0 0 1 0 5.8" />
+    </svg>
+  );
+}
+
+export function SeatIcon(props: IconProps) {
+  return (
+    <svg {...base(props)}>
+      <path d="M6 10V8a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v2" />
+      <path d="M5 10h14v5a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2v-5Z" />
+      <path d="M8 17v3M16 17v3" />
     </svg>
   );
 }
@@ -114,6 +147,14 @@ export function ChevronRightIcon(props: IconProps) {
   );
 }
 
+export function ChevronDownIcon(props: IconProps) {
+  return (
+    <svg {...base(props)}>
+      <path d="M6 9l6 6 6-6" />
+    </svg>
+  );
+}
+
 export function PlusIcon(props: IconProps) {
   return (
     <svg {...base(props)}>
@@ -144,6 +185,15 @@ export function TrashIcon(props: IconProps) {
       <path d="M5 7h14" />
       <path d="M10 7V5h4v2" />
       <path d="M8 7l1 13h6l1-13" />
+    </svg>
+  );
+}
+
+export function PencilIcon(props: IconProps) {
+  return (
+    <svg {...base(props)}>
+      <path d="M12 20h9" />
+      <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z" />
     </svg>
   );
 }

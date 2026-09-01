@@ -2,16 +2,25 @@
 
 import { ChevronLeftIcon } from "@/components/icons";
 import { StudentForm } from "@/components/student-form";
-import { Card, EmptyState } from "@/components/ui";
+import { StudentSavedModal } from "@/components/student-saved-modal";
+import { EmptyState } from "@/components/ui";
 import { useStudio } from "@/components/studio-provider";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
+import { useMemo, useState } from "react";
 
 export default function RestoreStudentPage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
-  const { archivedStudents } = useStudio();
+  const { archivedStudents, students, sessions } = useStudio();
   const student = archivedStudents.find((item) => item.id === params.id);
+  const [savedId, setSavedId] = useState<string | null>(null);
+  const [savedInviteUrl, setSavedInviteUrl] = useState<string | null>(null);
+  const saved = students.find((item) => item.id === savedId);
+  const savedSessions = useMemo(
+    () => (savedId ? sessions.filter((session) => session.studentId === savedId) : []),
+    [savedId, sessions],
+  );
 
   return (
     <div className="space-y-5">
@@ -23,25 +32,33 @@ export default function RestoreStudentPage() {
         Arşiv
       </Link>
       <header>
-        <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-accent">
-          Arşiv
-        </p>
-        <h1 className="mt-1 font-serif text-3xl">Kaydı aktif hale getir</h1>
+        <h1 className="font-serif text-3xl">Kaydı aktif hale getir</h1>
         <p className="mt-1 text-sm text-muted">
           Bilgileri düzenleyip kaydı tekrar öğrenci listesine al.
         </p>
       </header>
       {student ? (
-        <Card className="p-5">
-          <StudentForm
-            student={student}
-            submitLabel="Kaydı aktif hale getir"
-            onSaved={(id) => router.replace(`/admin/ogrenciler/${id}`)}
-          />
-        </Card>
+        <StudentForm
+          student={student}
+          mode="restore"
+          submitLabel="Kaydı aktif hale getir"
+          onSaved={(studentId, inviteUrl) => {
+            setSavedId(studentId);
+            setSavedInviteUrl(inviteUrl ?? null);
+          }}
+        />
       ) : (
         <EmptyState>Arşiv kaydı bulunamadı.</EmptyState>
       )}
+      {saved && savedInviteUrl ? (
+        <StudentSavedModal
+          student={saved}
+          sessions={savedSessions}
+          inviteUrl={savedInviteUrl}
+          phone={saved.phone}
+          onContinue={() => router.replace(`/admin/ogrenciler/${saved.id}`)}
+        />
+      ) : null}
     </div>
   );
 }

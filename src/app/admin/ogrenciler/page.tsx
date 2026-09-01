@@ -27,12 +27,10 @@ export default function StudentsPage() {
             {isSuperAdmin ? "Öğrenciler" : "Öğrencilerim"}
           </h1>
         </div>
-        {isSuperAdmin ? (
-          <Button onClick={() => router.push("/admin/ogrenciler/yeni")}>
-            <PlusIcon className="h-4 w-4" />
-            Kaydet
-          </Button>
-        ) : null}
+        <Button onClick={() => router.push("/admin/ogrenciler/yeni")}>
+          <PlusIcon className="h-4 w-4" />
+          Kaydet
+        </Button>
       </header>
 
       <LetterIndex students={sorted} selected={letter} onSelect={setLetter} />

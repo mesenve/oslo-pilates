@@ -37,10 +37,7 @@ export default function ProgramPage() {
   return (
     <div className="space-y-5">
       <header>
-        <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-accent">
-          Ders takvimi
-        </p>
-        <h1 className="mt-1 font-serif text-3xl">Programın</h1>
+        <h1 className="font-serif text-3xl">Programın</h1>
         <p className="mt-1 text-sm text-muted">{group?.label}</p>
         <p className="mt-1 text-sm text-muted">{postponeHint}</p>
       </header>

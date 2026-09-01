@@ -14,13 +14,10 @@ export default function AttendancePage() {
   return (
     <div className="space-y-6">
       <header>
-        <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-accent">
-          Yoklama
-        </p>
-        <h1 className="mt-1 font-serif text-3xl">Onay</h1>
-        <p className="mt-1 text-sm text-muted">
-          Öğrenci Geldim deyince grup burada bekler. {pending} grup onay bekliyor.
-        </p>
+        <h1 className="font-serif text-3xl">Onay</h1>
+        {pending > 0 ? (
+          <p className="mt-1 text-sm text-muted">{pending} grup onay bekliyor.</p>
+        ) : null}
       </header>
 
       <AttendanceBoard />

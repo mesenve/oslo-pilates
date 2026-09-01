@@ -90,7 +90,7 @@ export function SessionRow({
           }}
         >
           <p className="text-sm text-muted">
-            {postponeHint} Hoca onaylayınca bu ders ertelenir. Yeni saat seçilmez.
+            {postponeHint} Hoca onaylayınca bu ders ertelenir.
           </p>
           <label className="mt-3 block text-sm text-muted" htmlFor={`reason-${session.id}`}>
             Not (isteğe bağlı)
@@ -100,7 +100,7 @@ export function SessionRow({
             value={reason}
             onChange={(event) => setReason(event.target.value)}
             rows={2}
-            className="mt-2 w-full rounded-xl border border-border bg-surface-muted px-3 py-2 text-sm outline-none focus:border-accent"
+            className="mt-2 w-full resize-none rounded-xl border border-border bg-surface-muted px-3 py-2 text-sm outline-none focus:border-accent"
             placeholder="Hocaya kısa bir not bırakabilirsin."
           />
           <div className="mt-3 flex gap-2">

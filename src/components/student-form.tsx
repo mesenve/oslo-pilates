@@ -1,168 +1,226 @@
 "use client";
 
-import { Button } from "@/components/ui";
+import { Button, Card } from "@/components/ui";
 import { useStudio } from "@/components/studio-provider";
-import { getClassGroups } from "@/data/groups";
-import { DEFAULT_INSTRUCTOR_ID, getInstructors } from "@/data/staff";
+import { DateField } from "@/components/date-field";
+import {
+  InputField,
+  SelectField,
+  TextAreaField,
+} from "@/components/form-fields";
+import { getGroupSelectOptions } from "@/data/groups";
+import {
+  inferPackageType,
+  PACKAGE_TYPE_LABELS,
+  PACKAGE_TYPES,
+  sessionOptionsForPackage,
+} from "@/data/packages";
+import { DEFAULT_INSTRUCTOR_ID, getAssignableInstructors } from "@/data/staff";
 import { PAYMENT_LABELS } from "@/lib/labels";
-import type { NewStudentInput, PaymentStatus, Student } from "@/types/studio";
+import { todayISO } from "@/lib/dates";
+import type { NewStudentInput, PackageType, PaymentStatus, Student } from "@/types/studio";
 import { useState } from "react";
 
 export function StudentForm({
   student,
+  mode,
   submitLabel = "Öğrenciyi kaydet",
   onSaved,
 }: {
   student?: Student;
+  mode?: "create" | "edit" | "restore";
   submitLabel?: string;
-  onSaved?: (studentId: string) => void;
+  onSaved?: (studentId: string, inviteUrl?: string) => void;
 }) {
-  const { addStudent, restoreStudent } = useStudio();
-  const groups = getClassGroups();
+  const { addStudent, restoreStudent, updateStudent, user, isSuperAdmin } = useStudio();
+  const groups = getGroupSelectOptions();
   const [error, setError] = useState<string | null>(null);
-  const [form, setForm] = useState(() => formFromStudent(student, groups[0]?.id ?? ""));
+  const defaultInstructorId = user?.role === "instructor" ? user.id : undefined;
+  const [form, setForm] = useState(() =>
+    formFromStudent(student, groups[0]?.value ?? "", defaultInstructorId),
+  );
+  const resolvedMode = mode ?? (student ? "edit" : "create");
+  const lockInstructor = !isSuperAdmin && user?.role === "instructor";
 
   function update(field: keyof typeof form, value: string) {
     setForm((current) => ({ ...current, [field]: value }));
     setError(null);
   }
 
+  function updatePackageType(value: PackageType) {
+    setForm((current) => ({ ...current, packageType: value }));
+    setError(null);
+  }
+
   function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
-    const input = toInput(form);
-    const result = student
-      ? restoreStudent(student.id, input)
-      : addStudent(input);
+    if (!form.groupId) {
+      setError("Gün ve saat seç.");
+      return;
+    }
+    if (resolvedMode === "create" && !form.email.trim()) {
+      setError("E-posta gerekli. Davet maili gönderilecek.");
+      return;
+    }
+    const input = toInput(form, lockInstructor ? user?.id : undefined);
+    const result =
+      resolvedMode === "restore" && student
+        ? restoreStudent(student.id, input)
+        : resolvedMode === "edit" && student
+          ? updateStudent(student.id, input)
+          : addStudent(input);
     if (result.error || !result.id) {
       setError(result.error ?? "Kayıt yapılamadı.");
       return;
     }
-    onSaved?.(result.id);
+    onSaved?.(result.id, result.inviteUrl);
   }
 
   return (
     <form className="space-y-4" onSubmit={handleSubmit}>
-      <Field
-        label="Ad soyad"
-        value={form.name}
-        onChange={(value) => update("name", value)}
-        required
-      />
-      <div className="grid grid-cols-2 gap-4">
-        <Field
-          label="E-posta"
-          value={form.email}
-          onChange={(value) => update("email", value)}
-          placeholder="boş bırakılırsa otomatik oluşur"
-        />
-        <Field
-          label="Telefon"
-          value={form.phone}
-          onChange={(value) => update("phone", value)}
-        />
-      </div>
-      <label className="block text-sm">
-        <span className="text-muted">Eğitmen</span>
-        <select
-          value={form.instructorId}
-          onChange={(event) => update("instructorId", event.target.value)}
-          className="mt-1 w-full rounded-xl border border-border bg-white px-3 py-2.5 text-sm outline-none focus:border-accent"
-        >
-          {getInstructors().map((instructor) => (
-            <option key={instructor.id} value={instructor.id}>
-              {instructor.name}
-            </option>
-          ))}
-        </select>
-      </label>
-      <label className="block text-sm">
-        <span className="text-muted">Grup</span>
-        <select
-          value={form.groupId}
-          onChange={(event) => update("groupId", event.target.value)}
-          className="mt-1 w-full rounded-xl border border-border bg-white px-3 py-2.5 text-sm outline-none focus:border-accent"
-        >
-          {groups.map((group) => (
-            <option key={group.id} value={group.id}>
-              {group.label}
-            </option>
-          ))}
-        </select>
-      </label>
+      <FormSection title="Öğrenci ölçüsü">
+        <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
+          <InputField
+            label="Kilo (kg)"
+            value={form.weightKg}
+            onChange={(value) => update("weightKg", value)}
+            type="number"
+          />
+          <InputField
+            label="Boy (cm)"
+            value={form.heightCm}
+            onChange={(value) => update("heightCm", value)}
+            type="number"
+          />
+          <InputField
+            label="Bel (cm)"
+            value={form.waistCm}
+            onChange={(value) => update("waistCm", value)}
+            type="number"
+          />
+          <InputField
+            label="Kalça (cm)"
+            value={form.hipCm}
+            onChange={(value) => update("hipCm", value)}
+            type="number"
+          />
+          <InputField
+            label="Göğüs (cm)"
+            value={form.chestCm}
+            onChange={(value) => update("chestCm", value)}
+            type="number"
+          />
+        </div>
+      </FormSection>
 
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
-        <Field
-          label="Kilo (kg)"
-          value={form.weightKg}
-          onChange={(value) => update("weightKg", value)}
-          type="number"
-        />
-        <Field
-          label="Boy (cm)"
-          value={form.heightCm}
-          onChange={(value) => update("heightCm", value)}
-          type="number"
-        />
-        <Field
-          label="Bel (cm)"
-          value={form.waistCm}
-          onChange={(value) => update("waistCm", value)}
-          type="number"
-        />
-        <Field
-          label="Kalça (cm)"
-          value={form.hipCm}
-          onChange={(value) => update("hipCm", value)}
-          type="number"
-        />
-        <Field
-          label="Göğüs (cm)"
-          value={form.chestCm}
-          onChange={(value) => update("chestCm", value)}
-          type="number"
-        />
-        <Field
-          label="Paket ders"
-          value={form.totalSessions}
-          onChange={(value) => update("totalSessions", value)}
-          type="number"
-        />
-        <Field
-          label="Aylık erteleme hakkı"
-          value={form.monthlyPostponeLimit}
-          onChange={(value) => update("monthlyPostponeLimit", value)}
-          type="number"
-        />
-      </div>
-      <p className="-mt-2 text-xs text-muted">
-        Bir takvim ayında kaç ders erteleyebilir. Varsayılan 1.
-      </p>
+      <FormSection title="Kişisel bilgiler">
+        <div className="grid grid-cols-2 gap-4">
+          <InputField
+            label="Ad soyad"
+            value={form.name}
+            onChange={(value) => update("name", value)}
+            required
+          />
+          {!lockInstructor ? (
+            <SelectField
+              label="Eğitmen"
+              value={form.instructorId}
+              onChange={(value) => update("instructorId", value)}
+              options={getAssignableInstructors().map((instructor) => ({
+                value: instructor.id,
+                label: instructor.name,
+              }))}
+            />
+          ) : (
+            <div>
+              <p className="text-sm text-muted">Eğitmen</p>
+              <p className="mt-1 rounded-xl border border-border bg-white px-3 py-2.5 text-sm">
+                {getAssignableInstructors().find((item) => item.id === form.instructorId)?.name ??
+                  "—"}
+              </p>
+            </div>
+          )}
+        </div>
+        <div className="grid grid-cols-2 gap-4">
+          <InputField
+            label="E-posta"
+            value={form.email}
+            onChange={(value) => update("email", value)}
+            placeholder="ornek@mail.com"
+            required={resolvedMode === "create"}
+          />
+          <InputField
+            label="Telefon"
+            value={form.phone}
+            onChange={(value) => update("phone", value)}
+          />
+        </div>
+      </FormSection>
 
-      <label className="block text-sm">
-        <span className="text-muted">Ödeme durumu</span>
-        <select
-          value={form.paymentStatus}
-          onChange={(event) => update("paymentStatus", event.target.value)}
-          className="mt-1 w-full rounded-xl border border-border bg-white px-3 py-2.5 text-sm outline-none focus:border-accent"
-        >
-          {(Object.keys(PAYMENT_LABELS) as PaymentStatus[]).map((status) => (
-            <option key={status} value={status}>
-              {PAYMENT_LABELS[status]}
-            </option>
-          ))}
-        </select>
-      </label>
+      <FormSection title="Paket ve program">
+        <div className="grid grid-cols-2 gap-4">
+          <SelectField
+            label="Paket türü"
+            value={form.packageType}
+            onChange={(value) => updatePackageType(value as PackageType)}
+            options={PACKAGE_TYPES.map((type) => ({
+              value: type,
+              label: PACKAGE_TYPE_LABELS[type],
+            }))}
+          />
+          <SelectField
+            label="Seans"
+            value={form.totalSessions}
+            onChange={(value) => update("totalSessions", value)}
+            options={sessionOptionsForPackage(form.packageType)}
+          />
+        </div>
+        <div className="grid grid-cols-2 gap-4">
+          <SelectField
+            label="Gün ve saat"
+            value={form.groupId}
+            onChange={(value) => update("groupId", value)}
+            options={groups}
+          />
+          <DateField
+            label="Ders başlangıç tarihi"
+            value={form.startDate}
+            onChange={(value) => update("startDate", value)}
+            required
+          />
+        </div>
+      </FormSection>
 
-      <label className="block text-sm">
-        <span className="text-muted">Not</span>
-        <textarea
+      <FormSection title="Kayıt detayları">
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <InputField
+              label="Aylık erteleme hakkı"
+              value={form.monthlyPostponeLimit}
+              onChange={(value) => update("monthlyPostponeLimit", value)}
+              type="number"
+            />
+            <p className="mt-1 text-xs text-muted">
+              Bir takvim ayında kaç ders erteleyebilir. Varsayılan 1.
+            </p>
+          </div>
+          <SelectField
+            label="Ödeme durumu"
+            value={form.paymentStatus}
+            onChange={(value) => update("paymentStatus", value)}
+            options={(Object.keys(PAYMENT_LABELS) as PaymentStatus[]).map((status) => ({
+              value: status,
+              label: PAYMENT_LABELS[status],
+            }))}
+          />
+        </div>
+        <TextAreaField
+          label="Not"
           value={form.note}
-          onChange={(event) => update("note", event.target.value)}
-          rows={4}
+          onChange={(value) => update("note", value)}
           placeholder="Hoca notu: sakatlık, ödeme, özel durum…"
-          className="mt-1 w-full rounded-xl border border-border bg-white px-3 py-2.5 text-sm outline-none focus:border-accent"
         />
-      </label>
+      </FormSection>
 
       {error ? <p className="text-sm text-red-700">{error}</p> : null}
       <Button type="submit" className="w-full">
@@ -172,32 +230,58 @@ export function StudentForm({
   );
 }
 
-function formFromStudent(student: Student | undefined, fallbackGroupId: string) {
+function FormSection({
+  title,
+  children,
+}: {
+  title: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <Card className="space-y-4 p-5">
+      <h2 className="font-serif text-xl">{title}</h2>
+      {children}
+    </Card>
+  );
+}
+
+function formFromStudent(
+  student: Student | undefined,
+  fallbackGroupId: string,
+  defaultInstructorId?: string,
+) {
+  const groupId = student?.groupId ?? fallbackGroupId;
   return {
     name: student?.name ?? "",
     email: student?.email ?? "",
     phone: student?.phone === "—" ? "" : (student?.phone ?? ""),
-    groupId: student?.groupId ?? fallbackGroupId,
-    instructorId: student?.instructorId ?? DEFAULT_INSTRUCTOR_ID,
+    groupId,
+    instructorId: student?.instructorId ?? defaultInstructorId ?? DEFAULT_INSTRUCTOR_ID,
+    packageType: student?.packageType ?? inferPackageType(groupId),
     weightKg: student ? String(student.measurements.weightKg) : "",
     heightCm: student ? String(student.measurements.heightCm) : "",
     waistCm: student ? String(student.measurements.waistCm) : "",
     hipCm: student ? String(student.measurements.hipCm) : "",
     chestCm: student ? String(student.measurements.chestCm) : "",
-    totalSessions: student ? String(student.package.totalSessions) : "",
+    totalSessions: student ? String(student.package.totalSessions) : "12",
     paymentStatus: (student?.package.paymentStatus ?? "paid") as PaymentStatus,
     note: student?.note ?? "",
     monthlyPostponeLimit: student ? String(student.monthlyPostponeLimit) : "",
+    startDate: student?.package.startDate ?? todayISO(),
   };
 }
 
-function toInput(form: ReturnType<typeof formFromStudent>): NewStudentInput {
+function toInput(
+  form: ReturnType<typeof formFromStudent>,
+  lockedInstructorId?: string,
+): NewStudentInput {
   return {
     name: form.name,
     email: form.email,
     phone: form.phone,
     groupId: form.groupId,
-    instructorId: form.instructorId,
+    instructorId: lockedInstructorId ?? form.instructorId,
+    packageType: form.packageType,
     weightKg: Number(form.weightKg) || 0,
     heightCm: Number(form.heightCm) || 0,
     waistCm: Number(form.waistCm) || 0,
@@ -209,35 +293,6 @@ function toInput(form: ReturnType<typeof formFromStudent>): NewStudentInput {
     monthlyPostponeLimit: Number.isFinite(Number(form.monthlyPostponeLimit))
       ? Math.max(0, Math.round(Number(form.monthlyPostponeLimit)))
       : 1,
+    startDate: form.startDate || todayISO(),
   };
-}
-
-function Field({
-  label,
-  value,
-  onChange,
-  type = "text",
-  required,
-  placeholder,
-}: {
-  label: string;
-  value: string;
-  onChange: (value: string) => void;
-  type?: string;
-  required?: boolean;
-  placeholder?: string;
-}) {
-  return (
-    <label className="block text-sm">
-      <span className="text-muted">{label}</span>
-      <input
-        type={type}
-        value={value}
-        required={required}
-        placeholder={placeholder}
-        onChange={(event) => onChange(event.target.value)}
-        className="mt-1 w-full rounded-xl border border-border bg-white px-3 py-2.5 text-sm outline-none focus:border-accent"
-      />
-    </label>
-  );
 }

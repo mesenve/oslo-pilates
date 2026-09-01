@@ -29,7 +29,7 @@ export function LetterIndex({
               key={letter}
               type="button"
               onClick={() => onSelect(letter)}
-              className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-sm font-semibold shadow-[0_6px_14px_rgba(43,26,34,0.1)] ${
+              className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-sm font-semibold ${
                 active
                   ? "bg-accent text-white"
                   : hasStudents

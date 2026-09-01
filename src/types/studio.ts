@@ -21,6 +21,10 @@ export type PostponeStatus = "pending" | "approved" | "rejected";
 
 export type PaymentStatus = "paid" | "pending" | "overdue";
 
+export type PackageType = "group_5" | "duet_2" | "private";
+
+export type StudentAccountStatus = "invited" | "active";
+
 export type Measurements = {
   weightKg: number;
   heightCm: number;
@@ -54,10 +58,15 @@ export type Student = {
   phone: string;
   groupId: string;
   instructorId: string;
+  packageType: PackageType;
   note: string;
   measurements: Measurements;
   package: StudentPackage;
   monthlyPostponeLimit: number;
+  accountStatus: StudentAccountStatus;
+  inviteToken?: string;
+  inviteExpiresAt?: string;
+  invitedAt?: string;
 };
 
 export type StaffUser = {
@@ -100,6 +109,7 @@ export type NewStudentInput = {
   phone: string;
   groupId: string;
   instructorId: string;
+  packageType: PackageType;
   weightKg: number;
   heightCm: number;
   waistCm: number;
@@ -109,6 +119,7 @@ export type NewStudentInput = {
   paymentStatus: PaymentStatus;
   note: string;
   monthlyPostponeLimit: number;
+  startDate: string;
 };
 
 export type StudioState = {
@@ -117,4 +128,6 @@ export type StudioState = {
   archivedStudents: Student[];
   sessions: Session[];
   postponeRequests: PostponeRequest[];
+  staffPasswords: Record<string, string>;
+  studentPasswords: Record<string, string>;
 };

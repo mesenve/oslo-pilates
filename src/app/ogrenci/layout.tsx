@@ -16,7 +16,7 @@ export default function StudentLayout({
 }) {
   return (
     <RoleGuard role="student">
-      <AppShell title="Öğrenci" items={ITEMS}>
+      <AppShell items={ITEMS}>
         {children}
       </AppShell>
     </RoleGuard>

@@ -18,10 +18,7 @@ export default function ProfilePage() {
   return (
     <div className="space-y-5">
       <header>
-        <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-accent">
-          Öğrenci profili
-        </p>
-        <h1 className="mt-1 font-serif text-3xl">{student.name}</h1>
+        <h1 className="font-serif text-3xl">{student.name}</h1>
       </header>
 
       <Card className="grid gap-6 p-6 sm:grid-cols-2">
