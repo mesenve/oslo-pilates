@@ -22,6 +22,7 @@ export function PasswordField({
   onChange,
   required,
   autoComplete,
+  minLength,
 }: {
   id?: string;
   label: string;
@@ -29,6 +30,7 @@ export function PasswordField({
   onChange: (value: string) => void;
   required?: boolean;
   autoComplete?: string;
+  minLength?: number;
 }) {
   const generatedId = useId();
   const inputId = id ?? generatedId;
@@ -46,6 +48,7 @@ export function PasswordField({
           value={value}
           required={required}
           autoComplete={autoComplete}
+          minLength={minLength}
           onChange={(event) => onChange(event.target.value)}
           className={`${fieldControlClass} pr-10`}
         />

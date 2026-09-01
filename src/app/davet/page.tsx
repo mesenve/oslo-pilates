@@ -1,5 +1,6 @@
 "use client";
 
+import { PasswordField } from "@/components/form-fields";
 import { Button, Card } from "@/components/ui";
 import { useStudio } from "@/components/studio-provider";
 import { fetchInviteByToken, type InviteLookup } from "@/lib/invite-client";
@@ -169,36 +170,24 @@ function DavetForm() {
             Merhaba {studentName}, üyelik adımını tamamlamak için şifreni belirle.
           </p>
         </div>
-        <div>
-          <label className="text-sm text-muted" htmlFor="password">
-            Şifre
-          </label>
-          <input
-            id="password"
-            type="password"
-            value={password}
-            onChange={(event) => setPassword(event.target.value)}
-            required
-            minLength={6}
-            className="mt-1 w-full rounded-xl border border-border bg-white px-3 py-2.5 text-sm outline-none focus:border-accent"
-            autoComplete="new-password"
-          />
-        </div>
-        <div>
-          <label className="text-sm text-muted" htmlFor="confirm-password">
-            Şifre tekrar
-          </label>
-          <input
-            id="confirm-password"
-            type="password"
-            value={confirmPassword}
-            onChange={(event) => setConfirmPassword(event.target.value)}
-            required
-            minLength={6}
-            className="mt-1 w-full rounded-xl border border-border bg-white px-3 py-2.5 text-sm outline-none focus:border-accent"
-            autoComplete="new-password"
-          />
-        </div>
+        <PasswordField
+          id="password"
+          label="Şifre"
+          value={password}
+          onChange={setPassword}
+          autoComplete="new-password"
+          minLength={6}
+          required
+        />
+        <PasswordField
+          id="confirm-password"
+          label="Şifre tekrar"
+          value={confirmPassword}
+          onChange={setConfirmPassword}
+          autoComplete="new-password"
+          minLength={6}
+          required
+        />
         {error ? <p className="text-sm text-red-700">{error}</p> : null}
         <Button type="submit" className="w-full" disabled={pending}>
           {pending ? "Hesap oluşturuluyor…" : "Hesabımı oluştur"}
