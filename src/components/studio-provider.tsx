@@ -139,7 +139,7 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
           user.role === "student"
             ? fetchAttendanceMarks({ studentId: user.id })
             : isStaffRole(user.role)
-              ? fetchAttendanceMarks({ status: "attend_pending" })
+              ? fetchAttendanceMarks()
               : Promise.resolve([]);
 
         const invitesPromise =
@@ -170,10 +170,22 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
 
     void syncRemoteState();
     const interval = window.setInterval(syncRemoteState, 12000);
+    const onFocus = () => {
+      void syncRemoteState();
+    };
+    const onVisible = () => {
+      if (document.visibilityState === "visible") {
+        void syncRemoteState();
+      }
+    };
+    window.addEventListener("focus", onFocus);
+    document.addEventListener("visibilitychange", onVisible);
 
     return () => {
       cancelled = true;
       window.clearInterval(interval);
+      window.removeEventListener("focus", onFocus);
+      document.removeEventListener("visibilitychange", onVisible);
     };
   }, [ready, state.user?.id, state.user?.role]);
 
@@ -446,94 +458,123 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
     const session = getStudioSnapshot().sessions.find((item) => item.id === sessionId);
     if (!session || session.status !== "upcoming") return;
 
-    void pushAttendanceMark({
-      sessionId: session.id,
-      studentId: session.studentId,
-      date: session.date,
-      groupId: session.groupId,
-      status: "attend_pending",
-    }).catch(() => {});
-
-    setStudioState((current) => ({
-      ...current,
-      sessions: current.sessions.map((item) =>
-        item.id === sessionId && item.status === "upcoming"
-          ? { ...item, status: "attend_pending" }
-          : item,
-      ),
-    }));
+    void (async () => {
+      try {
+        await pushAttendanceMark({
+          sessionId: session.id,
+          studentId: session.studentId,
+          date: session.date,
+          groupId: session.groupId,
+          status: "attend_pending",
+        });
+        setStudioState((current) => ({
+          ...current,
+          sessions: current.sessions.map((item) =>
+            item.id === sessionId && item.status === "upcoming"
+              ? { ...item, status: "attend_pending" }
+              : item,
+          ),
+        }));
+      } catch {
+        // Sunucu kaydı olmadan yerel durum güncellenmez.
+      }
+    })();
   }, []);
 
   const approveAttendance = useCallback((sessionIds: string[]) => {
-    const idSet = new Set(sessionIds);
-    const snapshot = getStudioSnapshot();
-
-    for (const sessionId of sessionIds) {
-      const session = snapshot.sessions.find((item) => item.id === sessionId);
-      if (!session || session.status !== "attend_pending") continue;
-      void pushAttendanceMark({
-        sessionId: session.id,
-        studentId: session.studentId,
-        date: session.date,
-        groupId: session.groupId,
-        status: "attended",
-      }).catch(() => {});
-    }
-
-    setStudioState((current) => {
+    void (async () => {
+      const snapshot = getStudioSnapshot();
+      const idSet = new Set(sessionIds);
       const allowed = sessionIds.every((sessionId) => {
-        const session = current.sessions.find((item) => item.id === sessionId);
+        const session = snapshot.sessions.find((item) => item.id === sessionId);
         return (
           session &&
-          canManageStudent(current.user, session.studentId, current.students)
+          canManageStudent(snapshot.user, session.studentId, snapshot.students)
         );
       });
-      if (!allowed) return current;
-      return {
-        ...current,
-        sessions: current.sessions.map((session) =>
-          idSet.has(session.id) && session.status === "attend_pending"
-            ? { ...session, status: "attended" }
-            : session,
-        ),
-      };
-    });
+      if (!allowed) return;
+
+      const targets = sessionIds
+        .map((sessionId) => snapshot.sessions.find((item) => item.id === sessionId))
+        .filter(
+          (session): session is Session =>
+            Boolean(session && session.status === "attend_pending"),
+        );
+
+      if (targets.length === 0) return;
+
+      try {
+        await Promise.all(
+          targets.map((session) =>
+            pushAttendanceMark({
+              sessionId: session.id,
+              studentId: session.studentId,
+              date: session.date,
+              groupId: session.groupId,
+              status: "attended",
+            }),
+          ),
+        );
+        setStudioState((current) => ({
+          ...current,
+          sessions: current.sessions.map((session) =>
+            idSet.has(session.id) && session.status === "attend_pending"
+              ? { ...session, status: "attended" }
+              : session,
+          ),
+        }));
+      } catch {
+        // Onay sunucuya yazılamazsa yerel durum değişmez.
+      }
+    })();
   }, []);
 
   const rejectAttendance = useCallback((sessionIds: string[]) => {
-    const idSet = new Set(sessionIds);
-    const snapshot = getStudioSnapshot();
-
-    for (const sessionId of sessionIds) {
-      const session = snapshot.sessions.find((item) => item.id === sessionId);
-      if (!session || session.status !== "attend_pending") continue;
-      void pushAttendanceMark({
-        sessionId: session.id,
-        studentId: session.studentId,
-        date: session.date,
-        groupId: session.groupId,
-        status: "upcoming",
-      }).catch(() => {});
-    }
-
-    setStudioState((current) => {
+    void (async () => {
+      const snapshot = getStudioSnapshot();
+      const idSet = new Set(sessionIds);
       const allowed = sessionIds.every((sessionId) => {
-        const session = current.sessions.find((item) => item.id === sessionId);
+        const session = snapshot.sessions.find((item) => item.id === sessionId);
         return (
           session &&
-          canManageStudent(current.user, session.studentId, current.students)
+          canManageStudent(snapshot.user, session.studentId, snapshot.students)
         );
       });
-      if (!allowed) return current;
-      return {
-        ...current,
-        sessions: current.sessions.map((session) =>
-          idSet.has(session.id) && session.status === "attend_pending"
-            ? { ...session, status: "upcoming" }
-            : session,
-        ),
-      };
-    });
+      if (!allowed) return;
+
+      const targets = sessionIds
+        .map((sessionId) => snapshot.sessions.find((item) => item.id === sessionId))
+        .filter(
+          (session): session is Session =>
+            Boolean(session && session.status === "attend_pending"),
+        );
+
+      if (targets.length === 0) return;
+
+      try {
+        await Promise.all(
+          targets.map((session) =>
+            pushAttendanceMark({
+              sessionId: session.id,
+              studentId: session.studentId,
+              date: session.date,
+              groupId: session.groupId,
+              status: "upcoming",
+            }),
+          ),
+        );
+        setStudioState((current) => ({
+          ...current,
+          sessions: current.sessions.map((session) =>
+            idSet.has(session.id) && session.status === "attend_pending"
+              ? { ...session, status: "upcoming" }
+              : session,
+          ),
+        }));
+      } catch {
+        // Geri alma sunucuya yazılamazsa yerel durum değişmez.
+      }
+    })();
   }, []);
 
   const requestPostpone = useCallback((sessionId: string, reason: string) => {

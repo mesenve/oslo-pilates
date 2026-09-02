@@ -75,21 +75,26 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Davet linki geçersiz." }, { status: 400 });
   }
 
-  if (student && sessions && expiresAt) {
-    try {
-      await saveInvite({
-        token,
-        student,
-        sessions,
-        expiresAt,
-      });
-    } catch (error) {
-      console.error("Invite store save failed:", error);
-      return NextResponse.json(
-        { error: "Davet kaydedilemedi. Lütfen tekrar dene." },
-        { status: 500 },
-      );
-    }
+  if (!student || !sessions?.length || !expiresAt) {
+    return NextResponse.json(
+      { error: "Davet kaydı eksik. Lütfen daveti yeniden gönder." },
+      { status: 400 },
+    );
+  }
+
+  try {
+    await saveInvite({
+      token,
+      student,
+      sessions,
+      expiresAt,
+    });
+  } catch (error) {
+    console.error("Invite store save failed:", error);
+    return NextResponse.json(
+      { error: "Davet kaydedilemedi. Lütfen tekrar dene." },
+      { status: 500 },
+    );
   }
 
   let result: Awaited<ReturnType<typeof sendWelcomeInviteEmail>>;
