@@ -8,7 +8,9 @@ import {
   isSuperAdminEmail,
 } from "@/data/staff";
 import { buildSessionsForStudent, collectSessionDates } from "@/data/seed";
-import { studentsForUser, sessionsForUser, postponeRequestsForUser, canManageStudent } from "@/lib/access";
+import { studentsForUser, sessionsForUser, postponeRequestsForUser, canManageStudent, isStaffRole } from "@/lib/access";
+import { fetchAttendanceMarks, pushAttendanceMark } from "@/lib/attendance-client";
+import { mergeActivatedInvites, mergeAttendanceMarks } from "@/lib/attendance-sync";
 import { addDays, startOfWeekMonday, toISODate, todayISO } from "@/lib/dates";
 import {
   getStaffPassword,
@@ -25,6 +27,7 @@ import {
 import {
   activateInviteAccount,
   buildActivatedMerge,
+  fetchActivatedInvites,
   loginStudentAccount,
 } from "@/lib/invite-client";
 import {
@@ -44,6 +47,7 @@ import {
   createContext,
   useCallback,
   useContext,
+  useEffect,
   useMemo,
   useSyncExternalStore,
 } from "react";
@@ -122,6 +126,56 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
     getStudioSnapshot,
     getServerStudioSnapshot,
   );
+
+  useEffect(() => {
+    if (!ready || !state.user) return;
+
+    let cancelled = false;
+
+    async function syncRemoteState() {
+      try {
+        const user = state.user!;
+        const marksPromise =
+          user.role === "student"
+            ? fetchAttendanceMarks({ studentId: user.id })
+            : isStaffRole(user.role)
+              ? fetchAttendanceMarks({ status: "attend_pending" })
+              : Promise.resolve([]);
+
+        const invitesPromise =
+          user.role === "super_admin"
+            ? fetchActivatedInvites()
+            : Promise.resolve([]);
+
+        const [marks, invites] = await Promise.all([marksPromise, invitesPromise]);
+        if (cancelled || (marks.length === 0 && invites.length === 0)) return;
+
+        setStudioState((current) => {
+          let next = current;
+          if (invites.length > 0) {
+            next = mergeActivatedInvites(next, invites);
+          }
+          if (marks.length > 0) {
+            next = {
+              ...next,
+              sessions: mergeAttendanceMarks(next.sessions, marks),
+            };
+          }
+          return next;
+        });
+      } catch {
+        // Ağ hatasında yerel durum korunur.
+      }
+    }
+
+    void syncRemoteState();
+    const interval = window.setInterval(syncRemoteState, 12000);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+    };
+  }, [ready, state.user?.id, state.user?.role]);
 
   const loginAs = useCallback((role: Role, staffId?: string) => {
     if (role === "super_admin" || role === "instructor") {
@@ -389,18 +443,43 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const markAttended = useCallback((sessionId: string) => {
+    const session = getStudioSnapshot().sessions.find((item) => item.id === sessionId);
+    if (!session || session.status !== "upcoming") return;
+
+    void pushAttendanceMark({
+      sessionId: session.id,
+      studentId: session.studentId,
+      date: session.date,
+      groupId: session.groupId,
+      status: "attend_pending",
+    }).catch(() => {});
+
     setStudioState((current) => ({
       ...current,
-      sessions: current.sessions.map((session) =>
-        session.id === sessionId && session.status === "upcoming"
-          ? { ...session, status: "attend_pending" }
-          : session,
+      sessions: current.sessions.map((item) =>
+        item.id === sessionId && item.status === "upcoming"
+          ? { ...item, status: "attend_pending" }
+          : item,
       ),
     }));
   }, []);
 
   const approveAttendance = useCallback((sessionIds: string[]) => {
     const idSet = new Set(sessionIds);
+    const snapshot = getStudioSnapshot();
+
+    for (const sessionId of sessionIds) {
+      const session = snapshot.sessions.find((item) => item.id === sessionId);
+      if (!session || session.status !== "attend_pending") continue;
+      void pushAttendanceMark({
+        sessionId: session.id,
+        studentId: session.studentId,
+        date: session.date,
+        groupId: session.groupId,
+        status: "attended",
+      }).catch(() => {});
+    }
+
     setStudioState((current) => {
       const allowed = sessionIds.every((sessionId) => {
         const session = current.sessions.find((item) => item.id === sessionId);
@@ -423,6 +502,20 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
 
   const rejectAttendance = useCallback((sessionIds: string[]) => {
     const idSet = new Set(sessionIds);
+    const snapshot = getStudioSnapshot();
+
+    for (const sessionId of sessionIds) {
+      const session = snapshot.sessions.find((item) => item.id === sessionId);
+      if (!session || session.status !== "attend_pending") continue;
+      void pushAttendanceMark({
+        sessionId: session.id,
+        studentId: session.studentId,
+        date: session.date,
+        groupId: session.groupId,
+        status: "upcoming",
+      }).catch(() => {});
+    }
+
     setStudioState((current) => {
       const allowed = sessionIds.every((sessionId) => {
         const session = current.sessions.find((item) => item.id === sessionId);

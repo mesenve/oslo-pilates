@@ -105,6 +105,22 @@ async function readJsonResponse<T>(response: Response): Promise<T> {
   }
 }
 
+export async function fetchActivatedInvites(): Promise<
+  Array<{ student: Student; sessions: Session[] }>
+> {
+  const response = await fetch("/api/invite/activated");
+  const data = await readJsonResponse<{
+    invites?: Array<{ student: Student; sessions: Session[] }>;
+    error?: string;
+  }>(response);
+
+  if (!response.ok) {
+    throw new Error(data.error ?? "Aktif öğrenciler alınamadı.");
+  }
+
+  return data.invites ?? [];
+}
+
 export async function sendInviteEmail(input: SendInviteEmailInput) {
   const response = await fetch("/api/invite", {
     method: "POST",

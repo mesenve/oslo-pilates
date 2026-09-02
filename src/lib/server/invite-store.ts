@@ -23,6 +23,7 @@ type InviteBlobAdapter = {
   getInvite: (token: string) => Promise<StoredInvite | null>;
   saveInvite: (invite: StoredInvite) => Promise<void>;
   findActivatedByEmail: (email: string) => Promise<StoredInvite | null>;
+  listActivated: () => Promise<StoredInvite[]>;
 };
 
 let blobAdapterPromise: Promise<InviteBlobAdapter | null> | null = null;
@@ -77,6 +78,23 @@ async function getBlobAdapter(): Promise<InviteBlobAdapter | null> {
           }
 
           return null;
+        },
+
+        async listActivated() {
+          const { blobs } = await store.list({ prefix: TOKEN_PREFIX });
+          const invites: StoredInvite[] = [];
+
+          for (const item of blobs) {
+            const invite = (await store.get(item.key, {
+              type: "json",
+            })) as StoredInvite | null;
+
+            if (invite?.activatedAt && invite.password) {
+              invites.push(invite);
+            }
+          }
+
+          return invites;
         },
       };
     } catch {
@@ -207,6 +225,18 @@ export async function findActivatedInviteByEmail(email: string) {
   }
 
   return findActivatedInviteByEmailInFile(email);
+}
+
+export async function listActivatedInvites() {
+  const blobs = await getBlobAdapter();
+  if (blobs) {
+    return blobs.listActivated();
+  }
+
+  const store = await readFileStore();
+  return Object.values(store.invites).filter(
+    (invite) => invite.activatedAt && invite.password,
+  );
 }
 
 export function inviteTokenFromUrl(link: string) {
