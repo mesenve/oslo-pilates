@@ -1,6 +1,7 @@
 "use client";
 
 import { AttendanceBoard } from "@/components/attendance-board";
+import { DailyQuoteCard } from "@/components/daily-quote-card";
 import { GroupClassCard } from "@/components/group-class-card";
 import { Card, RequestBadge } from "@/components/ui";
 import { useStudio } from "@/components/studio-provider";
@@ -37,6 +38,9 @@ export default function AdminHomePage() {
       <header>
         <h1 className="font-serif text-3xl">Ana sayfa</h1>
       </header>
+
+      <DailyQuoteCard date={today} />
+
       <div
         className={`grid grid-cols-2 gap-3 ${isSuperAdmin ? "sm:grid-cols-4" : "sm:grid-cols-3"}`}
       >
