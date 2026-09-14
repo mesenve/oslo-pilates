@@ -56,7 +56,9 @@ export async function GET(request: Request) {
         sessions?: Array<{ studentId: string }>;
         postponeRequests?: Array<{ studentId: string }>;
         blockedEmails?: string[];
+        staffPasswords?: Record<string, string>;
       };
+    const { staffPasswords: _staffPasswords, ...publicSnapshot } = snapshot;
     const visibleStudentIds = new Set(
       user.role === "super_admin"
         ? (snapshot.students ?? []).map((student) => student.id)
@@ -71,7 +73,7 @@ export async function GET(request: Request) {
     return NextResponse.json({
       ...response,
       snapshot: {
-        ...snapshot,
+          ...publicSnapshot,
         students: (snapshot.students ?? []).filter((student) => visibleStudentIds.has(student.id)),
         archivedStudents: user.role === "super_admin"
           ? snapshot.archivedStudents ?? []

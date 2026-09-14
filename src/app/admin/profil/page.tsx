@@ -21,12 +21,12 @@ export default function AdminProfilePage() {
   const staff = getStaffById(staffId);
   const mine = studentsForUser(user, students);
 
-  function handleSubmit(event: React.FormEvent) {
+  async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
     setError(null);
     setSuccess(null);
 
-    const result = changeStaffPassword(
+    const result = await changeStaffPassword(
       staffId,
       currentPassword,
       newPassword,

@@ -11,10 +11,6 @@ import { fetchAttendanceMarks, pushAttendanceMark } from "@/lib/attendance-clien
 import { mergeActivatedInvites, mergeAttendanceMarks } from "@/lib/attendance-sync";
 import { addDays, startOfWeekMonday, toISODate, todayISO } from "@/lib/dates";
 import {
-  getStaffPassword,
-  validateNewPassword,
-} from "@/lib/staff-auth";
-import {
   createInviteToken,
   getStudentPassword,
   inviteExpiresAt,
@@ -89,7 +85,7 @@ type StudioContextValue = {
     currentPassword: string,
     newPassword: string,
     confirmPassword: string,
-  ) => { error: string | null; success: boolean };
+  ) => Promise<{ error: string | null; success: boolean }>;
   logout: () => void;
   markAttended: (sessionId: string) => void;
   approveAttendance: (sessionIds: string[]) => void;
@@ -446,41 +442,25 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
     };
   }, []);
 
-  const changeStaffPassword = useCallback(
-    (
-      staffId: string,
-      currentPassword: string,
-      newPassword: string,
-      confirmPassword: string,
-    ) => {
-      const validationError = validateNewPassword(
-        currentPassword,
-        newPassword,
-        confirmPassword,
-      );
-      if (validationError) {
-        return { error: validationError, success: false };
-      }
-
-      let error: string | null = "Mevcut şifre hatalı.";
-      let success = false;
-      setStudioState((current) => {
-        const stored = getStaffPassword(staffId, current.staffPasswords);
-        if (currentPassword !== stored) return current;
-        error = null;
-        success = true;
-        return {
-          ...current,
-          staffPasswords: {
-            ...current.staffPasswords,
-            [staffId]: newPassword,
-          },
-        };
-      });
-      return { error, success };
-    },
-    [],
-  );
+  const changeStaffPassword = useCallback(async (
+    staffId: string,
+    currentPassword: string,
+    newPassword: string,
+    confirmPassword: string,
+  ) => {
+    if (getStudioSnapshot().user?.id !== staffId) {
+      return { error: "Bu işlem için yetkin yok.", success: false };
+    }
+    const response = await fetch("/api/auth/staff/password", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ currentPassword, newPassword, confirmPassword }),
+    });
+    const data = (await response.json().catch(() => ({}))) as { error?: string };
+    return response.ok
+      ? { error: null, success: true }
+      : { error: data.error ?? "Şifre güncellenemedi.", success: false };
+  }, []);
 
   const logout = useCallback(() => {
     void fetch("/api/auth/session", { method: "DELETE" });
