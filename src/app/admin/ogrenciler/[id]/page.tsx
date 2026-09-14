@@ -21,7 +21,7 @@ import { getStaffById, instructorLabelForId } from "@/data/staff";
 import { formatLongDate, todayISO } from "@/lib/dates";
 import { inviteUrl, isInviteValid } from "@/lib/student-auth";
 import { sendInviteEmail } from "@/lib/invite-client";
-import { remainingLabel, postponeRightAdminLabel } from "@/lib/labels";
+import { DAY_LABELS, remainingLabel, postponeRightAdminLabel } from "@/lib/labels";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
@@ -62,6 +62,11 @@ export default function StudentDetailPage() {
   const selected = mine.filter((session) => session.date === selectedDate);
   const counts = sessionCounts(student?.id ?? "", visibleSessions);
   const group = student ? getClassGroupById(student.groupId) : undefined;
+  const customSchedule = student?.package.customSchedule;
+  const scheduleLabel = customSchedule?.days.length
+    ? `${customSchedule.days.map((day) => DAY_LABELS[day]).join(", ")} ${customSchedule.time}`
+    : "";
+  const lessonTime = customSchedule?.time ?? group?.time ?? "";
   const requests = visiblePostponeRequests.filter(
     (request) => request.studentId === student?.id,
   );
@@ -113,6 +118,7 @@ export default function StudentDetailPage() {
         </div>
         <p className="mt-1 text-sm text-muted">
           {group?.label}
+          {scheduleLabel ? ` · ${scheduleLabel}` : ""}
           {getStaffById(student.instructorId)
             ? ` · Eğitmen: ${instructorLabelForId(student.instructorId)}`
             : ""}
@@ -245,7 +251,7 @@ export default function StudentDetailPage() {
                 <p className="capitalize">{formatLongDate(session.date)}</p>
                 <SessionBadge status={status} />
               </div>
-              <p className="text-sm text-muted">{group?.time}</p>
+              {lessonTime ? <p className="text-sm text-muted">{lessonTime}</p> : null}
               {request ? (
                 <p className="text-sm">
                   Erteleme: {request.reason}
@@ -287,7 +293,7 @@ export default function StudentDetailPage() {
                   </p>
                   <RequestBadge status={request.status} />
                 </div>
-                <p className="text-sm text-muted">{group?.time}</p>
+                {lessonTime ? <p className="text-sm text-muted">{lessonTime}</p> : null}
                 <p className="text-sm">{request.reason}</p>
                 {request.status === "pending" ? (
                   <Button onClick={() => approveRequest(request.id)}>Onayla</Button>
