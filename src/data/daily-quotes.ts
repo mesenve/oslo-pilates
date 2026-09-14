@@ -16,7 +16,7 @@ export const DAILY_QUOTES = [
   "İyi hissetmek içeriden başlar.",
   "Güçlü bir merkez, hafif bir zihin.",
   "Küçük rutinler büyük fark yaratır.",
-  "Kendine iyi gelmek için buradasın.",
+  "Bedenini dinle; güç, orada başlar.",
   "Bugün kendi enerjine yatırım yap.",
   "Omuzları bırak, nefese yer aç.",
   "Bir seans, bambaşka bir his.",
