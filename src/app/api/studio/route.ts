@@ -1,6 +1,7 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { NextResponse } from "next/server";
+import { getSessionUser } from "@/lib/server/session";
 
 type StudioSnapshotResponse = {
   configured?: boolean;
@@ -11,7 +12,7 @@ const snapshotPath = path.join(process.cwd(), ".data", "studio.json");
 const BLOB_STORE_NAME = "oslo-pilates-studio";
 const SNAPSHOT_KEY = "snapshot:current";
 
-async function readStudioSnapshot(): Promise<StudioSnapshotResponse> {
+export async function readStudioSnapshot(): Promise<StudioSnapshotResponse> {
   try {
     const { getStore } = await import("@netlify/blobs");
     const store = getStore(BLOB_STORE_NAME);
@@ -30,7 +31,7 @@ async function readStudioSnapshot(): Promise<StudioSnapshotResponse> {
   }
 }
 
-async function writeStudioSnapshot(snapshot: StudioSnapshotResponse) {
+export async function writeStudioSnapshot(snapshot: StudioSnapshotResponse) {
   try {
     const { getStore } = await import("@netlify/blobs");
     const store = getStore(BLOB_STORE_NAME);
@@ -45,47 +46,39 @@ async function writeStudioSnapshot(snapshot: StudioSnapshotResponse) {
 }
 
 export async function GET(request: Request) {
+  const user = await getSessionUser();
+  if (!user) return NextResponse.json({ error: "Oturum gerekli." }, { status: 401 });
   const response = await readStudioSnapshot();
   if (response.configured && response.snapshot) {
     const snapshot = response.snapshot as {
-        students?: Array<{ id: string }>;
-        archivedStudents?: Array<{ id: string }>;
+        students?: Array<{ id: string; instructorId: string }>;
+        archivedStudents?: Array<{ id: string; instructorId: string }>;
         sessions?: Array<{ studentId: string }>;
         postponeRequests?: Array<{ studentId: string }>;
         blockedEmails?: string[];
       };
-    const url = new URL(request.url);
-    const studentId = url.searchParams.get("studentId")?.trim();
-    const includeBlockedEmails =
-      url.searchParams.get("includeBlockedEmails") !== "false";
-
-    if (!studentId) {
-      return NextResponse.json({
-        ...response,
-        snapshot: {
-          ...snapshot,
-          blockedEmails: includeBlockedEmails ? snapshot.blockedEmails ?? [] : [],
-        },
-      });
-    }
+    const visibleStudentIds = new Set(
+      user.role === "super_admin"
+        ? (snapshot.students ?? []).map((student) => student.id)
+        : user.role === "student"
+          ? [user.id]
+          : (snapshot.students ?? [])
+              .filter((student) => student.instructorId === user.id ||
+                (["staff-delfin", "staff-elif"].includes(student.instructorId) && ["staff-delfin", "staff-elif"].includes(user.id)))
+              .map((student) => student.id),
+    );
 
     return NextResponse.json({
       ...response,
       snapshot: {
         ...snapshot,
-        students: (snapshot.students ?? []).filter(
-          (student) => student.id === studentId,
-        ),
-        archivedStudents: (snapshot.archivedStudents ?? []).filter(
-          (student) => student.id === studentId,
-        ),
-        sessions: (snapshot.sessions ?? []).filter(
-          (session) => session.studentId === studentId,
-        ),
-        postponeRequests: (snapshot.postponeRequests ?? []).filter(
-          (postponeRequest) => postponeRequest.studentId === studentId,
-        ),
-        blockedEmails: includeBlockedEmails ? snapshot.blockedEmails ?? [] : [],
+        students: (snapshot.students ?? []).filter((student) => visibleStudentIds.has(student.id)),
+        archivedStudents: user.role === "super_admin"
+          ? snapshot.archivedStudents ?? []
+          : (snapshot.archivedStudents ?? []).filter((student) => visibleStudentIds.has(student.id)),
+        sessions: (snapshot.sessions ?? []).filter((session) => visibleStudentIds.has(session.studentId)),
+        postponeRequests: (snapshot.postponeRequests ?? []).filter((request) => visibleStudentIds.has(request.studentId)),
+        blockedEmails: user.role === "super_admin" ? snapshot.blockedEmails ?? [] : [],
       },
     });
   }
@@ -94,6 +87,10 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
+  const user = await getSessionUser();
+  if (user?.role !== "super_admin") {
+    return NextResponse.json({ error: "Bu işlem için yönetici oturumu gerekli." }, { status: 403 });
+  }
   try {
     const body = (await request.json()) as { snapshot?: unknown };
     if (!body.snapshot || typeof body.snapshot !== "object") {

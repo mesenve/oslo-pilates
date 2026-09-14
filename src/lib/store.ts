@@ -63,7 +63,7 @@ export function setStudioState(
   if (typeof window !== "undefined") {
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(memory));
     hydrated = true;
-    if (studioSnapshotPersistenceEnabled) {
+    if (studioSnapshotPersistenceEnabled && memory.user?.role === "super_admin") {
       const snapshot = {
         students: memory.students,
         archivedStudents: memory.archivedStudents,

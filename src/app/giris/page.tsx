@@ -167,7 +167,7 @@ function GirisForm() {
       return;
     }
 
-    const result = loginStaff(email, password);
+    const result = await loginStaff(email, password);
     if (result.error) {
       setPendingLogin(false);
       setError(result.error);

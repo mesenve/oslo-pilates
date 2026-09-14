@@ -33,21 +33,19 @@ export async function activateInviteAccount(input: {
     error?: string;
     student?: Student;
     sessions?: Session[];
-    password?: string;
   };
 
   if (!response.ok) {
     throw new Error(data.error ?? "Hesap oluşturulamadı.");
   }
 
-  if (!data.student || !data.sessions || !data.password) {
+  if (!data.student || !data.sessions) {
     throw new Error("Hesap oluşturulamadı.");
   }
 
   return {
     student: data.student,
     sessions: data.sessions,
-    password: data.password,
   };
 }
 
@@ -62,14 +60,13 @@ export async function loginStudentAccount(email: string, password: string) {
     error?: string;
     student?: Student;
     sessions?: Session[];
-    password?: string;
   };
 
   if (!response.ok) {
     return { error: data.error ?? "E-posta veya şifre hatalı.", payload: null };
   }
 
-  if (!data.student || !data.sessions || !data.password) {
+  if (!data.student || !data.sessions) {
     return { error: "E-posta veya şifre hatalı.", payload: null };
   }
 
@@ -78,7 +75,6 @@ export async function loginStudentAccount(email: string, password: string) {
     payload: {
       student: data.student,
       sessions: data.sessions,
-      password: data.password,
     },
   };
 }
@@ -138,7 +134,7 @@ export async function sendInviteEmail(input: SendInviteEmailInput) {
 export type ActivatedStudentPayload = {
   student: Student;
   sessions: Session[];
-  password: string;
+  password?: string;
 };
 
 export function buildActivatedMerge(
@@ -168,10 +164,9 @@ export function buildActivatedMerge(
     return {
       students,
       sessions,
-      studentPasswords: {
-        ...current.studentPasswords,
-        [payload.student.id]: payload.password,
-      },
+      studentPasswords: payload.password
+        ? { ...current.studentPasswords, [payload.student.id]: payload.password }
+        : current.studentPasswords,
     };
   };
 }

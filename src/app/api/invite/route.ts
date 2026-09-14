@@ -7,6 +7,7 @@ import {
 import { isInviteValid } from "@/lib/student-auth";
 import type { Session, Student } from "@/types/studio";
 import { NextResponse } from "next/server";
+import { getSessionUser } from "@/lib/server/session";
 
 type InviteRequestBody = {
   name?: string;
@@ -44,6 +45,10 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
+  const user = await getSessionUser();
+  if (user?.role !== "super_admin") {
+    return NextResponse.json({ error: "Bu işlem için yönetici oturumu gerekli." }, { status: 403 });
+  }
   let body: InviteRequestBody;
 
   try {

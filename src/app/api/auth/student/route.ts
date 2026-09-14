@@ -1,4 +1,5 @@
 import { findActivatedInviteByEmail } from "@/lib/server/invite-store";
+import { sessionCookie } from "@/lib/server/session";
 import { NextResponse } from "next/server";
 
 type StudentLoginBody = {
@@ -27,9 +28,15 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "E-posta veya şifre hatalı." }, { status: 401 });
   }
 
-  return NextResponse.json({
+  const response = NextResponse.json({
     student: invite.student,
     sessions: invite.sessions,
-    password: invite.password,
   });
+  response.cookies.set(sessionCookie({
+    id: invite.student.id,
+    name: invite.student.name,
+    email: invite.student.email,
+    role: "student",
+  }));
+  return response;
 }

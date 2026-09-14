@@ -4,6 +4,7 @@ import {
   saveAttendanceMark,
 } from "@/lib/server/attendance-store";
 import { NextResponse } from "next/server";
+import { getSessionUser } from "@/lib/server/session";
 
 function isAttendanceMarkStatus(value: string): value is AttendanceMarkStatus {
   return value === "attend_pending" || value === "attended" || value === "upcoming";
@@ -18,6 +19,8 @@ type AttendanceBody = {
 };
 
 export async function GET(request: Request) {
+  const user = await getSessionUser();
+  if (!user) return NextResponse.json({ error: "Oturum gerekli." }, { status: 401 });
   const url = new URL(request.url);
   const status = url.searchParams.get("status")?.trim();
   const studentId = url.searchParams.get("studentId")?.trim();
@@ -26,15 +29,23 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "Geçersiz durum." }, { status: 400 });
   }
 
+  if (user.role === "student" && studentId && studentId !== user.id) {
+    return NextResponse.json({ error: "Bu veriye erişim yok." }, { status: 403 });
+  }
+
   const marks = await listAttendanceMarks({
     status: status && isAttendanceMarkStatus(status) ? status : undefined,
-    studentId: studentId || undefined,
+    studentId: user.role === "student" ? user.id : studentId || undefined,
   });
 
   return NextResponse.json({ marks });
 }
 
 export async function POST(request: Request) {
+  const user = await getSessionUser();
+  if (!user || user.role === "student") {
+    return NextResponse.json({ error: "Bu işlem için eğitmen oturumu gerekli." }, { status: 403 });
+  }
   let body: AttendanceBody;
 
   try {

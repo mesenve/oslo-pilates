@@ -3,9 +3,7 @@
 import { remainingPostponeRights, remainingSessions } from "@/data/accessors";
 import {
   DEFAULT_INSTRUCTOR_ID,
-  getStaffByEmail,
   getStaffById,
-  isSuperAdminEmail,
 } from "@/data/staff";
 import { buildSessionsForStudent, collectSessionDates } from "@/data/seed";
 import { studentsForUser, sessionsForUser, postponeRequestsForUser, canManageStudent, isStaffRole } from "@/lib/access";
@@ -75,7 +73,7 @@ type StudioContextValue = {
   visiblePostponeRequests: StudioState["postponeRequests"];
   isSuperAdmin: boolean;
   loginAs: (role: Role, staffId?: string) => boolean;
-  loginStaff: (email: string, password: string) => { error: string | null };
+  loginStaff: (email: string, password: string) => Promise<{ error: string | null }>;
   loginStudent: (
     email: string,
     password: string,
@@ -128,6 +126,20 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
     getStudioSnapshot,
     getServerStudioSnapshot,
   );
+
+  useEffect(() => {
+    if (!ready) return;
+    let cancelled = false;
+    void fetch("/api/auth/session")
+      .then((response) => response.ok ? response.json() : { user: null })
+      .then((data: { user?: StudioState["user"] }) => {
+        if (!cancelled) setStudioState((current) => ({ ...current, user: data.user ?? null }));
+      })
+      .catch(() => {
+        if (!cancelled) setStudioState((current) => ({ ...current, user: null }));
+      });
+    return () => { cancelled = true; };
+  }, [ready]);
 
   useEffect(() => {
     if (!ready || !state.user) return;
@@ -255,26 +267,16 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
     return ok;
   }, []);
 
-  const loginStaff = useCallback((email: string, password: string) => {
-    let error: string | null = "E-posta veya şifre hatalı.";
-    setStudioState((current) => {
-      const staff = getStaffByEmail(email.trim());
-      if (!staff) return current;
-      const stored = getStaffPassword(staff.id, current.staffPasswords);
-      if (password !== stored) return current;
-      error = null;
-      const role = isSuperAdminEmail(staff.email) ? "super_admin" : staff.role;
-      return {
-        ...current,
-        user: {
-          id: staff.id,
-          name: staff.name,
-          email: staff.email,
-          role,
-        },
-      };
+  const loginStaff = useCallback(async (email: string, password: string) => {
+    const response = await fetch("/api/auth/staff", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, password }),
     });
-    return { error };
+    const data = (await response.json().catch(() => ({}))) as { error?: string; user?: StudioState["user"] };
+    if (!response.ok || !data.user) return { error: data.error ?? "E-posta veya şifre hatalı." };
+    setStudioState((current) => ({ ...current, user: data.user! }));
+    return { error: null };
   }, []);
 
   const loginStudent = useCallback(async (email: string, password: string) => {
@@ -481,6 +483,7 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
   );
 
   const logout = useCallback(() => {
+    void fetch("/api/auth/session", { method: "DELETE" });
     setStudioState((current) => ({ ...current, user: null }));
   }, []);
 
@@ -665,6 +668,16 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
       sessionId: string,
       outcome: "attended" | "postponed" | "missed" | "upcoming",
     ) => {
+      const current = getStudioSnapshot();
+      const session = current.sessions.find((item) => item.id === sessionId);
+      if (!session || !canManageStudent(current.user, session.studentId, current.students)) {
+        return;
+      }
+      void fetch("/api/sessions/status", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sessionId, status: outcome }),
+      });
       setStudioState((current) => {
         const session = current.sessions.find((item) => item.id === sessionId);
         if (!session) return current;
