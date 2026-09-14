@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronRightIcon, PlusIcon } from "@/components/icons";
+import { ChevronRightIcon, CloseIcon, PlusIcon, SearchIcon } from "@/components/icons";
 import { LetterIndex } from "@/components/letter-index";
 import { Button, Card, EmptyState } from "@/components/ui";
 import { useStudio } from "@/components/studio-provider";
@@ -17,7 +17,14 @@ export default function StudentsPage() {
   const initial =
     sorted.length > 0 ? firstLetter(sorted[0].name) : ("A" as TurkishLetter);
   const [letter, setLetter] = useState<TurkishLetter>(initial);
-  const visible = sorted.filter((student) => firstLetter(student.name) === letter);
+  const [query, setQuery] = useState("");
+  const normalizedQuery = query.trim().toLocaleLowerCase("tr-TR");
+  const visible = sorted.filter((student) => {
+    if (!normalizedQuery) return firstLetter(student.name) === letter;
+    return [student.name, student.email].some((value) =>
+      value.toLocaleLowerCase("tr-TR").includes(normalizedQuery),
+    );
+  });
 
   return (
     <div className="space-y-5">
@@ -33,10 +40,36 @@ export default function StudentsPage() {
         </Button>
       </header>
 
+      <div className="relative">
+        <SearchIcon className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-accent" />
+        <input
+          type="search"
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+          placeholder="Öğrenci ara"
+          aria-label="Öğrenci ara"
+          className="w-full rounded-2xl border border-white/80 bg-white/75 py-3 pl-12 pr-11 text-sm text-foreground shadow-[0_8px_24px_rgba(194,24,91,0.06)] outline-none transition placeholder:text-muted focus:border-accent/40 focus:ring-4 focus:ring-accent-soft/60"
+        />
+        {query && (
+          <button
+            type="button"
+            onClick={() => setQuery("")}
+            aria-label="Aramayı temizle"
+            className="absolute right-3 top-1/2 -translate-y-1/2 rounded-full p-1 text-muted transition hover:bg-surface-muted hover:text-foreground"
+          >
+            <CloseIcon className="h-4 w-4" />
+          </button>
+        )}
+      </div>
+
       <LetterIndex students={sorted} selected={letter} onSelect={setLetter} />
 
       {visible.length === 0 ? (
-        <EmptyState>Bu harfte kayıtlı öğrenci yok.</EmptyState>
+        <EmptyState>
+          {normalizedQuery
+            ? "Aramanla eşleşen öğrenci yok."
+            : "Bu harfte kayıtlı öğrenci yok."}
+        </EmptyState>
       ) : (
         <div className="flex flex-col gap-3">
           {visible.map((student) => (
