@@ -16,7 +16,10 @@ export function isIrregularGroup(groupId: string) {
 }
 
 export function getClassGroups(): ClassGroup[] {
-  return [...CLASS_GROUPS, ...customGroups];
+  return [...CLASS_GROUPS, ...customGroups].map((group) => ({
+    ...group,
+    label: readableGroupLabel(group),
+  }));
 }
 
 export function setCustomGroups(groups: ClassGroup[]) {
@@ -31,6 +34,24 @@ export function groupIdForSchedule(days: ClassGroup["days"], time: string) {
 export function groupLabelForSchedule(days: ClassGroup["days"], time: string) {
   const labels = { monday: "Pazartesi", tuesday: "Salı", wednesday: "Çarşamba", thursday: "Perşembe", friday: "Cuma", saturday: "Cumartesi", sunday: "Pazar" };
   return `${days.map((day) => labels[day]).join("–")} ${time}`;
+}
+
+function readableGroupLabel(group: ClassGroup) {
+  const labels = { monday: "Pazartesi", tuesday: "Salı", wednesday: "Çarşamba", thursday: "Perşembe", friday: "Cuma", saturday: "Cumartesi", sunday: "Pazar" };
+  const hasPerDayTimes = Object.keys(group.timeByDay ?? {}).length > 0;
+  if (hasPerDayTimes) {
+    return group.days
+      .map((day) => `${labels[day]} ${group.timeByDay?.[day] ?? group.time}`)
+      .join(" – ");
+  }
+
+  // Eski kayıtlarda saat alanına gün adlarıyla birlikte yazılmış programlar
+  // bulunabiliyor. Gün başlığını ikinci kez eklemeyiz.
+  if (Object.values(labels).some((dayLabel) => group.time.includes(dayLabel))) {
+    return group.time;
+  }
+
+  return groupLabelForSchedule(group.days, group.time);
 }
 
 export function getGroupSelectOptions(): {
