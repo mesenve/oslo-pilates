@@ -26,8 +26,7 @@ export default function CalendarPage() {
   const displayedGroups = onlyFullGroups
     ? groups.filter(
         (group) =>
-          group.capacity > 0 &&
-          visibleStudents.filter((student) => student.groupId === group.id).length >= group.capacity,
+          visibleStudents.some((student) => student.groupId === group.id),
       )
     : groups;
   const specialProgramSessions = visibleSessions.filter(
@@ -80,7 +79,7 @@ export default function CalendarPage() {
 
       {displayedGroups.length === 0 && (!specialProgramSessions.length || onlyFullGroups) ? (
         <EmptyState>
-          {onlyFullGroups ? "Bu günde dolu grup yok." : "Bu günde grup dersi yok."}
+          {onlyFullGroups ? "Bu günde kayıtlı öğrenci olan grup yok." : "Bu günde grup dersi yok."}
         </EmptyState>
       ) : (
         <div className="flex flex-col gap-3">
