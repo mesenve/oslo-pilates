@@ -34,6 +34,7 @@ export default function StudentDetailPage() {
     visiblePostponeRequests,
     approveRequest,
     markSessionByInstructor,
+    setPostponeLessonUsed,
     archiveStudent,
     resendStudentInvite,
     isSuperAdmin,
@@ -295,6 +296,20 @@ export default function StudentDetailPage() {
           })
         )}
       </section>
+
+      <Card className="p-4">
+        <label className="flex cursor-pointer items-center gap-3">
+          <input
+            type="checkbox"
+            checked={student.postponeLessonUsed ?? false}
+            onChange={(event) =>
+              setPostponeLessonUsed(student.id, event.target.checked)
+            }
+            className="h-5 w-5 shrink-0 rounded border-border text-accent accent-accent focus:ring-accent/30"
+          />
+          <span className="text-sm font-medium">Öğrenci erteleme dersini kullandı.</span>
+        </label>
+      </Card>
 
       <section className="space-y-3">
         <h2 className="font-serif text-xl">Tüm dersler</h2>

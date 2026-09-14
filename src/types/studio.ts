@@ -67,6 +67,7 @@ export type Student = {
   measurements: Measurements;
   package: StudentPackage;
   monthlyPostponeLimit: number;
+  postponeLessonUsed?: boolean;
   accountStatus: StudentAccountStatus;
   inviteToken?: string;
   inviteExpiresAt?: string;

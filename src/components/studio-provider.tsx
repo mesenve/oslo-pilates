@@ -98,6 +98,7 @@ type StudioContextValue = {
     sessionId: string,
     outcome: "attended" | "postponed" | "missed" | "upcoming",
   ) => void;
+  setPostponeLessonUsed: (studentId: string, used: boolean) => void;
   addStudent: (input: NewStudentInput) => StudentActionResult;
   archiveStudent: (studentId: string) => void;
   restoreStudent: (
@@ -751,6 +752,24 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
     [],
   );
 
+  const setPostponeLessonUsed = useCallback(
+    (studentId: string, used: boolean) => {
+      setStudioState((current) => {
+        const student = current.students.find((item) => item.id === studentId);
+        if (!student || !canManageStudent(current.user, studentId, current.students)) {
+          return current;
+        }
+        return {
+          ...current,
+          students: current.students.map((item) =>
+            item.id === studentId ? { ...item, postponeLessonUsed: used } : item,
+          ),
+        };
+      });
+    },
+    [],
+  );
+
   const addStudent = useCallback((input: NewStudentInput) => {
     const name = input.name.trim();
     if (!name) return { error: "Ad soyad gerekli.", id: null };
@@ -1045,6 +1064,7 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
       requestPostpone,
       approveRequest,
       markSessionByInstructor,
+      setPostponeLessonUsed,
       addStudent,
       archiveStudent,
       restoreStudent,
@@ -1068,6 +1088,7 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
       approveAttendance,
       rejectAttendance,
       markSessionByInstructor,
+      setPostponeLessonUsed,
       permanentlyDeleteStudent,
       ready,
       remainingFor,
