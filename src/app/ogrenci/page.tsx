@@ -129,9 +129,17 @@ export default function StudentHomePage() {
                   )}
                 </p>
                 {selectedDate === today && selectedSession.status === "upcoming" ? (
-                  <Button className="mt-3" onClick={() => markAttended(selectedSession.id)}>
-                    Geldim
-                  </Button>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <Button onClick={() => markAttended(selectedSession.id)}>
+                      Geldim
+                    </Button>
+                    <Link
+                      href="/ogrenci/program"
+                      className="inline-flex items-center justify-center rounded-full border border-accent/30 bg-white px-4 py-2 text-sm font-medium text-accent transition-colors hover:bg-accent-soft"
+                    >
+                      Ertele
+                    </Link>
+                  </div>
                 ) : null}
               </div>
             ) : null}
