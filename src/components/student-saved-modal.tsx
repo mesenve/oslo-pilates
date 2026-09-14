@@ -5,9 +5,9 @@ import { Button } from "@/components/ui";
 import { sendInviteEmail } from "@/lib/invite-client";
 import { getWelcomeWhatsAppUrl } from "@/lib/studio";
 import type { Session, Student } from "@/types/studio";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
-type MailStatus = "ready" | "sending" | "sent" | "error";
+type MailStatus = "sending" | "sent" | "error";
 
 export function StudentSavedModal({
   student,
@@ -22,8 +22,38 @@ export function StudentSavedModal({
   phone: string;
   onContinue: () => void;
 }) {
-  const [mailStatus, setMailStatus] = useState<MailStatus>("ready");
+  const [mailStatus, setMailStatus] = useState<MailStatus>("sending");
   const [mailError, setMailError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function deliverInvite() {
+      setMailStatus("sending");
+      setMailError(null);
+      try {
+        await sendInviteEmail({
+          name: student.name,
+          email: student.email,
+          inviteUrl,
+          student,
+          sessions,
+          expiresAt: student.inviteExpiresAt ?? new Date().toISOString(),
+        });
+        if (!cancelled) setMailStatus("sent");
+      } catch {
+        if (!cancelled) {
+          setMailStatus("error");
+          setMailError("Mail şu an gönderilemedi. Davet bağlantısını WhatsApp ile paylaşabilirsin.");
+        }
+      }
+    }
+
+    void deliverInvite();
+    return () => {
+      cancelled = true;
+    };
+  }, [student, sessions, inviteUrl]);
 
   async function retryMail() {
     setMailStatus("sending");
@@ -71,17 +101,7 @@ export function StudentSavedModal({
           </button>
         </div>
 
-        {mailStatus === "ready" ? (
-          <div className="mt-2 space-y-3">
-            <p className="text-sm text-muted">
-              Davet hazır. İstediğinde <span className="font-medium text-foreground">{student.email}</span>
-              {" "}adresine gönderebilirsin.
-            </p>
-            <Button type="button" variant="secondary" className="w-full" onClick={retryMail}>
-              Davet mailini gönder
-            </Button>
-          </div>
-        ) : mailStatus === "sending" ? (
+        {mailStatus === "sending" ? (
           <p className="mt-2 text-sm text-muted">
             Davet maili{" "}
             <span className="font-medium text-foreground">{student.email}</span> adresine
