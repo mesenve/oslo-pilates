@@ -3,6 +3,7 @@ import {
   listAttendanceMarks,
   saveAttendanceMark,
 } from "@/lib/server/attendance-store";
+import { readStudioSnapshot } from "@/app/api/studio/route";
 import { NextResponse } from "next/server";
 import { getSessionUser } from "@/lib/server/session";
 
@@ -43,7 +44,7 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   const user = await getSessionUser();
-  if (!user || user.role === "student") {
+  if (!user) {
     return NextResponse.json({ error: "Bu işlem için eğitmen oturumu gerekli." }, { status: 403 });
   }
   let body: AttendanceBody;
@@ -69,6 +70,20 @@ export async function POST(request: Request) {
 
   if (!isAttendanceMarkStatus(status)) {
     return NextResponse.json({ error: "Geçersiz durum." }, { status: 400 });
+  }
+
+  if (user.role === "student") {
+    if (studentId !== user.id || status !== "attend_pending") {
+      return NextResponse.json({ error: "Bu yoklama onayı için yetkiniz yok." }, { status: 403 });
+    }
+    const state = await readStudioSnapshot();
+    const snapshot = state.snapshot as {
+      sessions?: Array<{ id: string; studentId: string; status: string }>;
+    } | null;
+    const session = snapshot?.sessions?.find((item) => item.id === sessionId);
+    if (!session || session.studentId !== user.id || session.status !== "upcoming") {
+      return NextResponse.json({ error: "Bu ders için yoklama onayı verilemez." }, { status: 403 });
+    }
   }
 
   try {

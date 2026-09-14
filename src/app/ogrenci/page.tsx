@@ -4,7 +4,7 @@ import { DailyQuoteCard } from "@/components/daily-quote-card";
 import { LastWeekCta } from "@/components/last-week-cta";
 import { PilatesIcon } from "@/components/icons";
 import { useCurrentStudent, useStudio } from "@/components/studio-provider";
-import { Card, SessionBadge } from "@/components/ui";
+import { Button, Card, SessionBadge } from "@/components/ui";
 import { effectiveSessionStatus, sessionsForStudent } from "@/data/accessors";
 import { getClassGroupById } from "@/data/groups";
 import { addDays, formatLongDate, startOfWeekMonday, toISODate, todayISO } from "@/lib/dates";
@@ -14,7 +14,7 @@ import { useState } from "react";
 
 export default function StudentHomePage() {
   const student = useCurrentStudent();
-  const { sessions, remainingFor, remainingPostponeFor } = useStudio();
+  const { sessions, remainingFor, remainingPostponeFor, markAttended } = useStudio();
   const today = todayISO();
   const [selectedDate, setSelectedDate] = useState(today);
 
@@ -128,6 +128,11 @@ export default function StudentHomePage() {
                     student.monthlyPostponeLimit,
                   )}
                 </p>
+                {selectedDate === today && selectedSession.status === "upcoming" ? (
+                  <Button className="mt-3" onClick={() => markAttended(selectedSession.id)}>
+                    Geldim
+                  </Button>
+                ) : null}
               </div>
             ) : null}
             <div className="border-t border-border/60 px-4 py-3">
