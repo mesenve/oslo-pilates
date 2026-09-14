@@ -23,7 +23,7 @@ import { sendInviteEmail } from "@/lib/invite-client";
 import { remainingLabel, postponeRightAdminLabel } from "@/lib/labels";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 export default function StudentDetailPage() {
   const params = useParams<{ id: string }>();
@@ -358,6 +358,7 @@ function AttendanceStatusPicker({
   onChange: (status: "attended" | "postponed" | "missed") => void;
 }) {
   const [open, setOpen] = useState(false);
+  const pickerRef = useRef<HTMLDivElement>(null);
   const options: Array<{
     value: "attended" | "postponed" | "missed";
     label: string;
@@ -381,8 +382,21 @@ function AttendanceStatusPicker({
   ];
   const current = options.find((option) => option.value === status) ?? options[0];
 
+  useEffect(() => {
+    if (!open) return;
+
+    const closeWhenClickingOutside = (event: PointerEvent) => {
+      if (!pickerRef.current?.contains(event.target as Node)) {
+        setOpen(false);
+      }
+    };
+
+    document.addEventListener("pointerdown", closeWhenClickingOutside);
+    return () => document.removeEventListener("pointerdown", closeWhenClickingOutside);
+  }, [open]);
+
   return (
-    <div className="relative ml-3 shrink-0">
+    <div ref={pickerRef} className="relative ml-3 shrink-0">
       <button
         type="button"
         onClick={() => setOpen((currentOpen) => !currentOpen)}
