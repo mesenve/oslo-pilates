@@ -13,8 +13,6 @@ import { useMemo, useState } from "react";
 export default function StudentsPage() {
   const { visibleStudents, isSuperAdmin } = useStudio();
   const router = useRouter();
-  const [inviteStatus, setInviteStatus] = useState<string | null>(null);
-  const [sendingInvites, setSendingInvites] = useState(false);
   const sorted = useMemo(() => sortByName(visibleStudents), [visibleStudents]);
   const initial =
     sorted.length > 0 ? firstLetter(sorted[0].name) : ("A" as TurkishLetter);
@@ -27,31 +25,6 @@ export default function StudentsPage() {
       value.toLocaleLowerCase("tr-TR").includes(normalizedQuery),
     );
   });
-  const pendingInviteCount = sorted.filter(
-    (student) => student.accountStatus === "invited" && student.email.trim(),
-  ).length;
-
-  async function sendPendingInvites() {
-    if (pendingInviteCount === 0 || sendingInvites) return;
-    if (!window.confirm(`${pendingInviteCount} öğrenciye sisteme giriş daveti gönderilsin mi?`)) return;
-    setSendingInvites(true);
-    setInviteStatus(null);
-    try {
-      const response = await fetch("/api/invite/pending", { method: "POST" });
-      const data = (await response.json()) as { sent?: number; failed?: number; error?: string };
-      if (!response.ok) throw new Error(data.error ?? "Davet mailleri gönderilemedi.");
-      setInviteStatus(
-        data.failed
-          ? `${data.sent ?? 0} davet gönderildi, ${data.failed} davet gönderilemedi.`
-          : `${data.sent ?? 0} öğrenciye davet maili gönderildi.`,
-      );
-    } catch (error) {
-      setInviteStatus(error instanceof Error ? error.message : "Davet mailleri gönderilemedi.");
-    } finally {
-      setSendingInvites(false);
-    }
-  }
-
   return (
     <div className="space-y-5">
       <header className="flex items-start justify-between gap-3">
@@ -61,18 +34,12 @@ export default function StudentsPage() {
           </h1>
         </div>
         <div className="flex flex-wrap justify-end gap-2">
-          {isSuperAdmin && pendingInviteCount > 0 ? (
-            <Button variant="secondary" disabled={sendingInvites} onClick={sendPendingInvites}>
-              {sendingInvites ? "Mailler gönderiliyor…" : `${pendingInviteCount} davet mailini gönder`}
-            </Button>
-          ) : null}
           <Button onClick={() => router.push("/admin/ogrenciler/yeni")}>
             <PlusIcon className="h-4 w-4" />
             Kaydet
           </Button>
         </div>
       </header>
-      {inviteStatus ? <p className="text-sm text-muted">{inviteStatus}</p> : null}
 
       <div className="relative">
         <SearchIcon className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-accent" />
