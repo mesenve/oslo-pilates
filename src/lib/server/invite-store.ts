@@ -62,22 +62,20 @@ async function getBlobAdapter(): Promise<InviteBlobAdapter | null> {
         async findActivatedByEmail(email: string) {
           const normalized = email.trim().toLowerCase();
           const { blobs } = await store.list({ prefix: TOKEN_PREFIX });
+          const invites = await Promise.all(
+            blobs.map(async (item) =>
+              (await store.get(item.key, { type: "json" })) as StoredInvite | null,
+            ),
+          );
 
-          for (const item of blobs) {
-            const invite = (await store.get(item.key, {
-              type: "json",
-            })) as StoredInvite | null;
-
-            if (
-              invite?.student.email.toLowerCase() === normalized &&
-              invite.password &&
-              invite.activatedAt
-            ) {
-              return invite;
-            }
-          }
-
-          return null;
+          return (
+            invites.find(
+              (invite) =>
+                invite?.student.email.toLowerCase() === normalized &&
+                invite.password &&
+                invite.activatedAt,
+            ) ?? null
+          );
         },
 
         async listActivated() {
