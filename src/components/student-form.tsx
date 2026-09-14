@@ -105,6 +105,10 @@ export function StudentForm({
       setError("Gün ve saat seç.");
       return;
     }
+    if (!Number.isInteger(Number(form.totalSessions)) || Number(form.totalSessions) <= 0) {
+      setError("Geçerli bir seans sayısı seç.");
+      return;
+    }
     const isIrregular = isIrregularGroup(form.groupId);
     const isNewGroup = form.groupId === NEW_GROUP_ID;
     if ((isIrregular || isNewGroup) && (!form.customDays.length || !form.customTime)) {
@@ -393,7 +397,7 @@ function toInput(
     waistCm: Number(form.waistCm) || 0,
     hipCm: Number(form.hipCm) || 0,
     chestCm: Number(form.chestCm) || 0,
-    totalSessions: Number(form.totalSessions) || 12,
+    totalSessions: Number(form.totalSessions),
     paymentStatus: form.paymentStatus,
     note: form.note,
     monthlyPostponeLimit: Number.isFinite(Number(form.monthlyPostponeLimit))

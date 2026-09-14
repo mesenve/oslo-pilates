@@ -1215,6 +1215,7 @@ function studentFromInput(
     monthlyPostponeLimit: Number.isFinite(input.monthlyPostponeLimit)
       ? Math.max(0, Math.round(input.monthlyPostponeLimit))
       : 1,
+    postponeLessonUsed: previous?.postponeLessonUsed ?? false,
     accountStatus: previous?.accountStatus ?? "active",
     inviteToken: previous?.inviteToken,
     inviteExpiresAt: previous?.inviteExpiresAt,
