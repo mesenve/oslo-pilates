@@ -51,7 +51,7 @@ export function SessionRow({
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <SessionBadge status={session.status} />
+          {session.status !== "upcoming" ? <SessionBadge status={session.status} /> : null}
           {session.status === "attend_pending" ||
           session.status === "postpone_pending" ? (
             <p className="text-xs text-muted">Hocanın onayı bekleniyor.</p>

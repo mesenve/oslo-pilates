@@ -115,7 +115,9 @@ export default function StudentHomePage() {
                       {formatLongDate(selectedSession.date)}
                     </p>
                   </div>
-                  <SessionBadge status={selectedStatus} />
+                  {selectedStatus !== "upcoming" ? (
+                    <SessionBadge status={selectedStatus} />
+                  ) : null}
                 </div>
               </div>
             </div>
