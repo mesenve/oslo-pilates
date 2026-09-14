@@ -2,6 +2,7 @@
 
 import { ClassCalendar } from "@/components/class-calendar";
 import {
+  CheckIcon,
   ChevronDownIcon,
   ChevronLeftIcon,
   PencilIcon,
@@ -305,8 +306,11 @@ export default function StudentDetailPage() {
             onChange={(event) =>
               setPostponeLessonUsed(student.id, event.target.checked)
             }
-            className="h-5 w-5 shrink-0 rounded border-border text-accent accent-accent focus:ring-accent/30"
+            className="peer sr-only"
           />
+          <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg border border-accent/35 bg-accent-soft/30 text-white shadow-[0_3px_10px_rgba(194,24,91,0.1)] transition peer-focus-visible:ring-4 peer-focus-visible:ring-accent-soft/70 peer-checked:border-accent peer-checked:bg-accent">
+            <CheckIcon className="h-4 w-4 opacity-0 transition peer-checked:opacity-100" />
+          </span>
           <span className="text-sm font-medium">Öğrenci erteleme dersini kullandı.</span>
         </label>
       </Card>
