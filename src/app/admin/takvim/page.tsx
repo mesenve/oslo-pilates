@@ -20,8 +20,16 @@ export default function CalendarPage() {
   const today = todayISO();
   const todayDay = weekdayFromISO(today);
   const [selectedDate, setSelectedDate] = useState(today);
+  const [onlyFullGroups, setOnlyFullGroups] = useState(false);
   const day = weekdayFromISO(selectedDate);
   const groups = day ? getClassGroupsForDay(day) : [];
+  const displayedGroups = onlyFullGroups
+    ? groups.filter(
+        (group) =>
+          group.capacity > 0 &&
+          visibleStudents.filter((student) => student.groupId === group.id).length >= group.capacity,
+      )
+    : groups;
   const specialProgramSessions = visibleSessions.filter(
     (session) => session.date === selectedDate && session.groupId === "duzensiz",
   );
@@ -52,18 +60,31 @@ export default function CalendarPage() {
         onSelectDate={setSelectedDate}
       />
 
-      <h2 className="font-serif text-xl">
-        {day ? `${DAY_LABELS[day]} grupları` : "Hafta sonu"}
-      </h2>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h2 className="font-serif text-xl">
+          {day ? `${DAY_LABELS[day]} grupları` : "Hafta sonu"}
+        </h2>
+        <label className="inline-flex cursor-pointer items-center gap-2 text-sm text-foreground">
+          <input
+            type="checkbox"
+            checked={onlyFullGroups}
+            onChange={(event) => setOnlyFullGroups(event.target.checked)}
+            className="h-4 w-4 accent-accent"
+          />
+          Sadece dolu gruplar
+        </label>
+      </div>
       {todayDay && selectedDate === today ? (
         <p className="text-xs text-muted">Bugünün programı</p>
       ) : null}
 
-      {groups.length === 0 && specialProgramSessions.length === 0 ? (
-        <EmptyState>Bu günde grup dersi yok.</EmptyState>
+      {displayedGroups.length === 0 && (!specialProgramSessions.length || onlyFullGroups) ? (
+        <EmptyState>
+          {onlyFullGroups ? "Bu günde dolu grup yok." : "Bu günde grup dersi yok."}
+        </EmptyState>
       ) : (
         <div className="flex flex-col gap-3">
-          {groups.map((group) => (
+          {displayedGroups.map((group) => (
             <GroupClassCard
               key={group.id}
               group={group}
@@ -71,7 +92,7 @@ export default function CalendarPage() {
               students={visibleStudents}
             />
             ))}
-          {specialProgramSessions.length > 0 ? (
+          {specialProgramSessions.length > 0 && !onlyFullGroups ? (
             <a
               href={`/admin/ders/${selectedDate}/duzensiz`}
               className="rounded-2xl border border-border bg-white p-4 transition-colors hover:bg-surface-muted"
