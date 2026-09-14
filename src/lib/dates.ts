@@ -113,6 +113,14 @@ export function isBefore(iso: string, compareISO: string): boolean {
   return iso < compareISO;
 }
 
+export function isAtLeast24HoursAway(date: string, time: string, now = new Date()): boolean {
+  const match = time.trim().match(/^(\d{1,2})[.:](\d{2})$/);
+  if (!match) return false;
+  const [year, month, day] = date.split("-").map(Number);
+  const startsAt = new Date(year, month - 1, day, Number(match[1]), Number(match[2]));
+  return startsAt.getTime() - now.getTime() >= 24 * 60 * 60 * 1000;
+}
+
 export function monthTitle(year: number, month: number): string {
   return new Date(year, month, 1).toLocaleDateString("tr-TR", {
     month: "long",

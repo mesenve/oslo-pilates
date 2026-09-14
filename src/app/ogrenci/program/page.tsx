@@ -6,9 +6,9 @@ import { useCurrentStudent, useStudio } from "@/components/studio-provider";
 import { EmptyState } from "@/components/ui";
 import { sessionsForStudent } from "@/data/accessors";
 import { getClassGroupById } from "@/data/groups";
-import { todayISO } from "@/lib/dates";
+import { isAtLeast24HoursAway, todayISO, weekdayFromISO } from "@/lib/dates";
 import { postponeRightLabel } from "@/lib/labels";
-import { useEffect, useMemo, useState } from "react";
+import { type ComponentProps, useEffect, useMemo, useState } from "react";
 
 export default function ProgramPage() {
   const student = useCurrentStudent();
@@ -35,7 +35,7 @@ export default function ProgramPage() {
   const group = student ? getClassGroupById(student.groupId) : undefined;
   const postponeRemaining = student ? remainingPostponeFor(student.id) : 0;
   const postponeHint = student
-    ? postponeRightLabel(postponeRemaining, student.monthlyPostponeLimit)
+    ? postponeRightLabel(postponeRemaining, student.monthlyPostponeLimit > 0 ? 1 : 0)
     : "";
 
   if (!student) return null;
@@ -65,7 +65,7 @@ export default function ProgramPage() {
         <EmptyState>Bu günde dersin yok.</EmptyState>
       ) : (
         selected.map((session) => (
-          <SessionRow
+          <ProgramSessionRow
             key={session.id}
             session={session}
             time={group?.time ?? ""}
@@ -78,6 +78,38 @@ export default function ProgramPage() {
         ))
       )}
     </div>
+  );
+}
+
+function ProgramSessionRow({
+  session,
+  time,
+  canPostpone,
+  canAttend,
+  postponeHint,
+  onAttend,
+  onPostpone,
+}: ComponentProps<typeof SessionRow>) {
+  const group = getClassGroupById(session.groupId);
+  const day = weekdayFromISO(session.date);
+  const sessionTime = (day && group?.timeByDay?.[day]) ?? group?.time ?? time;
+  const canPostponeAtThisTime = canPostpone && isAtLeast24HoursAway(session.date, sessionTime);
+  const hint = canPostponeAtThisTime
+    ? postponeHint
+    : canPostpone
+      ? "Ders başlangıcına 24 saatten az kaldığı için ertelenemez."
+      : postponeHint;
+
+  return (
+    <SessionRow
+      session={session}
+      time={sessionTime}
+      canPostpone={canPostponeAtThisTime}
+      canAttend={canAttend}
+      postponeHint={hint}
+      onAttend={onAttend}
+      onPostpone={onPostpone}
+    />
   );
 }
 

@@ -39,7 +39,7 @@ export default function ProfilePage() {
           label="Erteleme hakkı"
           value={postponeRightLabel(
             remainingPostponeFor(student.id),
-            student.monthlyPostponeLimit,
+            student.monthlyPostponeLimit > 0 ? 1 : 0,
           )}
         />
         <Field

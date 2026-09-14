@@ -7,7 +7,15 @@ import { useCurrentStudent, useStudio } from "@/components/studio-provider";
 import { Button, Card, SessionBadge } from "@/components/ui";
 import { effectiveSessionStatus, sessionsForStudent } from "@/data/accessors";
 import { getClassGroupById } from "@/data/groups";
-import { addDays, formatLongDate, startOfWeekMonday, toISODate, todayISO } from "@/lib/dates";
+import {
+  addDays,
+  formatLongDate,
+  isAtLeast24HoursAway,
+  startOfWeekMonday,
+  toISODate,
+  todayISO,
+  weekdayFromISO,
+} from "@/lib/dates";
 import { remainingLabel, postponeRightLabel } from "@/lib/labels";
 import Link from "next/link";
 import { useState } from "react";
@@ -32,6 +40,15 @@ export default function StudentHomePage() {
     selectedStatus === "upcoming" ||
     selectedStatus === "attend_pending" ||
     selectedStatus === "postpone_pending";
+  const selectedDay = selectedSession ? weekdayFromISO(selectedSession.date) : null;
+  const selectedTime =
+    (selectedDay && group?.timeByDay?.[selectedDay]) ?? group?.time ?? "";
+  const canPostponeSelected = Boolean(
+    selectedSession &&
+      selectedStatus === "upcoming" &&
+      remainingPostponeFor(student.id) > 0 &&
+      isAtLeast24HoursAway(selectedSession.date, selectedTime),
+  );
 
   return (
     <div className="space-y-4">
@@ -127,7 +144,7 @@ export default function StudentHomePage() {
                 <p className="text-sm text-muted">
                   {postponeRightLabel(
                     remainingPostponeFor(student.id),
-                    student.monthlyPostponeLimit,
+                    student.monthlyPostponeLimit > 0 ? 1 : 0,
                   )}
                 </p>
                 {selectedSession.status === "upcoming" ? (
@@ -136,7 +153,7 @@ export default function StudentHomePage() {
                       <Button onClick={() => markAttended(selectedSession.id)}>
                         Geldim
                       </Button>
-                    ) : selectedDate > today ? (
+                    ) : selectedDate > today && canPostponeSelected ? (
                       <Link
                         href={`/ogrenci/program?date=${selectedDate}`}
                         className="inline-flex items-center justify-center rounded-full border border-accent/30 bg-white px-4 py-2 text-sm font-medium text-accent transition-colors hover:bg-accent-soft"
@@ -145,6 +162,15 @@ export default function StudentHomePage() {
                       </Link>
                     ) : null}
                   </div>
+                ) : null}
+                {selectedDate > today &&
+                selectedSession.status === "upcoming" &&
+                !canPostponeSelected ? (
+                  <p className="mt-3 text-sm text-muted">
+                    {remainingPostponeFor(student.id) <= 0
+                      ? "Bu ay erteleme hakkın kalmadı."
+                      : "Ders başlangıcına 24 saatten az kaldığı için ertelenemez."}
+                  </p>
                 ) : null}
               </div>
             ) : null}

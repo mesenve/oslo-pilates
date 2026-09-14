@@ -6,11 +6,11 @@ import {
   getStaffById,
 } from "@/data/staff";
 import { buildSessionsForStudent, collectSessionDates } from "@/data/seed";
-import { setCustomGroups } from "@/data/groups";
+import { getClassGroupById, setCustomGroups } from "@/data/groups";
 import { studentsForUser, sessionsForUser, postponeRequestsForUser, canManageStudent, isStaffRole } from "@/lib/access";
 import { fetchAttendanceMarks, pushAttendanceMark } from "@/lib/attendance-client";
 import { mergeActivatedInvites, mergeAttendanceMarks } from "@/lib/attendance-sync";
-import { addDays, startOfWeekMonday, toISODate, todayISO } from "@/lib/dates";
+import { addDays, isAtLeast24HoursAway, startOfWeekMonday, toISODate, todayISO, weekdayFromISO } from "@/lib/dates";
 import {
   createInviteToken,
   getStudentPassword,
@@ -603,7 +603,13 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
       if (!session || session.status !== "upcoming") return current;
       const student = current.students.find((item) => item.id === session.studentId);
       if (!student) return current;
-      if (remainingPostponeRights(student, current.postponeRequests) <= 0) {
+      const group = getClassGroupById(session.groupId);
+      const day = weekdayFromISO(session.date);
+      const time = (day && group?.timeByDay?.[day]) ?? group?.time ?? "";
+      const studentHasRight =
+        student.monthlyPostponeLimit > 0 &&
+        remainingPostponeRights({ ...student, monthlyPostponeLimit: 1 }, current.postponeRequests) > 0;
+      if (!studentHasRight || !isAtLeast24HoursAway(session.date, time)) {
         return current;
       }
       return {
@@ -1021,7 +1027,11 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
     (studentId: string) => {
       const student = state.students.find((item) => item.id === studentId);
       if (!student) return 0;
-      return remainingPostponeRights(student, state.postponeRequests);
+      if (student.monthlyPostponeLimit <= 0) return 0;
+      return remainingPostponeRights(
+        { ...student, monthlyPostponeLimit: 1 },
+        state.postponeRequests,
+      );
     },
     [state.postponeRequests, state.students],
   );
