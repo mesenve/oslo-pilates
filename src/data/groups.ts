@@ -166,4 +166,11 @@ const CLASS_GROUPS: ClassGroup[] = [
     capacity: 2,
     label: "Çarşamba–Cuma 16.00",
   },
+  {
+    id: "car-cum-1900",
+    days: ["wednesday", "friday"],
+    time: "19.00",
+    capacity: 2,
+    label: "Çarşamba–Cuma 19.00",
+  },
 ];
