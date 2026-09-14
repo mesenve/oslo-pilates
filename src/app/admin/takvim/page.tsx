@@ -16,7 +16,7 @@ import {
 import { useMemo, useState } from "react";
 
 export default function CalendarPage() {
-  const { visibleStudents, visibleSessions } = useStudio();
+  const { visibleStudents, visibleSessions, customGroups } = useStudio();
   const today = todayISO();
   const todayDay = weekdayFromISO(today);
   const [selectedDate, setSelectedDate] = useState(today);
@@ -38,7 +38,7 @@ export default function CalendarPage() {
       if (count) result.push({ date: iso, count });
     }
     return result;
-  }, []);
+  }, [customGroups]);
 
   return (
     <div className="space-y-5">

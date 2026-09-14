@@ -2,7 +2,7 @@ import type { StudioState } from "@/types/studio";
 
 export type RemoteStudioSnapshot = Pick<
   StudioState,
-  "students" | "archivedStudents" | "sessions" | "postponeRequests"
+  "students" | "archivedStudents" | "sessions" | "postponeRequests" | "customGroups"
 > & {
   blockedEmails?: string[];
 };

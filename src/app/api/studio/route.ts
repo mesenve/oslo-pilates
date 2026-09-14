@@ -90,7 +90,7 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   const user = await getSessionUser();
-  if (user?.role !== "super_admin") {
+  if (user?.role !== "super_admin" && user?.role !== "instructor") {
     return NextResponse.json({ error: "Bu işlem için yönetici oturumu gerekli." }, { status: 403 });
   }
   try {
@@ -105,6 +105,43 @@ export async function POST(request: Request) {
       existing.snapshot && typeof existing.snapshot === "object"
         ? existing.snapshot
         : {};
+    if (user.role === "instructor") {
+      const current = currentSnapshot as {
+        students?: Array<{ id: string; instructorId: string }>;
+        archivedStudents?: Array<{ id: string; instructorId: string }>;
+        sessions?: Array<{ studentId: string }>;
+        postponeRequests?: Array<{ studentId: string }>;
+      };
+      const incoming = body.snapshot as typeof current;
+      const shared = ["staff-delfin", "staff-elif"];
+      const owns = (student: { instructorId: string }) =>
+        student.instructorId === user.id ||
+        (shared.includes(student.instructorId) && shared.includes(user.id));
+      const existingOwnedIds = new Set((current.students ?? []).filter(owns).map((student) => student.id));
+      const incomingStudents = (incoming.students ?? []).filter((student) =>
+        existingOwnedIds.has(student.id) || owns(student),
+      ).map((student) => existingOwnedIds.has(student.id)
+        ? { ...student, instructorId: (current.students ?? []).find((item) => item.id === student.id)?.instructorId ?? student.instructorId }
+        : student,
+      );
+      const allowedIds = new Set(incomingStudents.map((student) => student.id));
+      const mergeByStudent = <T extends { studentId: string }>(existing: T[] = [], updated: T[] = []) => [
+        ...existing.filter((item) => !allowedIds.has(item.studentId)),
+        ...updated.filter((item) => allowedIds.has(item.studentId)),
+      ];
+      await writeStudioSnapshot({
+        configured: true,
+        snapshot: {
+          ...current,
+          students: [...(current.students ?? []).filter((student) => !existingOwnedIds.has(student.id)), ...incomingStudents],
+          archivedStudents: current.archivedStudents,
+          sessions: mergeByStudent(current.sessions, incoming.sessions),
+          postponeRequests: mergeByStudent(current.postponeRequests, incoming.postponeRequests),
+        },
+      });
+      return NextResponse.json({ ok: true });
+    }
+
     const next = {
       configured: true,
       snapshot: { ...currentSnapshot, ...body.snapshot },

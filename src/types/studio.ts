@@ -126,6 +126,7 @@ export type NewStudentInput = {
   startDate: string;
   customDays?: DayOfWeek[];
   customTime?: string;
+  customGroup?: ClassGroup;
 };
 
 export type StudioState = {
@@ -134,6 +135,7 @@ export type StudioState = {
   archivedStudents: Student[];
   sessions: Session[];
   postponeRequests: PostponeRequest[];
+  customGroups: ClassGroup[];
   staffPasswords: Record<string, string>;
   studentPasswords: Record<string, string>;
 };

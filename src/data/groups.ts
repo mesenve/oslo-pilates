@@ -1,6 +1,8 @@
 import type { ClassGroup } from "@/types/studio";
 
 export const IRREGULAR_GROUP_ID = "duzensiz";
+export const NEW_GROUP_ID = "yeni-grup";
+let customGroups: ClassGroup[] = [];
 
 const IRREGULAR_GROUP: ClassGroup = {
   id: IRREGULAR_GROUP_ID,
@@ -15,7 +17,21 @@ export function isIrregularGroup(groupId: string) {
 }
 
 export function getClassGroups(): ClassGroup[] {
-  return CLASS_GROUPS;
+  return [...CLASS_GROUPS, ...customGroups];
+}
+
+export function setCustomGroups(groups: ClassGroup[]) {
+  customGroups = groups;
+}
+
+export function groupIdForSchedule(days: ClassGroup["days"], time: string) {
+  const dayPart = days.map((day) => ({ monday: "pzt", tuesday: "sal", wednesday: "car", thursday: "per", friday: "cum" })[day]).join("-");
+  return `${dayPart}-${time.replace(/[^0-9]/g, "")}`;
+}
+
+export function groupLabelForSchedule(days: ClassGroup["days"], time: string) {
+  const labels = { monday: "Pazartesi", tuesday: "Salı", wednesday: "Çarşamba", thursday: "Perşembe", friday: "Cuma" };
+  return `${days.map((day) => labels[day]).join("–")} ${time}`;
 }
 
 export function getGroupSelectOptions(): {
@@ -24,7 +40,7 @@ export function getGroupSelectOptions(): {
   separatorBefore?: boolean;
 }[] {
   return [
-    ...CLASS_GROUPS.map((group) => ({
+    ...getClassGroups().map((group) => ({
       value: group.id,
       label: group.label,
     })),
@@ -33,16 +49,17 @@ export function getGroupSelectOptions(): {
       label: IRREGULAR_GROUP.label,
       separatorBefore: true,
     },
+    { value: NEW_GROUP_ID, label: "+ Yeni grup oluştur", separatorBefore: true },
   ];
 }
 
 export function getClassGroupById(id: string): ClassGroup | undefined {
   if (id === IRREGULAR_GROUP_ID) return IRREGULAR_GROUP;
-  return CLASS_GROUPS.find((group) => group.id === id);
+  return getClassGroups().find((group) => group.id === id);
 }
 
 export function getClassGroupsForDay(day: ClassGroup["days"][number]): ClassGroup[] {
-  return CLASS_GROUPS.filter((group) => group.days.includes(day));
+  return getClassGroups().filter((group) => group.days.includes(day));
 }
 
 const CLASS_GROUPS: ClassGroup[] = [

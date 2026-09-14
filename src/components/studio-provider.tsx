@@ -6,6 +6,7 @@ import {
   getStaffById,
 } from "@/data/staff";
 import { buildSessionsForStudent, collectSessionDates } from "@/data/seed";
+import { setCustomGroups } from "@/data/groups";
 import { studentsForUser, sessionsForUser, postponeRequestsForUser, canManageStudent, isStaffRole } from "@/lib/access";
 import { fetchAttendanceMarks, pushAttendanceMark } from "@/lib/attendance-client";
 import { mergeActivatedInvites, mergeAttendanceMarks } from "@/lib/attendance-sync";
@@ -63,6 +64,7 @@ type StudioContextValue = {
   students: Student[];
   visibleStudents: Student[];
   archivedStudents: Student[];
+  customGroups: StudioState["customGroups"];
   sessions: Session[];
   visibleSessions: Session[];
   postponeRequests: StudioState["postponeRequests"];
@@ -122,6 +124,10 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
     getStudioSnapshot,
     getServerStudioSnapshot,
   );
+
+  useEffect(() => {
+    setCustomGroups(state.customGroups ?? []);
+  }, [state.customGroups]);
 
   useEffect(() => {
     if (!ready) return;
@@ -774,6 +780,10 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
 
       return {
         ...current,
+        customGroups:
+          input.customGroup && !current.customGroups.some((group) => group.id === input.customGroup!.id)
+            ? [...current.customGroups, input.customGroup]
+            : current.customGroups,
         students: [student, ...current.students],
         sessions: [
           ...current.sessions,
@@ -992,6 +1002,7 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
       students: state.students,
       visibleStudents,
       archivedStudents: state.archivedStudents,
+      customGroups: state.customGroups,
       sessions: state.sessions,
       visibleSessions,
       postponeRequests: state.postponeRequests,
@@ -1041,6 +1052,7 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
       restoreStudent,
       updateStudent,
       state.archivedStudents,
+      state.customGroups,
       state.postponeRequests,
       state.sessions,
       state.students,

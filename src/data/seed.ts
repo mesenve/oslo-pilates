@@ -199,6 +199,7 @@ export function createSeedState(): StudioState {
     archivedStudents: [],
     sessions,
     postponeRequests,
+    customGroups: [],
     staffPasswords: { ...DEFAULT_STAFF_PASSWORDS },
     studentPasswords: { ...DEFAULT_STUDENT_PASSWORDS },
   };

@@ -31,6 +31,7 @@ function readStorage(): StudioState {
       user,
       students,
       archivedStudents: (parsed.archivedStudents ?? []).map(hydrateStudent),
+      customGroups: parsed.customGroups ?? [],
       staffPasswords: hydrateStaffPasswords(parsed.staffPasswords),
       studentPasswords: hydrateStudentPasswords(parsed.studentPasswords),
     };
@@ -63,12 +64,13 @@ export function setStudioState(
   if (typeof window !== "undefined") {
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(memory));
     hydrated = true;
-    if (studioSnapshotPersistenceEnabled && memory.user?.role === "super_admin") {
+    if (studioSnapshotPersistenceEnabled && (memory.user?.role === "super_admin" || memory.user?.role === "instructor")) {
       const snapshot = {
         students: memory.students,
         archivedStudents: memory.archivedStudents,
         sessions: memory.sessions,
         postponeRequests: memory.postponeRequests,
+        customGroups: memory.customGroups,
       };
       void fetch("/api/studio", {
         method: "POST",

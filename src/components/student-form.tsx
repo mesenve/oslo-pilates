@@ -12,6 +12,9 @@ import {
   getClassGroupById,
   getGroupSelectOptions,
   isIrregularGroup,
+  NEW_GROUP_ID,
+  groupIdForSchedule,
+  groupLabelForSchedule,
 } from "@/data/groups";
 import {
   inferPackageType,
@@ -28,6 +31,7 @@ import { DAY_SHORT, PAYMENT_LABELS, WEEKDAYS } from "@/lib/labels";
 import { todayISO } from "@/lib/dates";
 import type {
   DayOfWeek,
+  ClassGroup,
   NewStudentInput,
   PackageType,
   PaymentStatus,
@@ -102,8 +106,9 @@ export function StudentForm({
       return;
     }
     const isIrregular = isIrregularGroup(form.groupId);
-    if (isIrregular && (!form.customDays.length || !form.customTime)) {
-      setError("Düzensiz öğrenci için gün ve saat gerekli.");
+    const isNewGroup = form.groupId === NEW_GROUP_ID;
+    if ((isIrregular || isNewGroup) && (!form.customDays.length || !form.customTime)) {
+      setError(isNewGroup ? "Yeni grup için gün ve saat gerekli." : "Düzensiz öğrenci için gün ve saat gerekli.");
       return;
     }
     if (
@@ -117,7 +122,14 @@ export function StudentForm({
       setError("E-posta gerekli. Davet maili gönderilecek.");
       return;
     }
-    const input = toInput(form, lockInstructor ? user?.id : undefined);
+    const newGroup: ClassGroup | undefined = isNewGroup ? {
+      id: groupIdForSchedule(form.customDays, form.customTime),
+      days: form.customDays,
+      time: form.customTime,
+      capacity: 2,
+      label: groupLabelForSchedule(form.customDays, form.customTime),
+    } : undefined;
+    const input = toInput(form, lockInstructor ? user?.id : undefined, newGroup);
     const result =
       resolvedMode === "restore" && student
         ? restoreStudent(student.id, input)
@@ -245,9 +257,11 @@ export function StudentForm({
         </div>
         <div className="rounded-2xl border border-border/70 bg-surface-muted/40 p-4">
           <p className="text-sm font-medium">
-            {isIrregularGroup(form.groupId)
-              ? "Özel program (zorunlu)"
-              : "Özel program (isteğe bağlı)"}
+            {form.groupId === NEW_GROUP_ID
+              ? "Yeni grup bilgisi (zorunlu)"
+              : isIrregularGroup(form.groupId)
+                ? "Özel program (zorunlu)"
+                : "Özel program (isteğe bağlı)"}
           </p>
           <p className="mt-1 text-xs text-muted">
             Doldurulursa öğrenci takvimi bu gün ve saate göre oluşturulur.
@@ -274,7 +288,7 @@ export function StudentForm({
               value={form.customTime.replace(".", ":")}
               onChange={(value) => update("customTime", value.replace(":", "."))}
               type="time"
-              required={isIrregularGroup(form.groupId) || form.customDays.length > 0}
+              required={isIrregularGroup(form.groupId) || form.groupId === NEW_GROUP_ID || form.customDays.length > 0}
             />
           </div>
         </div>
@@ -365,12 +379,13 @@ function formFromStudent(
 function toInput(
   form: ReturnType<typeof formFromStudent>,
   lockedInstructorId?: string,
+  newGroup?: ClassGroup,
 ): NewStudentInput {
   return {
     name: form.name,
     email: form.email,
     phone: form.phone,
-    groupId: form.groupId,
+    groupId: newGroup?.id ?? form.groupId,
     instructorId: lockedInstructorId ?? form.instructorId,
     packageType: form.packageType,
     weightKg: Number(form.weightKg) || 0,
@@ -387,5 +402,6 @@ function toInput(
     startDate: form.startDate || todayISO(),
     customDays: form.customDays,
     customTime: form.customTime,
+    customGroup: newGroup,
   };
 }
