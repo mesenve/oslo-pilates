@@ -130,15 +130,18 @@ export function StudentForm({
       setError("E-posta gerekli. Davet maili gönderilecek.");
       return;
     }
-    // Düzensiz öğrenciye girilen özel program, kayıtla birlikte kalıcı bir
-    // grup olur ve sonraki öğrenci kayıtlarında normal listede görünür.
-    const newGroup: ClassGroup | undefined = isIrregular ? {
+    // Gün ve saat elle girildiyse öğrenci hazır grubun üzerinde kalmaz:
+    // bu program kayıtla birlikte kendi kalıcı grubuna dönüşür.
+    const newGroup: ClassGroup | undefined =
+      form.customDays.length && form.customTime.trim()
+        ? {
       id: groupIdForSchedule(form.customDays, form.customTime),
       days: form.customDays,
       time: form.customTime,
       capacity: 2,
       label: groupLabelForSchedule(form.customDays, form.customTime),
-    } : undefined;
+    }
+        : undefined;
     const input = toInput(form, lockInstructor ? user?.id : undefined, newGroup);
     const result =
       resolvedMode === "restore" && student

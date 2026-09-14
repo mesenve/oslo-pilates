@@ -2,6 +2,8 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { NextResponse } from "next/server";
 import { getSessionUser } from "@/lib/server/session";
+import { groupIdForSchedule, groupLabelForSchedule } from "@/data/groups";
+import type { ClassGroup, DayOfWeek } from "@/types/studio";
 
 type StudioSnapshotResponse = {
   configured?: boolean;
@@ -11,6 +13,65 @@ type StudioSnapshotResponse = {
 const snapshotPath = path.join(process.cwd(), ".data", "studio.json");
 const BLOB_STORE_NAME = "oslo-pilates-studio";
 const SNAPSHOT_KEY = "snapshot:current";
+
+type SnapshotStudent = {
+  id: string;
+  groupId: string;
+  package?: {
+    customSchedule?: { days?: DayOfWeek[]; time?: string };
+  };
+};
+
+type SnapshotSession = { studentId: string; groupId: string };
+
+function normalizeCustomScheduleGroups(snapshot: Record<string, unknown>) {
+  const students = (snapshot.students ?? []) as SnapshotStudent[];
+  const customGroups = (snapshot.customGroups ?? []) as ClassGroup[];
+  const groups = new Map(customGroups.map((group) => [group.id, group]));
+  const replacementGroupIds = new Map<string, string>();
+
+  const normalizedStudents = students.map((student) => {
+    const schedule = student.package?.customSchedule;
+    const days = schedule?.days ?? [];
+    const time = schedule?.time?.trim() ?? "";
+    if (!days.length || !time) return student;
+
+    const groupId = groupIdForSchedule(days, time);
+    replacementGroupIds.set(student.id, groupId);
+    if (!groups.has(groupId)) {
+      groups.set(groupId, {
+        id: groupId,
+        days,
+        time,
+        capacity: 2,
+        label: groupLabelForSchedule(days, time),
+      });
+    }
+    return student.groupId === groupId ? student : { ...student, groupId };
+  });
+
+  if (!replacementGroupIds.size) return { snapshot, changed: false };
+
+  const normalizedSessions = ((snapshot.sessions ?? []) as SnapshotSession[]).map(
+    (session) => {
+      const groupId = replacementGroupIds.get(session.studentId);
+      return groupId && session.groupId !== groupId ? { ...session, groupId } : session;
+    },
+  );
+  const changed =
+    normalizedStudents.some((student, index) => student !== students[index]) ||
+    normalizedSessions.some(
+      (session, index) => session !== ((snapshot.sessions ?? []) as SnapshotSession[])[index],
+    ) ||
+    groups.size !== customGroups.length;
+
+  return {
+    changed,
+    snapshot: changed
+      ? { ...snapshot, students: normalizedStudents, sessions: normalizedSessions, customGroups: [...groups.values()] }
+      : snapshot,
+  };
+}
 
 export async function readStudioSnapshot(): Promise<StudioSnapshotResponse> {
   try {
@@ -50,7 +111,11 @@ export async function GET(request: Request) {
   if (!user) return NextResponse.json({ error: "Oturum gerekli." }, { status: 401 });
   const response = await readStudioSnapshot();
   if (response.configured && response.snapshot) {
-    const snapshot = response.snapshot as {
+    const normalized = normalizeCustomScheduleGroups(response.snapshot as Record<string, unknown>);
+    if (normalized.changed) {
+      await writeStudioSnapshot({ ...response, snapshot: normalized.snapshot });
+    }
+    const snapshot = normalized.snapshot as {
         students?: Array<{ id: string; instructorId: string; groupId?: string }>;
         archivedStudents?: Array<{ id: string; instructorId: string }>;
         sessions?: Array<{ studentId: string }>;
