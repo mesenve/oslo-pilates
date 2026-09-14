@@ -51,10 +51,11 @@ export async function GET(request: Request) {
   const response = await readStudioSnapshot();
   if (response.configured && response.snapshot) {
     const snapshot = response.snapshot as {
-        students?: Array<{ id: string; instructorId: string }>;
+        students?: Array<{ id: string; instructorId: string; groupId?: string }>;
         archivedStudents?: Array<{ id: string; instructorId: string }>;
         sessions?: Array<{ studentId: string }>;
         postponeRequests?: Array<{ studentId: string }>;
+        customGroups?: Array<{ id: string }>;
         blockedEmails?: string[];
         staffPasswords?: Record<string, string>;
       };
@@ -107,10 +108,11 @@ export async function POST(request: Request) {
         : {};
     if (user.role === "instructor") {
       const current = currentSnapshot as {
-        students?: Array<{ id: string; instructorId: string }>;
+        students?: Array<{ id: string; instructorId: string; groupId?: string }>;
         archivedStudents?: Array<{ id: string; instructorId: string }>;
         sessions?: Array<{ studentId: string }>;
         postponeRequests?: Array<{ studentId: string }>;
+        customGroups?: Array<{ id: string }>;
       };
       const incoming = body.snapshot as typeof current;
       const shared = ["staff-delfin", "staff-elif"];
@@ -129,6 +131,12 @@ export async function POST(request: Request) {
         ...existing.filter((item) => !allowedIds.has(item.studentId)),
         ...updated.filter((item) => allowedIds.has(item.studentId)),
       ];
+      const existingGroupIds = new Set((current.customGroups ?? []).map((group) => group.id));
+      const groupsCreatedForOwnedStudents = (incoming.customGroups ?? []).filter(
+        (group) =>
+          !existingGroupIds.has(group.id) &&
+          incomingStudents.some((student) => student.groupId === group.id),
+      );
       await writeStudioSnapshot({
         configured: true,
         snapshot: {
@@ -137,6 +145,7 @@ export async function POST(request: Request) {
           archivedStudents: current.archivedStudents,
           sessions: mergeByStudent(current.sessions, incoming.sessions),
           postponeRequests: mergeByStudent(current.postponeRequests, incoming.postponeRequests),
+          customGroups: [...(current.customGroups ?? []), ...groupsCreatedForOwnedStudents],
         },
       });
       return NextResponse.json({ ok: true });

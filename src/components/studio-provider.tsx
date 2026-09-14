@@ -927,10 +927,34 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
 
         id = student.id;
 
+        // A program change must also update the student's generated timetable.
+        // Retain the outcome already recorded for lessons that stay on the same date.
+        const previousSessions = current.sessions.filter(
+          (session) => session.studentId === studentId,
+        );
+        const statusByDate = new Map(
+          previousSessions.map((session) => [session.date, session.status]),
+        );
+        const updatedSessions = buildSessionsForStudent(student, {
+          fromPackageStart: true,
+        }).map((session) => ({
+          ...session,
+          status: statusByDate.get(session.date) ?? session.status,
+        }));
+        const updatedSessionIds = new Set(updatedSessions.map((session) => session.id));
+
         return {
           ...current,
           students: current.students.map((item) =>
             item.id === studentId ? student : item,
+          ),
+          sessions: [
+            ...current.sessions.filter((session) => session.studentId !== studentId),
+            ...updatedSessions,
+          ],
+          postponeRequests: current.postponeRequests.filter(
+            (request) =>
+              request.studentId !== studentId || updatedSessionIds.has(request.sessionId),
           ),
           user:
             current.user?.id === studentId && current.user.role === "student"
