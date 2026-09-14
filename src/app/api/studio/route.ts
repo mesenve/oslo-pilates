@@ -30,6 +30,22 @@ type SnapshotSession = {
   status?: string;
 };
 
+type SnapshotStudentIdentity = {
+  id: string;
+  email?: string;
+};
+
+function hasDuplicateStudentEmail(students: SnapshotStudentIdentity[] = []) {
+  const seen = new Set<string>();
+  for (const student of students) {
+    const email = student.email?.trim().toLowerCase();
+    if (!email || email === "—") continue;
+    if (seen.has(email)) return true;
+    seen.add(email);
+  }
+  return false;
+}
+
 function normalizeFutureAttendanceStatuses(snapshot: Record<string, unknown>) {
   const sessions = (snapshot.sessions ?? []) as SnapshotSession[];
   let changed = false;
@@ -233,11 +249,21 @@ export async function POST(request: Request) {
           !existingGroupIds.has(group.id) &&
           incomingStudents.some((student) => student.groupId === group.id),
       );
+      const mergedStudents = [
+        ...(current.students ?? []).filter((student) => !existingOwnedIds.has(student.id)),
+        ...incomingStudents,
+      ];
+      if (hasDuplicateStudentEmail(mergedStudents)) {
+        return NextResponse.json(
+          { error: "Bu e-posta ile kayıtlı başka bir öğrenci var." },
+          { status: 409 },
+        );
+      }
       await writeStudioSnapshot({
         configured: true,
         snapshot: {
           ...current,
-          students: [...(current.students ?? []).filter((student) => !existingOwnedIds.has(student.id)), ...incomingStudents],
+          students: mergedStudents,
           archivedStudents: current.archivedStudents,
           sessions: mergeByStudent(current.sessions, incoming.sessions),
           postponeRequests: mergeByStudent(current.postponeRequests, incoming.postponeRequests),
@@ -245,6 +271,37 @@ export async function POST(request: Request) {
         },
       });
       return NextResponse.json({ ok: true });
+    }
+
+    const currentForValidation = currentSnapshot as {
+      students?: SnapshotStudentIdentity[];
+      archivedStudents?: SnapshotStudentIdentity[];
+    };
+    const currentStudents = currentForValidation.students ?? [];
+    const currentArchived = currentForValidation.archivedStudents ?? [];
+    const incomingSnapshot = body.snapshot as {
+      students?: SnapshotStudentIdentity[];
+      archivedStudents?: SnapshotStudentIdentity[];
+    };
+    const incomingStudents = incomingSnapshot.students ?? [];
+    const incomingArchived = incomingSnapshot.archivedStudents ?? [];
+    const currentTotal = currentStudents.length + currentArchived.length;
+    const incomingTotal = incomingStudents.length + incomingArchived.length;
+
+    // A stale browser must never be able to replace the studio with a much
+    // smaller cached list. A single intentional permanent deletion remains
+    // possible, while a partial sync is rejected and refreshed instead.
+    if (incomingTotal < currentTotal - 1) {
+      return NextResponse.json(
+        { error: "Eksik öğrenci listesi kaydedilmedi. Sayfayı yenileyip tekrar dene." },
+        { status: 409 },
+      );
+    }
+    if (hasDuplicateStudentEmail([...incomingStudents, ...incomingArchived])) {
+      return NextResponse.json(
+        { error: "Bu e-posta ile kayıtlı başka bir öğrenci var." },
+        { status: 409 },
+      );
     }
 
     const next = {
