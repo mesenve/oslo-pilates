@@ -22,7 +22,13 @@ import { useState } from "react";
 
 export default function StudentHomePage() {
   const student = useCurrentStudent();
-  const { sessions, remainingFor, remainingPostponeFor, markAttended } = useStudio();
+  const {
+    sessions,
+    remainingFor,
+    remainingPostponeFor,
+    markAttended,
+    requestPostpone,
+  } = useStudio();
   const today = todayISO();
   const [selectedDate, setSelectedDate] = useState(today);
 
@@ -154,12 +160,12 @@ export default function StudentHomePage() {
                         Geldim
                       </Button>
                     ) : selectedDate > today && canPostponeSelected ? (
-                      <Link
-                        href={`/ogrenci/program?date=${selectedDate}`}
-                        className="inline-flex items-center justify-center rounded-full border border-accent/30 bg-white px-4 py-2 text-sm font-medium text-accent transition-colors hover:bg-accent-soft"
+                      <Button
+                        variant="secondary"
+                        onClick={() => requestPostpone(selectedSession.id, "")}
                       >
                         Ertele
-                      </Link>
+                      </Button>
                     ) : null}
                   </div>
                 ) : null}
