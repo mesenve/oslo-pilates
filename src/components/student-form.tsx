@@ -75,6 +75,16 @@ export function StudentForm({
       const wasIrregular = isIrregularGroup(current.groupId);
       const isNowIrregular = isIrregularGroup(groupId);
       const groupDays = getClassGroupById(groupId)?.days ?? [];
+      if (!isNowIrregular && groupId !== NEW_GROUP_ID) {
+        // Hazır bir grup seçildiğinde öğrencinin programı doğrudan grubun
+        // gün ve saatini kullanır; bunu özel program alanına kopyalamayız.
+        return {
+          ...current,
+          groupId,
+          customDays: [],
+          customTime: "",
+        };
+      }
       return {
         ...current,
         groupId,
@@ -82,8 +92,7 @@ export function StudentForm({
           isNowIrregular && current.customDays.length === 0 && !wasIrregular
             ? [...groupDays]
             : current.customDays,
-        customTime:
-          current.customTime || (isNowIrregular || wasIrregular ? "" : getClassGroupById(groupId)?.time ?? ""),
+        customTime: current.customTime,
       };
     });
     setError(null);
@@ -115,10 +124,7 @@ export function StudentForm({
       setError(isNewGroup ? "Yeni grup için gün ve saat gerekli." : "Düzensiz öğrenci için gün ve saat gerekli.");
       return;
     }
-    if (
-      (!form.customDays.length && form.customTime) ||
-      (form.customDays.length && !form.customTime)
-    ) {
+    if (form.customDays.length && !form.customTime) {
       setError("Özel programda gün ve saat birlikte girilmeli.");
       return;
     }
