@@ -11,6 +11,8 @@ export const DAY_LABELS: Record<DayOfWeek, string> = {
   wednesday: "Çarşamba",
   thursday: "Perşembe",
   friday: "Cuma",
+  saturday: "Cumartesi",
+  sunday: "Pazar",
 };
 
 export const DAY_SHORT: Record<DayOfWeek, string> = {
@@ -19,6 +21,8 @@ export const DAY_SHORT: Record<DayOfWeek, string> = {
   wednesday: "Çar",
   thursday: "Per",
   friday: "Cum",
+  saturday: "Cmt",
+  sunday: "Paz",
 };
 
 export const CALENDAR_HEADERS = ["Pzt", "Sal", "Çar", "Per", "Cum", "Cmt", "Paz"];
@@ -29,6 +33,8 @@ export const WEEKDAYS: DayOfWeek[] = [
   "wednesday",
   "thursday",
   "friday",
+  "saturday",
+  "sunday",
 ];
 
 export const PAYMENT_LABELS: Record<PaymentStatus, string> = {

@@ -6,6 +6,8 @@ const DAY_OFFSET: Record<DayOfWeek, number> = {
   wednesday: 2,
   thursday: 3,
   friday: 4,
+  saturday: 5,
+  sunday: 6,
 };
 
 export function startOfWeekMonday(date = new Date()): Date {
@@ -55,6 +57,8 @@ export function weekdayFromISO(iso: string): DayOfWeek | null {
     3: "wednesday",
     4: "thursday",
     5: "friday",
+    6: "saturday",
+    0: "sunday",
   };
   return map[day] ?? null;
 }

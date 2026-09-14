@@ -3,7 +3,9 @@ export type DayOfWeek =
   | "tuesday"
   | "wednesday"
   | "thursday"
-  | "friday";
+  | "friday"
+  | "saturday"
+  | "sunday";
 
 export type Role = "student" | "super_admin" | "instructor";
 

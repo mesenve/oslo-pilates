@@ -964,6 +964,11 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
 
         return {
           ...current,
+          customGroups:
+            normalized.customGroup &&
+            !current.customGroups.some((group) => group.id === normalized.customGroup!.id)
+              ? [...current.customGroups, normalized.customGroup]
+              : current.customGroups,
           students: current.students.map((item) =>
             item.id === studentId ? student : item,
           ),

@@ -25,12 +25,12 @@ export function setCustomGroups(groups: ClassGroup[]) {
 }
 
 export function groupIdForSchedule(days: ClassGroup["days"], time: string) {
-  const dayPart = days.map((day) => ({ monday: "pzt", tuesday: "sal", wednesday: "car", thursday: "per", friday: "cum" })[day]).join("-");
+  const dayPart = days.map((day) => ({ monday: "pzt", tuesday: "sal", wednesday: "car", thursday: "per", friday: "cum", saturday: "cmt", sunday: "paz" })[day]).join("-");
   return `${dayPart}-${time.replace(/[^0-9]/g, "")}`;
 }
 
 export function groupLabelForSchedule(days: ClassGroup["days"], time: string) {
-  const labels = { monday: "Pazartesi", tuesday: "Salı", wednesday: "Çarşamba", thursday: "Perşembe", friday: "Cuma" };
+  const labels = { monday: "Pazartesi", tuesday: "Salı", wednesday: "Çarşamba", thursday: "Perşembe", friday: "Cuma", saturday: "Cumartesi", sunday: "Pazar" };
   return `${days.map((day) => labels[day]).join("–")} ${time}`;
 }
 
