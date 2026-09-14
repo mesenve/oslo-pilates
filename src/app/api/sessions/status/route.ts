@@ -1,5 +1,6 @@
 import { readStudioSnapshot, writeStudioSnapshot } from "@/app/api/studio/route";
 import { getSessionUser } from "@/lib/server/session";
+import { todayISO } from "@/lib/dates";
 import { NextResponse } from "next/server";
 
 const allowedStatuses = new Set(["attended", "postponed", "missed", "upcoming"]);
@@ -16,7 +17,7 @@ export async function POST(request: Request) {
   const state = await readStudioSnapshot();
   const snapshot = state.snapshot as {
     students?: Array<{ id: string; instructorId: string }>;
-    sessions?: Array<{ id: string; studentId: string; status: string }>;
+    sessions?: Array<{ id: string; studentId: string; date: string; status: string }>;
     postponeRequests?: Array<{ sessionId: string; status: string }>;
   } | null;
   const session = snapshot?.sessions?.find((item) => item.id === body.sessionId);
@@ -28,6 +29,12 @@ export async function POST(request: Request) {
   ));
   if (!session || !allowed || !snapshot) {
     return NextResponse.json({ error: "Bu ders için yetkiniz yok." }, { status: 403 });
+  }
+  if (session.date > todayISO() && body.status !== "upcoming") {
+    return NextResponse.json(
+      { error: "Gelecekteki dersler bekleniyor olarak kalır." },
+      { status: 400 },
+    );
   }
   snapshot.sessions = snapshot.sessions?.map((item) =>
     item.id === session.id ? { ...item, status: body.status! } : item,

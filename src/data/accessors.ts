@@ -57,6 +57,14 @@ export function studentName(studentId: string, students: Student[]) {
 }
 
 export function effectiveSessionStatus(session: Session): SessionStatus {
+  // Gelecekteki bir ders henüz geldi ya da yandı olamaz. Eski hatalı
+  // kayıtlarda bu durum görünürse takvim her zaman bekleyen ders olarak sunulur.
+  if (
+    session.date > todayISO() &&
+    (session.status === "attended" || session.status === "missed")
+  ) {
+    return "upcoming";
+  }
   if (session.status === "upcoming" && session.date < todayISO()) {
     return "missed";
   }

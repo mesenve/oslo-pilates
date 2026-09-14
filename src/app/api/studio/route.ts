@@ -3,6 +3,7 @@ import path from "node:path";
 import { NextResponse } from "next/server";
 import { getSessionUser } from "@/lib/server/session";
 import { groupIdForSchedule, groupLabelForSchedule } from "@/data/groups";
+import { todayISO } from "@/lib/dates";
 import type { ClassGroup, DayOfWeek } from "@/types/studio";
 
 type StudioSnapshotResponse = {
@@ -22,7 +23,32 @@ type SnapshotStudent = {
   };
 };
 
-type SnapshotSession = { studentId: string; groupId: string };
+type SnapshotSession = {
+  studentId: string;
+  groupId: string;
+  date?: string;
+  status?: string;
+};
+
+function normalizeFutureAttendanceStatuses(snapshot: Record<string, unknown>) {
+  const sessions = (snapshot.sessions ?? []) as SnapshotSession[];
+  let changed = false;
+  const normalizedSessions = sessions.map((session) => {
+    if (
+      session.date &&
+      session.date > todayISO() &&
+      (session.status === "attended" || session.status === "missed")
+    ) {
+      changed = true;
+      return { ...session, status: "upcoming" };
+    }
+    return session;
+  });
+  return {
+    changed,
+    snapshot: changed ? { ...snapshot, sessions: normalizedSessions } : snapshot,
+  };
+}
 
 function normalizeCustomScheduleGroups(snapshot: Record<string, unknown>) {
   const students = (snapshot.students ?? []) as SnapshotStudent[];
@@ -113,8 +139,11 @@ export async function GET(request: Request) {
   if (!user) return NextResponse.json({ error: "Oturum gerekli." }, { status: 401 });
   const response = await readStudioSnapshot();
   if (response.configured && response.snapshot) {
-    const normalized = normalizeCustomScheduleGroups(response.snapshot as Record<string, unknown>);
-    if (normalized.changed) {
+    const normalizedGroups = normalizeCustomScheduleGroups(
+      response.snapshot as Record<string, unknown>,
+    );
+    const normalized = normalizeFutureAttendanceStatuses(normalizedGroups.snapshot);
+    if (normalizedGroups.changed || normalized.changed) {
       await writeStudioSnapshot({ ...response, snapshot: normalized.snapshot });
     }
     const snapshot = normalized.snapshot as {

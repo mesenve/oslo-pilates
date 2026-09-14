@@ -666,6 +666,9 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
       if (!session || !canManageStudent(current.user, session.studentId, current.students)) {
         return;
       }
+      if (session.date > todayISO() && outcome !== "upcoming") {
+        return;
+      }
       void fetch("/api/sessions/status", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
