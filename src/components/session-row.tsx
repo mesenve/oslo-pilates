@@ -5,9 +5,6 @@ import { CalendarIcon, ClockIcon } from "@/components/icons";
 import {
   formatLongDate,
   isBefore,
-  parseISODate,
-  startOfWeekMonday,
-  toISODate,
   todayISO,
 } from "@/lib/dates";
 import type { Session } from "@/types/studio";
@@ -17,6 +14,7 @@ export function SessionRow({
   session,
   time,
   canPostpone,
+  canAttend,
   postponeHint,
   onAttend,
   onPostpone,
@@ -24,18 +22,14 @@ export function SessionRow({
   session: Session;
   time: string;
   canPostpone: boolean;
+  canAttend: boolean;
   postponeHint: string;
   onAttend: () => void;
   onPostpone: (reason: string) => void;
 }) {
   const [open, setOpen] = useState(false);
   const [reason, setReason] = useState("");
-  const currentMonday = toISODate(startOfWeekMonday());
-  const sessionMonday = toISODate(startOfWeekMonday(parseISODate(session.date)));
-  const isCurrentWeek = sessionMonday === currentMonday;
-  const locked =
-    session.status !== "upcoming" ||
-    (isBefore(session.date, todayISO()) && !isCurrentWeek);
+  const locked = session.status !== "upcoming" || isBefore(session.date, todayISO());
 
   return (
     <Card className="px-4 py-4 sm:px-5">
@@ -64,7 +58,7 @@ export function SessionRow({
           ) : null}
           {!locked ? (
             <>
-              <Button onClick={onAttend}>Geldim</Button>
+              {canAttend ? <Button onClick={onAttend}>Geldim</Button> : null}
               {canPostpone ? (
                 <Button variant="secondary" onClick={() => setOpen(true)}>
                   Ertele

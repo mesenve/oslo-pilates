@@ -4,6 +4,7 @@ import {
   saveAttendanceMark,
 } from "@/lib/server/attendance-store";
 import { readStudioSnapshot } from "@/app/api/studio/route";
+import { todayISO } from "@/lib/dates";
 import { NextResponse } from "next/server";
 import { getSessionUser } from "@/lib/server/session";
 
@@ -81,7 +82,12 @@ export async function POST(request: Request) {
       sessions?: Array<{ id: string; studentId: string; status: string }>;
     } | null;
     const session = snapshot?.sessions?.find((item) => item.id === sessionId);
-    if (!session || session.studentId !== user.id || session.status !== "upcoming") {
+    if (
+      !session ||
+      session.studentId !== user.id ||
+      session.status !== "upcoming" ||
+      date !== todayISO()
+    ) {
       return NextResponse.json({ error: "Bu ders için yoklama onayı verilemez." }, { status: 403 });
     }
   }

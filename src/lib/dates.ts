@@ -42,7 +42,17 @@ export function dateForWeekDay(monday: Date, day: DayOfWeek): Date {
 }
 
 export function todayISO(): string {
-  return toISODate(new Date());
+  // Ders günleri Türkiye saatine göre belirlenir. Tarayıcı veya Netlify
+  // sunucusunun bulunduğu saat dilimi sonucu değiştirmemelidir.
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Europe/Istanbul",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(new Date());
+  const value = (type: "year" | "month" | "day") =>
+    parts.find((part) => part.type === type)?.value ?? "";
+  return `${value("year")}-${value("month")}-${value("day")}`;
 }
 
 export function monthKey(iso: string): string {

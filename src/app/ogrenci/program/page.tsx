@@ -64,6 +64,7 @@ export default function ProgramPage() {
             session={session}
             time={group?.time ?? ""}
             canPostpone={postponeRemaining > 0}
+            canAttend={session.date === today}
             postponeHint={postponeHint}
             onAttend={() => markAttended(session.id)}
             onPostpone={(reason) => requestPostpone(session.id, reason)}
