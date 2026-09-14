@@ -3,11 +3,13 @@ import {
   getInviteByToken,
   inviteTokenFromUrl,
   saveInvite,
+  type StoredInvite,
 } from "@/lib/server/invite-store";
 import { isInviteValid } from "@/lib/student-auth";
 import type { Session, Student } from "@/types/studio";
 import { NextResponse } from "next/server";
 import { getSessionUser } from "@/lib/server/session";
+import { readStudioSnapshot } from "@/app/api/studio/route";
 
 type InviteRequestBody = {
   name?: string;
@@ -16,7 +18,27 @@ type InviteRequestBody = {
   student?: Student;
   sessions?: Session[];
   expiresAt?: string;
+  sendEmail?: boolean;
 };
+
+async function findInviteOrRecoverFromStudio(token: string): Promise<StoredInvite | null> {
+  const stored = await getInviteByToken(token);
+  if (stored) return stored;
+
+  const state = await readStudioSnapshot();
+  const snapshot = state.snapshot as { students?: Student[]; sessions?: Session[] } | null;
+  const student = snapshot?.students?.find((item) => item.inviteToken === token);
+  if (!student?.inviteExpiresAt) return null;
+
+  const recovered = {
+    token,
+    student,
+    sessions: (snapshot?.sessions ?? []).filter((session) => session.studentId === student.id),
+    expiresAt: student.inviteExpiresAt,
+  };
+  await saveInvite(recovered);
+  return recovered;
+}
 
 export async function GET(request: Request) {
   const token = new URL(request.url).searchParams.get("token")?.trim();
@@ -24,7 +46,7 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "Token gerekli." }, { status: 400 });
   }
 
-  const invite = await getInviteByToken(token);
+  const invite = await findInviteOrRecoverFromStudio(token);
   if (!invite) {
     return NextResponse.json({ found: false }, { status: 404 });
   }
@@ -100,6 +122,10 @@ export async function POST(request: Request) {
       { error: "Davet kaydedilemedi. Lütfen tekrar dene." },
       { status: 500 },
     );
+  }
+
+  if (body.sendEmail === false) {
+    return NextResponse.json({ ok: true });
   }
 
   let result: Awaited<ReturnType<typeof sendWelcomeInviteEmail>>;

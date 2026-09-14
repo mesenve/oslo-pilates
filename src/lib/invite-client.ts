@@ -118,16 +118,24 @@ export async function fetchActivatedInvites(): Promise<
 }
 
 export async function sendInviteEmail(input: SendInviteEmailInput) {
+  await saveInvite(input, true);
+}
+
+export async function saveInviteLink(input: SendInviteEmailInput) {
+  await saveInvite(input, false);
+}
+
+async function saveInvite(input: SendInviteEmailInput, sendEmail: boolean) {
   const response = await fetch("/api/invite", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(input),
+    body: JSON.stringify({ ...input, sendEmail }),
   });
 
   const data = await readJsonResponse<{ error?: string }>(response);
 
   if (!response.ok) {
-    throw new Error(data.error ?? "Davet maili gönderilemedi.");
+    throw new Error(data.error ?? "Davet linki kaydedilemedi.");
   }
 }
 

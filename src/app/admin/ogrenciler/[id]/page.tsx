@@ -20,7 +20,7 @@ import { getClassGroupById } from "@/data/groups";
 import { getStaffById, instructorLabelForId } from "@/data/staff";
 import { formatLongDate, todayISO } from "@/lib/dates";
 import { inviteUrl, isInviteValid } from "@/lib/student-auth";
-import { sendInviteEmail } from "@/lib/invite-client";
+import { saveInviteLink, sendInviteEmail } from "@/lib/invite-client";
 import { DAY_LABELS, remainingLabel, postponeRightAdminLabel } from "@/lib/labels";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
@@ -171,6 +171,16 @@ export default function StudentDetailPage() {
                 onClick={async () => {
                   const link = inviteUrl(student.inviteToken!);
                   try {
+                    await saveInviteLink({
+                      name: student.name,
+                      email: student.email,
+                      inviteUrl: link,
+                      student,
+                      sessions: visibleSessions.filter(
+                        (session) => session.studentId === student.id,
+                      ),
+                      expiresAt: student.inviteExpiresAt ?? "",
+                    });
                     await navigator.clipboard.writeText(link);
                     setCopiedInvite(true);
                     window.setTimeout(() => setCopiedInvite(false), 2000);
