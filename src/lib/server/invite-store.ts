@@ -80,19 +80,15 @@ async function getBlobAdapter(): Promise<InviteBlobAdapter | null> {
 
         async listActivated() {
           const { blobs } = await store.list({ prefix: TOKEN_PREFIX });
-          const invites: StoredInvite[] = [];
+          const invites = await Promise.all(
+            blobs.map(async (item) =>
+              (await store.get(item.key, { type: "json" })) as StoredInvite | null,
+            ),
+          );
 
-          for (const item of blobs) {
-            const invite = (await store.get(item.key, {
-              type: "json",
-            })) as StoredInvite | null;
-
-            if (invite?.activatedAt && invite.password) {
-              invites.push(invite);
-            }
-          }
-
-          return invites;
+          return invites.filter(
+            (invite): invite is StoredInvite => Boolean(invite?.activatedAt && invite.password),
+          );
         },
       };
     } catch {
