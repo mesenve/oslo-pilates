@@ -41,12 +41,34 @@ export default function StudentDetailPage() {
     isSuperAdmin,
   } = useStudio();
   const router = useRouter();
+  const student = visibleStudents.find((item) => item.id === params.id);
   const [copiedInvite, setCopiedInvite] = useState(false);
   const [resendStatus, setResendStatus] = useState<"idle" | "sending" | "sent" | "error">(
     "idle",
   );
   const [resendError, setResendError] = useState<string | null>(null);
-  const student = visibleStudents.find((item) => item.id === params.id);
+  const [inviteAccount, setInviteAccount] = useState<{
+    exists: boolean;
+    activated: boolean;
+  } | null>(null);
+  useEffect(() => {
+    if (!student) {
+      setInviteAccount(null);
+      return;
+    }
+    let cancelled = false;
+    void fetch(`/api/invite/status?studentId=${encodeURIComponent(student.id)}`)
+      .then((response) => (response.ok ? response.json() : null))
+      .then((data) => {
+        if (!cancelled && data) setInviteAccount(data);
+      })
+      .catch(() => {
+        if (!cancelled) setInviteAccount(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [student?.id]);
   const mine = sessionsForStudent(student?.id ?? "", visibleSessions);
   const today = todayISO();
   const defaultDate =
@@ -156,12 +178,16 @@ export default function StudentDetailPage() {
         ) : null}
       </Card>
 
-      {student.accountStatus === "invited" ? (
+      {student.accountStatus === "invited" || inviteAccount?.activated === false ? (
         <Card className="space-y-3 p-4">
           <p className="text-sm font-medium text-amber-800">Davet bekliyor</p>
           <p className="text-sm text-muted">
-            Öğrenci henüz maildeki linkten şifresini oluşturmadı.
-            {!isInviteValid(student) ? " Davet süresi dolmuş olabilir." : ""}
+            {inviteAccount?.exists === false
+              ? "Bu öğrenci için henüz davet oluşturulmadı."
+              : "Öğrenci henüz maildeki linkten şifresini oluşturmadı."}
+            {student.inviteToken && !isInviteValid(student)
+              ? " Davet süresi dolmuş olabilir."
+              : ""}
           </p>
           <div className="flex flex-wrap gap-2">
             {student.inviteToken ? (
@@ -234,7 +260,9 @@ export default function StudentDetailPage() {
                 ? "Mail gönderiliyor…"
                 : resendStatus === "sent"
                   ? "Mail gönderildi"
-                  : "Davet mailini yeniden gönder"}
+                  : student.inviteToken
+                    ? "Davet mailini yeniden gönder"
+                    : "Davet mailini gönder"}
             </Button>
           </div>
           {resendStatus === "error" && resendError ? (

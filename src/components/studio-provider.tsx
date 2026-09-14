@@ -418,7 +418,6 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
       const student = current.students.find((item) => item.id === studentId);
       if (
         !student ||
-        student.accountStatus !== "invited" ||
         !canManageStudent(current.user, studentId, current.students)
       ) {
         return current;
@@ -440,6 +439,7 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
           item.id === studentId
             ? {
                 ...item,
+                accountStatus: "invited",
                 inviteToken: token,
                 inviteExpiresAt: expiresAt,
                 invitedAt,

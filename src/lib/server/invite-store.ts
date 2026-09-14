@@ -21,6 +21,7 @@ const STUDENT_INDEX_PREFIX = "student:";
 
 type InviteBlobAdapter = {
   getInvite: (token: string) => Promise<StoredInvite | null>;
+  getInviteByStudentId: (studentId: string) => Promise<StoredInvite | null>;
   saveInvite: (invite: StoredInvite) => Promise<void>;
   findActivatedByEmail: (email: string) => Promise<StoredInvite | null>;
   listActivated: () => Promise<StoredInvite[]>;
@@ -76,6 +77,20 @@ async function getBlobAdapter(): Promise<InviteBlobAdapter | null> {
                 invite.activatedAt,
             ) ?? null
           );
+        },
+
+        async getInviteByStudentId(studentId: string) {
+          try {
+            const token = await store.get(`${STUDENT_INDEX_PREFIX}${studentId}`, {
+              type: "text",
+            });
+            if (!token) return null;
+            return (await store.get(`${TOKEN_PREFIX}${token}`, {
+              type: "json",
+            })) as StoredInvite | null;
+          } catch {
+            return null;
+          }
         },
 
         async listActivated() {
@@ -185,6 +200,18 @@ export async function getInviteByToken(token: string) {
   }
 
   return getInviteFromFile(token);
+}
+
+export async function getInviteByStudentId(studentId: string) {
+  const blobs = await getBlobAdapter();
+  if (blobs) return blobs.getInviteByStudentId(studentId);
+
+  const store = await readFileStore();
+  return (
+    Object.values(store.invites).find(
+      (invite) => invite.student.id === studentId,
+    ) ?? null
+  );
 }
 
 export async function activateInvite(token: string, password: string) {
