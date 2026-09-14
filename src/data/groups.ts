@@ -84,6 +84,41 @@ export function getClassGroupById(id: string): ClassGroup | undefined {
   return getClassGroups().find((group) => group.id === id);
 }
 
+// İlk aktarımda bazı özel saatler yalnızca grup kimliğiyle kaydedilmişti.
+// Bu kayıtlara ait günleri ve saati yeniden tanıyarak, öğrenci formunda
+// mevcut programın kaybolmadan düzenlenebilmesini sağlarız.
+export function legacyGroupFromId(id: string): ClassGroup | undefined {
+  const match = id.match(/^([a-z-]+)-(\d{4,})$/);
+  if (!match) return undefined;
+
+  const dayById: Record<string, ClassGroup["days"][number]> = {
+    pzt: "monday",
+    sal: "tuesday",
+    car: "wednesday",
+    per: "thursday",
+    cum: "friday",
+    cmt: "saturday",
+    paz: "sunday",
+  };
+  const days = match[1].split("-").map((day) => dayById[day]);
+  if (!days.length || days.some((day) => !day)) return undefined;
+
+  const timeParts = match[2].match(/\d{4}/g);
+  if (!timeParts?.length || timeParts.join("") !== match[2]) return undefined;
+  const time = timeParts
+    .map((part) => `${part.slice(0, 2)}.${part.slice(2)}`)
+    .join(" / ");
+  const scheduleDays = days as ClassGroup["days"];
+
+  return {
+    id,
+    days: scheduleDays,
+    time,
+    capacity: 2,
+    label: groupLabelForSchedule(scheduleDays, time),
+  };
+}
+
 export function getClassGroupsForDay(day: ClassGroup["days"][number]): ClassGroup[] {
   return getClassGroups().filter((group) => group.days.includes(day));
 }

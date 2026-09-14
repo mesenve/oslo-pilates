@@ -6,7 +6,7 @@ import {
   getStaffById,
 } from "@/data/staff";
 import { buildSessionsForStudent, collectSessionDates } from "@/data/seed";
-import { getClassGroupById, setCustomGroups } from "@/data/groups";
+import { getClassGroupById, legacyGroupFromId, setCustomGroups } from "@/data/groups";
 import { studentsForUser, sessionsForUser, postponeRequestsForUser, canManageStudent, isStaffRole } from "@/lib/access";
 import { fetchAttendanceMarks, pushAttendanceMark } from "@/lib/attendance-client";
 import { mergeActivatedInvites, mergeAttendanceMarks } from "@/lib/attendance-sync";
@@ -127,8 +127,18 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
   );
 
   useEffect(() => {
-    setCustomGroups(state.customGroups ?? []);
-  }, [state.customGroups]);
+    const groups = [...(state.customGroups ?? [])];
+    const knownIds = new Set(groups.map((group) => group.id));
+    state.students.forEach((student) => {
+      if (knownIds.has(student.groupId) || getClassGroupById(student.groupId)) return;
+      const legacyGroup = legacyGroupFromId(student.groupId);
+      if (legacyGroup) {
+        groups.push(legacyGroup);
+        knownIds.add(legacyGroup.id);
+      }
+    });
+    setCustomGroups(groups);
+  }, [state.customGroups, state.students]);
 
   useEffect(() => {
     if (!ready) return;
