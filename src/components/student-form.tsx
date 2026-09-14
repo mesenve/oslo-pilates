@@ -296,12 +296,9 @@ export function StudentForm({
             ))}
           </div>
           <div className="mt-3 max-w-xs">
-            <InputField
-              label="Saat"
-              value={form.customTime.replace(".", ":")}
-              onChange={(value) => update("customTime", value.replace(":", "."))}
-              type="time"
-              required={isIrregularGroup(form.groupId) || form.customDays.length > 0}
+            <TimePickerField
+              value={form.customTime}
+              onChange={(value) => update("customTime", value)}
             />
           </div>
         </div>
@@ -358,6 +355,49 @@ function FormSection({
       <h2 className="font-serif text-xl">{title}</h2>
       {children}
     </Card>
+  );
+}
+
+function TimePickerField({
+  value,
+  onChange,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  const [rawHour = "", rawMinute = ""] = value.split(/[.:]/);
+  const hour = rawHour.padStart(2, "0");
+  const minute = rawMinute.padStart(2, "0");
+  const hours = Array.from({ length: 24 }, (_, index) => String(index).padStart(2, "0"));
+  const minutes = Array.from({ length: 12 }, (_, index) => String(index * 5).padStart(2, "0"));
+  const updateTime = (nextHour: string, nextMinute: string) => {
+    onChange(nextHour && nextMinute ? `${nextHour}.${nextMinute}` : "");
+  };
+
+  return (
+    <fieldset>
+      <legend className="text-sm text-muted">Saat</legend>
+      <div className="mt-1 grid grid-cols-2 gap-2">
+        <SelectField
+          label="Saat"
+          value={hours.includes(hour) ? hour : ""}
+          onChange={(nextHour) => updateTime(nextHour, minute)}
+          options={[
+            { value: "", label: "Saat seç" },
+            ...hours.map((item) => ({ value: item, label: item })),
+          ]}
+        />
+        <SelectField
+          label="Dakika"
+          value={minutes.includes(minute) ? minute : ""}
+          onChange={(nextMinute) => updateTime(hour, nextMinute)}
+          options={[
+            { value: "", label: "Dakika seç" },
+            ...minutes.map((item) => ({ value: item, label: item })),
+          ]}
+        />
+      </div>
+    </fieldset>
   );
 }
 
