@@ -19,7 +19,7 @@ export function GroupClassCard({
 }) {
   const [open, setOpen] = useState(false);
   const members = sortByName(students.filter((student) => student.groupId === group.id));
-  const time = (day && group.timeByDay?.[day]) || group.time;
+  const time = displayGroupTime(group, day);
   const daysLabel = group.days.map((item) => DAY_LABELS[item]).join(" · ");
   const spotsLeft = Math.max(0, group.capacity - members.length);
   const isFull = spotsLeft === 0;
@@ -92,4 +92,16 @@ export function GroupClassCard({
       ) : null}
     </Card>
   );
+}
+
+function displayGroupTime(group: ClassGroup, day: DayOfWeek | null) {
+  const perDayTime = day && group.timeByDay?.[day];
+  if (perDayTime) return perDayTime;
+
+  // Eski programlarda saat alanı "Pazartesi 12.00 / Salı 13.00" gibi
+  // kaydedilmiş olabilir. Kart başlığında gün adlarını değil, yalnızca
+  // saatleri gösteririz; günler alt satırda zaten yer alıyor.
+  const times = group.time.match(/\b\d{1,2}[.:]\d{2}\b/g);
+  if (!times?.length) return group.time;
+  return [...new Set(times)].join(" / ");
 }
