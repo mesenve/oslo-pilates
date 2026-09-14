@@ -21,6 +21,7 @@ export function GroupClassCard({
   const members = sortByName(students.filter((student) => student.groupId === group.id));
   const time = displayGroupTime(group, day);
   const daysLabel = group.days.map((item) => DAY_LABELS[item]).join(" · ");
+  const detailLabel = day ? `${DAY_LABELS[day]} ${time}` : group.label;
   const spotsLeft = Math.max(0, group.capacity - members.length);
   const isFull = spotsLeft === 0;
   const showSpots = members.length > 0;
@@ -70,7 +71,7 @@ export function GroupClassCard({
       {open ? (
         <div className="border-t border-border/70 bg-surface-muted/25 px-4 py-3">
           <p className="mb-2 text-xs font-medium uppercase tracking-[0.12em] text-muted">
-            {group.label}
+            {detailLabel}
           </p>
           {members.length === 0 ? (
             <p className="text-sm text-muted">Bu grupta kayıtlı öğrenci yok.</p>
@@ -97,6 +98,13 @@ export function GroupClassCard({
 function displayGroupTime(group: ClassGroup, day: DayOfWeek | null) {
   const perDayTime = day && group.timeByDay?.[day];
   if (perDayTime) return perDayTime;
+
+  if (day) {
+    const dayTime = group.time.match(
+      new RegExp(`${DAY_LABELS[day]}\\s+(\\d{1,2}[.:]\\d{2})`, "i"),
+    );
+    if (dayTime?.[1]) return dayTime[1];
+  }
 
   // Eski programlarda saat alanı "Pazartesi 12.00 / Salı 13.00" gibi
   // kaydedilmiş olabilir. Kart başlığında gün adlarını değil, yalnızca
