@@ -12,7 +12,6 @@ import {
   getClassGroupById,
   getGroupSelectOptions,
   isIrregularGroup,
-  NEW_GROUP_ID,
   groupIdForSchedule,
   groupLabelForSchedule,
 } from "@/data/groups";
@@ -75,7 +74,7 @@ export function StudentForm({
       const wasIrregular = isIrregularGroup(current.groupId);
       const isNowIrregular = isIrregularGroup(groupId);
       const groupDays = getClassGroupById(groupId)?.days ?? [];
-      if (!isNowIrregular && groupId !== NEW_GROUP_ID) {
+      if (!isNowIrregular) {
         // Hazır bir grup seçildiğinde öğrencinin programı doğrudan grubun
         // gün ve saatini kullanır; bunu özel program alanına kopyalamayız.
         return {
@@ -119,9 +118,8 @@ export function StudentForm({
       return;
     }
     const isIrregular = isIrregularGroup(form.groupId);
-    const isNewGroup = form.groupId === NEW_GROUP_ID;
-    if ((isIrregular || isNewGroup) && (!form.customDays.length || !form.customTime)) {
-      setError(isNewGroup ? "Yeni grup için gün ve saat gerekli." : "Düzensiz öğrenci için gün ve saat gerekli.");
+    if (isIrregular && (!form.customDays.length || !form.customTime)) {
+      setError("Özel program için gün ve saat gerekli.");
       return;
     }
     if (form.customDays.length && !form.customTime) {
@@ -132,7 +130,9 @@ export function StudentForm({
       setError("E-posta gerekli. Davet maili gönderilecek.");
       return;
     }
-    const newGroup: ClassGroup | undefined = isNewGroup ? {
+    // Düzensiz öğrenciye girilen özel program, kayıtla birlikte kalıcı bir
+    // grup olur ve sonraki öğrenci kayıtlarında normal listede görünür.
+    const newGroup: ClassGroup | undefined = isIrregular ? {
       id: groupIdForSchedule(form.customDays, form.customTime),
       days: form.customDays,
       time: form.customTime,
@@ -267,14 +267,14 @@ export function StudentForm({
         </div>
         <div className="rounded-2xl border border-border/70 bg-surface-muted/40 p-4">
           <p className="text-sm font-medium">
-            {form.groupId === NEW_GROUP_ID
-              ? "Yeni grup bilgisi (zorunlu)"
-              : isIrregularGroup(form.groupId)
-                ? "Özel program (zorunlu)"
-                : "Özel program (isteğe bağlı)"}
+            {isIrregularGroup(form.groupId)
+              ? "Özel program (zorunlu)"
+              : "Özel program (isteğe bağlı)"}
           </p>
           <p className="mt-1 text-xs text-muted">
-            Doldurulursa öğrenci takvimi bu gün ve saate göre oluşturulur.
+            {isIrregularGroup(form.groupId)
+              ? "Kaydedildiğinde bu gün ve saat grup listesine eklenir."
+              : "Doldurulursa öğrenci takvimi bu gün ve saate göre oluşturulur."}
           </p>
           <div className="mt-3 flex flex-wrap gap-2">
             {WEEKDAYS.map((day) => (
@@ -298,7 +298,7 @@ export function StudentForm({
               value={form.customTime.replace(".", ":")}
               onChange={(value) => update("customTime", value.replace(":", "."))}
               type="time"
-              required={isIrregularGroup(form.groupId) || form.groupId === NEW_GROUP_ID || form.customDays.length > 0}
+              required={isIrregularGroup(form.groupId) || form.customDays.length > 0}
             />
           </div>
         </div>

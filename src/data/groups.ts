@@ -1,7 +1,6 @@
 import type { ClassGroup } from "@/types/studio";
 
 export const IRREGULAR_GROUP_ID = "duzensiz";
-export const NEW_GROUP_ID = "yeni-grup";
 let customGroups: ClassGroup[] = [];
 
 const IRREGULAR_GROUP: ClassGroup = {
@@ -49,7 +48,6 @@ export function getGroupSelectOptions(): {
       label: IRREGULAR_GROUP.label,
       separatorBefore: true,
     },
-    { value: NEW_GROUP_ID, label: "+ Yeni grup oluştur", separatorBefore: true },
   ];
 }
 
