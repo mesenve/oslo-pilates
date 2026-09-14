@@ -26,7 +26,11 @@ type SnapshotSession = { studentId: string; groupId: string };
 
 function normalizeCustomScheduleGroups(snapshot: Record<string, unknown>) {
   const students = (snapshot.students ?? []) as SnapshotStudent[];
-  const customGroups = (snapshot.customGroups ?? []) as ClassGroup[];
+  const customGroups = ((snapshot.customGroups ?? []) as ClassGroup[]).filter((group) => {
+    const time = group.time?.trim();
+    return group.days.length > 0 && Boolean(time) && time !== "Belirtilmedi" && time !== "—";
+  });
+  const originalCustomGroupCount = ((snapshot.customGroups ?? []) as ClassGroup[]).length;
   const groups = new Map(customGroups.map((group) => [group.id, group]));
   const replacementGroupIds = new Map<string, string>();
 
@@ -50,8 +54,6 @@ function normalizeCustomScheduleGroups(snapshot: Record<string, unknown>) {
     return student.groupId === groupId ? student : { ...student, groupId };
   });
 
-  if (!replacementGroupIds.size) return { snapshot, changed: false };
-
   const normalizedSessions = ((snapshot.sessions ?? []) as SnapshotSession[]).map(
     (session) => {
       const groupId = replacementGroupIds.get(session.studentId);
@@ -63,7 +65,7 @@ function normalizeCustomScheduleGroups(snapshot: Record<string, unknown>) {
     normalizedSessions.some(
       (session, index) => session !== ((snapshot.sessions ?? []) as SnapshotSession[])[index],
     ) ||
-    groups.size !== customGroups.length;
+    groups.size !== originalCustomGroupCount;
 
   return {
     changed,

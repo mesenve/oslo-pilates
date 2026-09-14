@@ -16,14 +16,21 @@ export function isIrregularGroup(groupId: string) {
 }
 
 export function getClassGroups(): ClassGroup[] {
-  return [...CLASS_GROUPS, ...customGroups].map((group) => ({
+  return [...CLASS_GROUPS, ...customGroups.filter(hasUsableSchedule)].map((group) => ({
     ...group,
     label: readableGroupLabel(group),
   }));
 }
 
 export function setCustomGroups(groups: ClassGroup[]) {
-  customGroups = groups;
+  customGroups = groups.filter(hasUsableSchedule);
+}
+
+// Eski verilerde gün seçilip saat boş bırakılmış özel gruplar bulunabiliyor.
+// Bunlar gerçek bir ders programı olmadığı için seçim listesinde gösterilmez.
+function hasUsableSchedule(group: ClassGroup) {
+  const time = group.time?.trim();
+  return group.days.length > 0 && Boolean(time) && time !== "Belirtilmedi" && time !== "—";
 }
 
 export function groupIdForSchedule(days: ClassGroup["days"], time: string) {
