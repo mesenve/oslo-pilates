@@ -5,6 +5,7 @@ import { CustomScrollArea } from "@/components/custom-scroll-area";
 import { Card } from "@/components/ui";
 import { getInstructors } from "@/data/staff";
 import { sortByName } from "@/lib/alphabet";
+import { isStudentAssignedToInstructor } from "@/lib/access";
 import type { Student } from "@/types/studio";
 import Link from "next/link";
 import { useEffect, useState } from "react";
@@ -21,7 +22,7 @@ export function TeamPanel({ students }: { students: Student[] }) {
       <div className="grid gap-3 sm:grid-cols-2">
         {instructors.map((instructor) => {
           const members = students.filter(
-            (student) => student.instructorId === instructor.id,
+            (student) => isStudentAssignedToInstructor(student, instructor.id),
           );
           return (
             <InstructorTeamCard

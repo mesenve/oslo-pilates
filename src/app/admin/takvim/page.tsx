@@ -16,12 +16,15 @@ import {
 import { useMemo, useState } from "react";
 
 export default function CalendarPage() {
-  const { visibleStudents } = useStudio();
+  const { visibleStudents, visibleSessions } = useStudio();
   const today = todayISO();
   const todayDay = weekdayFromISO(today);
   const [selectedDate, setSelectedDate] = useState(today);
   const day = weekdayFromISO(selectedDate);
   const groups = day ? getClassGroupsForDay(day) : [];
+  const specialProgramSessions = visibleSessions.filter(
+    (session) => session.date === selectedDate && session.groupId === "duzensiz",
+  );
 
   const marks = useMemo(() => {
     const allGroups = getClassGroups();
@@ -56,7 +59,7 @@ export default function CalendarPage() {
         <p className="text-xs text-muted">Bugünün programı</p>
       ) : null}
 
-      {groups.length === 0 ? (
+      {groups.length === 0 && specialProgramSessions.length === 0 ? (
         <EmptyState>Bu günde grup dersi yok.</EmptyState>
       ) : (
         <div className="flex flex-col gap-3">
@@ -67,7 +70,18 @@ export default function CalendarPage() {
               day={day}
               students={visibleStudents}
             />
-          ))}
+            ))}
+          {specialProgramSessions.length > 0 ? (
+            <a
+              href={`/admin/ders/${selectedDate}/duzensiz`}
+              className="rounded-2xl border border-border bg-white p-4 transition-colors hover:bg-surface-muted"
+            >
+              <p className="font-serif text-2xl">Özel program</p>
+              <p className="mt-1 text-sm text-muted">
+                {specialProgramSessions.length} öğrenci · Gün ve saatleri farklı
+              </p>
+            </a>
+          ) : null}
         </div>
       )}
     </div>

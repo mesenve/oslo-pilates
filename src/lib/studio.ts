@@ -24,7 +24,18 @@ export function getAvailabilityWhatsAppUrl(slots: { time: string; spots: number 
 }
 
 export const WELCOME_WHATSAPP_TEXT =
-  "Oslo'ya hoşgeldin! Stüdyomuzla ilgili ufak bir bilgilendirme metni.";
+  `Oslo’ya hoş geldiniz, aramıza katıldığınız için çok mutluyuz :)
+
+Size stüdyoyu rahatça kullanmanız için birkaç küçük not bırakıyoruz:
+
+Ders gününüz ve saatiniz sizinle birlikte netleşiyor; o yüzden iade veya saat değişikliği yapamıyoruz.
+Haftada 2 gün geliyorsanız 8’li, 3 gün geliyorsanız 12’li paket alıyoruz.
+Her pakette 1 kez erteleme hakkınız var. Gelemeyecekseniz lütfen en az 1 gün önce yazın; geç kalırsa o dersi telafi edemiyoruz.
+Ertelediğiniz dersi bir daha erteleyemiyoruz, paket bitmeden kullanmanız yeterli.
+Ödemeyi kayıt sırasında alıyoruz.
+Derse 1 havlu getirmenizi rica ederiz. Paketinizde 1 ders kalınca devam edip etmeyeceğinizi de bize söylemeniz çok işimize yarar.
+
+Sizi stüdyoda görmek için sabırsızlanıyoruz. Sevgiler, Oslo Pilates Co.`;
 
 export function toWhatsAppDigits(phone: string) {
   const digits = phone.replace(/\D/g, "");

@@ -31,6 +31,9 @@ export default function AdminHomePage() {
   const groupsWithStudents = todayGroups.filter((group) =>
     visibleStudents.some((student) => student.groupId === group.id),
   );
+  const specialProgramSessions = visibleSessions.filter(
+    (session) => session.date === today && session.groupId === "duzensiz",
+  );
   const teamCount = getInstructors().length;
 
   return (
@@ -75,7 +78,7 @@ export default function AdminHomePage() {
             Takvime git →
           </Link>
         </div>
-        {groupsWithStudents.length === 0 ? (
+        {groupsWithStudents.length === 0 && specialProgramSessions.length === 0 ? (
           <p className="text-sm text-muted">Bugün dersin yok.</p>
         ) : (
           <div className="flex flex-col gap-3">
@@ -87,6 +90,19 @@ export default function AdminHomePage() {
                 students={visibleStudents}
               />
             ))}
+            {specialProgramSessions.length > 0 ? (
+              <Link href={`/admin/ders/${today}/duzensiz`}>
+                <Card className="flex items-center justify-between gap-4 p-4 transition-colors hover:bg-white/40">
+                  <div>
+                    <p className="font-serif text-2xl">Özel program</p>
+                    <p className="mt-1 text-sm text-muted">
+                      {specialProgramSessions.length} öğrenci · Gün ve saatleri farklı
+                    </p>
+                  </div>
+                  <span className="text-sm font-medium text-accent">Yoklama →</span>
+                </Card>
+              </Link>
+            ) : null}
           </div>
         )}
       </section>

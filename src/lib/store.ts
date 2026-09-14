@@ -5,11 +5,13 @@ import { hydrateStaffPasswords } from "@/lib/staff-auth";
 import { hydrateStudentPasswords } from "@/lib/student-auth";
 import type { AuthUser, Student, StudioState } from "@/types/studio";
 
-export const STORAGE_KEY = "oslo-pilates-demo-v11";
+// v13: Eski tarayıcı önbelleğinin güncel yerel stüdyo verisini geri yazmasını önler.
+export const STORAGE_KEY = "oslo-pilates-demo-v13";
 
 let memory: StudioState = createSeedState();
 const serverSnapshot = memory;
 let hydrated = false;
+let studioSnapshotPersistenceEnabled = false;
 const listeners = new Set<() => void>();
 
 function readStorage(): StudioState {
@@ -61,8 +63,25 @@ export function setStudioState(
   if (typeof window !== "undefined") {
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(memory));
     hydrated = true;
+    if (studioSnapshotPersistenceEnabled) {
+      const snapshot = {
+        students: memory.students,
+        archivedStudents: memory.archivedStudents,
+        sessions: memory.sessions,
+        postponeRequests: memory.postponeRequests,
+      };
+      void fetch("/api/studio", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ snapshot }),
+      });
+    }
   }
   listeners.forEach((listener) => listener());
+}
+
+export function enableStudioSnapshotPersistence() {
+  studioSnapshotPersistenceEnabled = true;
 }
 
 function hydrateStudent(student: Student): Student {

@@ -10,7 +10,13 @@ import {
 } from "@/lib/dates";
 import { DEFAULT_STAFF_PASSWORDS } from "@/lib/staff-auth";
 import { DEFAULT_STUDENT_PASSWORDS } from "@/lib/student-auth";
-import type { PostponeRequest, Session, Student, StudioState } from "@/types/studio";
+import type {
+  DayOfWeek,
+  PostponeRequest,
+  Session,
+  Student,
+  StudioState,
+} from "@/types/studio";
 
 const WEEK_COUNT = 4;
 
@@ -18,15 +24,17 @@ export function collectSessionDates(
   startDateISO: string,
   groupId: string,
   totalSessions: number,
+  customDays?: DayOfWeek[],
 ): string[] {
   const group = getClassGroupById(groupId);
-  if (!group || group.days.length === 0) return [];
+  const days = customDays?.length ? customDays : group?.days ?? [];
+  if (days.length === 0) return [];
 
   const startMonday = startOfWeekMonday(parseISODate(startDateISO));
   const dates: string[] = [];
   for (let week = 0; dates.length < totalSessions && week < 52; week += 1) {
     const monday = addDays(startMonday, 7 * week);
-    for (const day of group.days) {
+    for (const day of days) {
       const iso = toISODate(dateForWeekDay(monday, day));
       if (iso < startDateISO) continue;
       dates.push(iso);
@@ -41,7 +49,10 @@ export function buildSessionsForStudent(
   options?: { fromToday?: boolean; fromPackageStart?: boolean },
 ): Session[] {
   const group = getClassGroupById(student.groupId);
-  if (!group || group.days.length === 0) return [];
+  const days = student.package.customSchedule?.days?.length
+    ? student.package.customSchedule.days
+    : group?.days ?? [];
+  if (days.length === 0) return [];
 
   const currentMonday = startOfWeekMonday();
   const today = todayISO();
@@ -51,13 +62,14 @@ export function buildSessionsForStudent(
       student.package.startDate,
       student.groupId,
       student.package.totalSessions,
+      days,
     );
     return dates.map((date) => ({
       id: `${student.id}-${date}`,
       studentId: student.id,
       groupId: student.groupId,
       date,
-      status: "upcoming" as const,
+      status: date < today ? ("attended" as const) : ("upcoming" as const),
     }));
   }
 
@@ -65,7 +77,7 @@ export function buildSessionsForStudent(
     const dates: string[] = [];
     for (let week = 0; dates.length < student.package.totalSessions && week < 40; week += 1) {
       const monday = addDays(currentMonday, 7 * week);
-      for (const day of group.days) {
+      for (const day of days) {
         const iso = toISODate(dateForWeekDay(monday, day));
         if (iso < today) continue;
         dates.push(iso);
@@ -84,7 +96,7 @@ export function buildSessionsForStudent(
   const dates: string[] = [];
   for (let week = WEEK_COUNT - 1; week >= 0; week -= 1) {
     const monday = addDays(currentMonday, -7 * week);
-    for (const day of group.days) {
+    for (const day of days) {
       dates.push(toISODate(dateForWeekDay(monday, day)));
     }
   }

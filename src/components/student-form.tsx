@@ -8,17 +8,31 @@ import {
   SelectField,
   TextAreaField,
 } from "@/components/form-fields";
-import { getGroupSelectOptions } from "@/data/groups";
+import {
+  getClassGroupById,
+  getGroupSelectOptions,
+  isIrregularGroup,
+} from "@/data/groups";
 import {
   inferPackageType,
   PACKAGE_TYPE_LABELS,
   PACKAGE_TYPES,
   sessionOptionsForPackage,
 } from "@/data/packages";
-import { DEFAULT_INSTRUCTOR_ID, getAssignableInstructors } from "@/data/staff";
-import { PAYMENT_LABELS } from "@/lib/labels";
+import {
+  DEFAULT_INSTRUCTOR_ID,
+  getAssignableInstructors,
+  instructorLabelForId,
+} from "@/data/staff";
+import { DAY_SHORT, PAYMENT_LABELS, WEEKDAYS } from "@/lib/labels";
 import { todayISO } from "@/lib/dates";
-import type { NewStudentInput, PackageType, PaymentStatus, Student } from "@/types/studio";
+import type {
+  DayOfWeek,
+  NewStudentInput,
+  PackageType,
+  PaymentStatus,
+  Student,
+} from "@/types/studio";
 import { useState } from "react";
 
 export function StudentForm({
@@ -52,10 +66,51 @@ export function StudentForm({
     setError(null);
   }
 
+  function selectGroup(groupId: string) {
+    setForm((current) => {
+      const wasIrregular = isIrregularGroup(current.groupId);
+      const isNowIrregular = isIrregularGroup(groupId);
+      const groupDays = getClassGroupById(groupId)?.days ?? [];
+      return {
+        ...current,
+        groupId,
+        customDays:
+          isNowIrregular && current.customDays.length === 0 && !wasIrregular
+            ? [...groupDays]
+            : current.customDays,
+        customTime:
+          current.customTime || (isNowIrregular || wasIrregular ? "" : getClassGroupById(groupId)?.time ?? ""),
+      };
+    });
+    setError(null);
+  }
+
+  function toggleCustomDay(day: DayOfWeek) {
+    setForm((current) => ({
+      ...current,
+      customDays: current.customDays.includes(day)
+        ? current.customDays.filter((item) => item !== day)
+        : [...current.customDays, day],
+    }));
+    setError(null);
+  }
+
   function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
     if (!form.groupId) {
       setError("Gün ve saat seç.");
+      return;
+    }
+    const isIrregular = isIrregularGroup(form.groupId);
+    if (isIrregular && (!form.customDays.length || !form.customTime)) {
+      setError("Düzensiz öğrenci için gün ve saat gerekli.");
+      return;
+    }
+    if (
+      (!form.customDays.length && form.customTime) ||
+      (form.customDays.length && !form.customTime)
+    ) {
+      setError("Özel programda gün ve saat birlikte girilmeli.");
       return;
     }
     if (resolvedMode === "create" && !form.email.trim()) {
@@ -135,8 +190,7 @@ export function StudentForm({
             <div>
               <p className="text-sm text-muted">Eğitmen</p>
               <p className="mt-1 rounded-xl border border-border bg-white px-3 py-2.5 text-sm">
-                {getAssignableInstructors().find((item) => item.id === form.instructorId)?.name ??
-                  "—"}
+                {instructorLabelForId(form.instructorId)}
               </p>
             </div>
           )}
@@ -179,7 +233,7 @@ export function StudentForm({
           <SelectField
             label="Gün ve saat"
             value={form.groupId}
-            onChange={(value) => update("groupId", value)}
+            onChange={selectGroup}
             options={groups}
           />
           <DateField
@@ -188,6 +242,41 @@ export function StudentForm({
             onChange={(value) => update("startDate", value)}
             required
           />
+        </div>
+        <div className="rounded-2xl border border-border/70 bg-surface-muted/40 p-4">
+          <p className="text-sm font-medium">
+            {isIrregularGroup(form.groupId)
+              ? "Özel program (zorunlu)"
+              : "Özel program (isteğe bağlı)"}
+          </p>
+          <p className="mt-1 text-xs text-muted">
+            Doldurulursa öğrenci takvimi bu gün ve saate göre oluşturulur.
+          </p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            {WEEKDAYS.map((day) => (
+              <button
+                key={day}
+                type="button"
+                onClick={() => toggleCustomDay(day)}
+                className={`rounded-full px-3 py-1.5 text-sm ${
+                  form.customDays.includes(day)
+                    ? "bg-accent text-white"
+                    : "border border-border bg-white text-muted"
+                }`}
+              >
+                {DAY_SHORT[day]}
+              </button>
+            ))}
+          </div>
+          <div className="mt-3 max-w-xs">
+            <InputField
+              label="Saat"
+              value={form.customTime.replace(".", ":")}
+              onChange={(value) => update("customTime", value.replace(":", "."))}
+              type="time"
+              required={isIrregularGroup(form.groupId) || form.customDays.length > 0}
+            />
+          </div>
         </div>
       </FormSection>
 
@@ -268,6 +357,8 @@ function formFromStudent(
     note: student?.note ?? "",
     monthlyPostponeLimit: student ? String(student.monthlyPostponeLimit) : "",
     startDate: student?.package.startDate ?? todayISO(),
+    customDays: student?.package.customSchedule?.days ?? [],
+    customTime: student?.package.customSchedule?.time ?? "",
   };
 }
 
@@ -294,5 +385,7 @@ function toInput(
       ? Math.max(0, Math.round(Number(form.monthlyPostponeLimit)))
       : 1,
     startDate: form.startDate || todayISO(),
+    customDays: form.customDays,
+    customTime: form.customTime,
   };
 }

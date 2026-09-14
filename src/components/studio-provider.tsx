@@ -30,7 +30,9 @@ import {
   fetchActivatedInvites,
   loginStudentAccount,
 } from "@/lib/invite-client";
+import { fetchStudioSnapshot } from "@/lib/studio-client";
 import {
+  enableStudioSnapshotPersistence,
   getServerStudioSnapshot,
   getStudioSnapshot,
   setStudioState,
@@ -98,7 +100,7 @@ type StudioContextValue = {
   approveRequest: (requestId: string) => void;
   markSessionByInstructor: (
     sessionId: string,
-    outcome: "attended" | "postponed" | "missed",
+    outcome: "attended" | "postponed" | "missed" | "upcoming",
   ) => void;
   addStudent: (input: NewStudentInput) => StudentActionResult;
   archiveStudent: (studentId: string) => void;
@@ -147,11 +149,38 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
             ? fetchActivatedInvites()
             : Promise.resolve([]);
 
-        const [marks, invites] = await Promise.all([marksPromise, invitesPromise]);
-        if (cancelled || (marks.length === 0 && invites.length === 0)) return;
+        const studioPromise =
+          user.role === "student"
+            ? fetchStudioSnapshot({
+                studentId: user.id,
+                includeBlockedEmails: false,
+              })
+            : isStaffRole(user.role)
+              ? fetchStudioSnapshot()
+              : Promise.resolve(null);
+
+        const [marks, invites, remoteStudio] = await Promise.all([
+          marksPromise,
+          invitesPromise,
+          studioPromise,
+        ]);
+        if (
+          cancelled ||
+          (marks.length === 0 && invites.length === 0 && !remoteStudio)
+        ) {
+          return;
+        }
 
         setStudioState((current) => {
-          let next = current;
+          let next = remoteStudio
+            ? {
+                ...current,
+                ...remoteStudio,
+                user: current.user,
+                staffPasswords: current.staffPasswords,
+                studentPasswords: current.studentPasswords,
+              }
+            : current;
           if (invites.length > 0) {
             next = mergeActivatedInvites(next, invites);
           }
@@ -163,6 +192,7 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
           }
           return next;
         });
+        if (remoteStudio) enableStudioSnapshotPersistence();
       } catch {
         // Ağ hatasında yerel durum korunur.
       }
@@ -631,22 +661,16 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const markSessionByInstructor = useCallback(
-    (sessionId: string, outcome: "attended" | "postponed" | "missed") => {
+    (
+      sessionId: string,
+      outcome: "attended" | "postponed" | "missed" | "upcoming",
+    ) => {
       setStudioState((current) => {
         const session = current.sessions.find((item) => item.id === sessionId);
         if (!session) return current;
         if (!canManageStudent(current.user, session.studentId, current.students)) {
           return current;
         }
-        const status = session.status;
-        if (
-          status !== "upcoming" &&
-          status !== "attend_pending" &&
-          status !== "postpone_pending"
-        ) {
-          return current;
-        }
-
         if (outcome === "attended") {
           return {
             ...current,
@@ -654,7 +678,7 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
               item.id === sessionId ? { ...item, status: "attended" } : item,
             ),
             postponeRequests: current.postponeRequests.map((request) =>
-              request.sessionId === sessionId && request.status === "pending"
+              request.sessionId === sessionId && request.status !== "rejected"
                 ? { ...request, status: "rejected" }
                 : request,
             ),
@@ -668,7 +692,21 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
               item.id === sessionId ? { ...item, status: "missed" } : item,
             ),
             postponeRequests: current.postponeRequests.map((request) =>
-              request.sessionId === sessionId && request.status === "pending"
+              request.sessionId === sessionId && request.status !== "rejected"
+                ? { ...request, status: "rejected" }
+                : request,
+            ),
+          };
+        }
+
+        if (outcome === "upcoming") {
+          return {
+            ...current,
+            sessions: current.sessions.map((item) =>
+              item.id === sessionId ? { ...item, status: "upcoming" } : item,
+            ),
+            postponeRequests: current.postponeRequests.map((request) =>
+              request.sessionId === sessionId && request.status !== "rejected"
                 ? { ...request, status: "rejected" }
                 : request,
             ),
@@ -839,14 +877,15 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
           error = "Öğrenci bulunamadı.";
           return current;
         }
-        if (
-          current.user?.role === "instructor" &&
-          previous.instructorId !== current.user.id
-        ) {
+        if (!canManageStudent(current.user, studentId, current.students)) {
           error = "Bu öğrenci sana atanmamış.";
           return current;
         }
-        const normalized = normalizeStudentInput(input, current.user);
+        const normalizedBase = normalizeStudentInput(input, current.user);
+        const normalized =
+          current.user?.role === "instructor"
+            ? { ...normalizedBase, instructorId: previous.instructorId }
+            : normalizedBase;
         const email = normalized.email.trim().toLowerCase();
         if (!email) {
           error = "E-posta gerekli.";
@@ -1087,7 +1126,12 @@ function studentFromInput(
     startDate,
     input.groupId,
     input.totalSessions,
+    input.customDays,
   );
+  const customSchedule =
+    input.customDays?.length && input.customTime?.trim()
+      ? { days: input.customDays, time: input.customTime.trim() }
+      : undefined;
   const endDate =
     sessionDates.at(-1) ??
     previous?.package.endDate ??
@@ -1116,6 +1160,7 @@ function studentFromInput(
       endDate,
       paymentStatus: input.paymentStatus,
       isLastWeek: previous?.package.isLastWeek ?? false,
+      customSchedule,
     },
     monthlyPostponeLimit: Number.isFinite(input.monthlyPostponeLimit)
       ? Math.max(0, Math.round(input.monthlyPostponeLimit))

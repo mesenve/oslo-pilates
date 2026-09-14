@@ -40,6 +40,10 @@ export type StudentPackage = {
   endDate: string;
   paymentStatus: PaymentStatus;
   isLastWeek: boolean;
+  customSchedule?: {
+    days: DayOfWeek[];
+    time: string;
+  };
 };
 
 export type ClassGroup = {
@@ -120,6 +124,8 @@ export type NewStudentInput = {
   note: string;
   monthlyPostponeLimit: number;
   startDate: string;
+  customDays?: DayOfWeek[];
+  customTime?: string;
 };
 
 export type StudioState = {

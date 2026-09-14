@@ -1,7 +1,12 @@
 "use client";
 
 import { ClassCalendar } from "@/components/class-calendar";
-import { ChevronLeftIcon, PencilIcon, TrashIcon } from "@/components/icons";
+import {
+  ChevronDownIcon,
+  ChevronLeftIcon,
+  PencilIcon,
+  TrashIcon,
+} from "@/components/icons";
 import { Button, Card, ConfirmDialog, EmptyState, PaymentBadge, RequestBadge, SessionBadge } from "@/components/ui";
 import { useStudio } from "@/components/studio-provider";
 import {
@@ -11,7 +16,7 @@ import {
   sessionsForStudent,
 } from "@/data/accessors";
 import { getClassGroupById } from "@/data/groups";
-import { getStaffById } from "@/data/staff";
+import { getStaffById, instructorLabelForId } from "@/data/staff";
 import { formatLongDate, todayISO } from "@/lib/dates";
 import { inviteUrl, isInviteValid } from "@/lib/student-auth";
 import { sendInviteEmail } from "@/lib/invite-client";
@@ -28,6 +33,7 @@ export default function StudentDetailPage() {
     remainingFor,
     visiblePostponeRequests,
     approveRequest,
+    markSessionByInstructor,
     archiveStudent,
     resendStudentInvite,
     isSuperAdmin,
@@ -106,7 +112,7 @@ export default function StudentDetailPage() {
         <p className="mt-1 text-sm text-muted">
           {group?.label}
           {getStaffById(student.instructorId)
-            ? ` · Eğitmen: ${getStaffById(student.instructorId)?.name}`
+            ? ` · Eğitmen: ${instructorLabelForId(student.instructorId)}`
             : ""}
         </p>
       </header>
@@ -294,18 +300,36 @@ export default function StudentDetailPage() {
         <h2 className="font-serif text-xl">Tüm dersler</h2>
         {mine.map((session) => {
           const status = effectiveSessionStatus(session);
+          const canChangeStatus = session.date < today || status !== "upcoming";
+          const pickerStatus =
+            status === "attend_pending"
+              ? "attended"
+              : status === "postpone_pending"
+                ? "postponed"
+                : status;
           return (
-            <button
+            <div
               key={session.id}
-              type="button"
-              onClick={() => setSelectedDate(session.date)}
               className="flex w-full items-center justify-between rounded-2xl bg-white/70 px-3 py-3 text-left"
             >
-              <span className="text-sm capitalize">
+              <button
+                type="button"
+                onClick={() => setSelectedDate(session.date)}
+                className="min-w-0 flex-1 text-left text-sm capitalize"
+              >
                 {formatLongDate(session.date)}
-              </span>
-              <SessionBadge status={status} />
-            </button>
+              </button>
+              {canChangeStatus ? (
+                <AttendanceStatusPicker
+                  status={pickerStatus as "attended" | "postponed" | "missed"}
+                  onChange={(nextStatus) =>
+                    markSessionByInstructor(session.id, nextStatus)
+                  }
+                />
+              ) : (
+                <SessionBadge status={status} />
+              )}
+            </div>
           );
         })}
       </section>
@@ -321,6 +345,68 @@ export default function StudentDetailPage() {
             router.replace("/admin/arsiv");
           }}
         />
+      ) : null}
+    </div>
+  );
+}
+
+function AttendanceStatusPicker({
+  status,
+  onChange,
+}: {
+  status: "attended" | "postponed" | "missed";
+  onChange: (status: "attended" | "postponed" | "missed") => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const options: Array<{
+    value: "attended" | "postponed" | "missed";
+    label: string;
+    className: string;
+  }> = [
+    {
+      value: "attended",
+      label: "Geldi",
+      className: "border-emerald-100 bg-emerald-50 text-emerald-800",
+    },
+    {
+      value: "postponed",
+      label: "Erteleme",
+      className: "border-amber-100 bg-amber-50 text-amber-800",
+    },
+    {
+      value: "missed",
+      label: "Yandı",
+      className: "border-red-100 bg-red-50 text-red-700",
+    },
+  ];
+  const current = options.find((option) => option.value === status) ?? options[0];
+
+  return (
+    <div className="relative ml-3 shrink-0">
+      <button
+        type="button"
+        onClick={() => setOpen((currentOpen) => !currentOpen)}
+        className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-medium shadow-sm transition-colors hover:brightness-95 ${current.className}`}
+      >
+        {current.label}
+        <ChevronDownIcon className={`h-3 w-3 transition-transform ${open ? "rotate-180" : ""}`} />
+      </button>
+      {open ? (
+        <div className="absolute right-0 z-20 mt-2 w-36 rounded-2xl border border-border bg-white p-1.5 shadow-[0_12px_28px_rgba(194,24,91,0.16)]">
+          {options.map((option) => (
+            <button
+              key={option.value}
+              type="button"
+              onClick={() => {
+                onChange(option.value);
+                setOpen(false);
+              }}
+              className="w-full rounded-xl px-3 py-2 text-left text-sm font-medium text-foreground transition-colors hover:bg-surface-muted"
+            >
+              {option.label}
+            </button>
+          ))}
+        </div>
       ) : null}
     </div>
   );

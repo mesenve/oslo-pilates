@@ -57,7 +57,7 @@ export default function InstructorLessonPage() {
           {formatLongDate(date)}
         </h1>
         <p className="mt-1 text-sm text-muted">
-          {group.time} · {group.label}
+          {groupId === "duzensiz" ? "Özel program" : `${group.time} · ${group.label}`}
         </p>
       </header>
 
@@ -67,11 +67,10 @@ export default function InstructorLessonPage() {
         <div className="space-y-3">
           {sessions.map((session) => {
             const status = effectiveSessionStatus(session);
-            const locked =
-              status === "attended" ||
-              status === "missed" ||
-              status === "postponed";
             const pendingPostpone = status === "postpone_pending";
+            const student = visibleStudents.find((item) => item.id === session.studentId);
+            const sessionTime =
+              student?.package.customSchedule?.time ?? group.time;
             return (
               <Card key={session.id} className="space-y-3 p-4">
                 <div className="flex items-center justify-between gap-3">
@@ -80,6 +79,7 @@ export default function InstructorLessonPage() {
                   </p>
                   <SessionBadge status={status} />
                 </div>
+                <p className="text-sm text-muted">{sessionTime}</p>
                 {status === "attend_pending" ? (
                   <p className="text-sm text-amber-800">
                     Öğrenci Geldim işaretledi.
@@ -90,8 +90,7 @@ export default function InstructorLessonPage() {
                     Erteleme talebi bekliyor.
                   </p>
                 ) : null}
-                {!locked ? (
-                  <div className="flex flex-wrap gap-2">
+                <div className="flex flex-wrap gap-2">
                     <Button
                       className="px-3 py-1.5"
                       onClick={() =>
@@ -119,9 +118,6 @@ export default function InstructorLessonPage() {
                       Yandı
                     </Button>
                   </div>
-                ) : (
-                  <p className="text-xs text-muted">Yoklama tamamlandı.</p>
-                )}
               </Card>
             );
           })}

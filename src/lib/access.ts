@@ -7,6 +7,20 @@ import type {
   StudioState,
 } from "@/types/studio";
 
+const SHARED_INSTRUCTOR_IDS = new Set(["staff-delfin", "staff-elif"]);
+
+export function isStudentAssignedToInstructor(
+  student: Student,
+  instructorId: string,
+) {
+  if (student.instructorId === instructorId) return true;
+
+  return (
+    SHARED_INSTRUCTOR_IDS.has(student.instructorId) &&
+    SHARED_INSTRUCTOR_IDS.has(instructorId)
+  );
+}
+
 export function isStaffRole(role: Role): role is "super_admin" | "instructor" {
   return role === "super_admin" || role === "instructor" || (role as string) === "admin";
 }
@@ -22,7 +36,9 @@ export function studentsForUser(user: AuthUser | null, students: Student[]) {
     return students.filter((student) => student.id === user.id);
   }
   if (user.role === "instructor") {
-    return students.filter((student) => student.instructorId === user.id);
+    return students.filter((student) =>
+      isStudentAssignedToInstructor(student, user.id),
+    );
   }
   return students;
 }
@@ -53,7 +69,7 @@ export function canManageStudent(
   if (!user || user.role === "student") return false;
   if (user.role === "super_admin") return true;
   const student = students.find((item) => item.id === studentId);
-  return student?.instructorId === user.id;
+  return Boolean(student && isStudentAssignedToInstructor(student, user.id));
 }
 
 export function canAccessAdminRoute(user: AuthUser, pathname: string) {

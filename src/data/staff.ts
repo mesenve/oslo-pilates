@@ -28,6 +28,13 @@ export function getStaffById(id: string): StaffUser | undefined {
   return STAFF.find((member) => member.id === id);
 }
 
+export function instructorLabelForId(id: string) {
+  if (id === "staff-delfin" || id === "staff-elif") {
+    return "Delfin & Elif";
+  }
+  return getStaffById(id)?.name ?? "—";
+}
+
 export function getStaffByEmail(email: string): StaffUser | undefined {
   const normalized = email.trim().toLowerCase();
   return STAFF.find((member) => member.email.toLowerCase() === normalized);
