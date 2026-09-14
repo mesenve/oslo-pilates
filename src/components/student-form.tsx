@@ -276,8 +276,8 @@ export function StudentForm({
           </p>
           <p className="mt-1 text-xs text-muted">
             {isIrregularGroup(form.groupId)
-              ? "Kaydedildiğinde bu gün ve saat grup listesine eklenir."
-              : "Doldurulursa öğrenci takvimi bu gün ve saate göre oluşturulur."}
+              ? "Günleri ve saati girip öğrenciyi kaydet. Bu program otomatik olarak grup listesine eklenir."
+              : "Hazır listede olmayan bir ders saati için günleri ve saati girip öğrenciyi kaydet. Program otomatik olarak grup listesine eklenir."}
           </p>
           <div className="mt-3 flex flex-wrap gap-2">
             {WEEKDAYS.map((day) => (
