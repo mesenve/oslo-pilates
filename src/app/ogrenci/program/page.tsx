@@ -8,7 +8,7 @@ import { sessionsForStudent } from "@/data/accessors";
 import { getClassGroupById } from "@/data/groups";
 import { todayISO } from "@/lib/dates";
 import { postponeRightLabel } from "@/lib/labels";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 export default function ProgramPage() {
   const student = useCurrentStudent();
@@ -21,6 +21,12 @@ export default function ProgramPage() {
     mine.at(-1)?.date ??
     today;
   const [selectedDate, setSelectedDate] = useState(defaultDate);
+  useEffect(() => {
+    const requestedDate = new URLSearchParams(window.location.search).get("date");
+    if (requestedDate && mine.some((session) => session.date === requestedDate)) {
+      setSelectedDate(requestedDate);
+    }
+  }, [mine]);
   const marks = useMemo(
     () => mine.map((session) => ({ date: session.date, status: session.status })),
     [mine],
@@ -63,7 +69,7 @@ export default function ProgramPage() {
             key={session.id}
             session={session}
             time={group?.time ?? ""}
-            canPostpone={postponeRemaining > 0}
+            canPostpone={postponeRemaining > 0 && session.date > today}
             canAttend={session.date === today}
             postponeHint={postponeHint}
             onAttend={() => markAttended(session.id)}

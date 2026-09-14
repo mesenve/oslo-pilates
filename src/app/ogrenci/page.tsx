@@ -130,17 +130,20 @@ export default function StudentHomePage() {
                     student.monthlyPostponeLimit,
                   )}
                 </p>
-                {selectedDate === today && selectedSession.status === "upcoming" ? (
+                {selectedSession.status === "upcoming" ? (
                   <div className="mt-3 flex flex-wrap gap-2">
-                    <Button onClick={() => markAttended(selectedSession.id)}>
-                      Geldim
-                    </Button>
-                    <Link
-                      href="/ogrenci/program"
-                      className="inline-flex items-center justify-center rounded-full border border-accent/30 bg-white px-4 py-2 text-sm font-medium text-accent transition-colors hover:bg-accent-soft"
-                    >
-                      Ertele
-                    </Link>
+                    {selectedDate === today ? (
+                      <Button onClick={() => markAttended(selectedSession.id)}>
+                        Geldim
+                      </Button>
+                    ) : selectedDate > today ? (
+                      <Link
+                        href={`/ogrenci/program?date=${selectedDate}`}
+                        className="inline-flex items-center justify-center rounded-full border border-accent/30 bg-white px-4 py-2 text-sm font-medium text-accent transition-colors hover:bg-accent-soft"
+                      >
+                        Ertele
+                      </Link>
+                    ) : null}
                   </div>
                 ) : null}
               </div>
