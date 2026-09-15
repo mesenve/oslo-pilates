@@ -1,4 +1,5 @@
--- Applied to project hiopdvoxhslgqpvoaaza on 2026-09-15.
+-- Applied to project hiopdvoxhslgqpvoaaza on 2026-09-15
+-- (migration 20260915093721_schema_hardening_rls).
 -- Keep this file as the reproducible schema/RLS migration record.
 create table if not exists public.custom_groups (
   id text primary key,
