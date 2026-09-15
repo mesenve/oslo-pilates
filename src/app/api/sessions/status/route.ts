@@ -65,7 +65,9 @@ export async function POST(request: Request) {
       id: `req-${session.id}-${Date.now()}`,
       studentId: user.id,
       sessionId: session.id,
-      reason: body.reason?.trim() || "Bu dersi ertelemek istiyorum.",
+      // Öğrenci akışında gerekçe alanı yok; geçmişte alanı korumak için boş
+      // string saklanır. Hoca tarafından eklenen notlar ayrı tutulabilir.
+      reason: body.reason?.trim() ?? "",
       status: "pending",
       createdAt: new Date().toISOString(),
     };

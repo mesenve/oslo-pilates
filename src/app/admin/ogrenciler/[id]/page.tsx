@@ -359,7 +359,9 @@ export default function StudentDetailPage() {
                   <RequestBadge status={request.status} />
                 </div>
                 {lessonTime ? <p className="text-sm text-muted">{lessonTime}</p> : null}
-                <p className="text-sm">{request.reason}</p>
+                {request.reason?.trim() ? (
+                  <p className="text-sm">{request.reason}</p>
+                ) : null}
                 {request.status === "pending" ? (
                   <Button onClick={() => approveRequest(request.id)}>Onayla</Button>
                 ) : null}
