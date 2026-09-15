@@ -1011,6 +1011,21 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
         (request) => request.studentId !== studentId,
       ),
     }));
+    void fetch("/api/studio", {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ studentId }),
+    }).then(async (response) => {
+      if (!response.ok) {
+        window.dispatchEvent(new CustomEvent("studio:persistence-error", {
+          detail: "Öğrenci kalıcı olarak silinemedi. Sayfayı yenileyip tekrar deneyin.",
+        }));
+      }
+    }).catch(() => {
+      window.dispatchEvent(new CustomEvent("studio:persistence-error", {
+        detail: "Öğrenci kalıcı olarak silinemedi. Bağlantınızı kontrol edin.",
+      }));
+    });
   }, []);
 
   const remainingFor = useCallback(

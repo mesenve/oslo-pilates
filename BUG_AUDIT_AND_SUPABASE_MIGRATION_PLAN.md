@@ -2,7 +2,7 @@
 
 > Durum: Denetim tamamlandı; Supabase şeması/RLS ve veri aktarımı uygulanıyor. Bu doküman geliştirme kontrol listesi olarak korunur.
 
-**15 Eylül 2026 aktarım notu:** Canlı Blob snapshot’ında 45 aktif öğrenci doğrulandı (yerel kopyadaki `denemelik` test kaydı aktarılmadı). Supabase’e 45 öğrenci, 524 ders satırı (mevcut 4 satır korunarak), 23 özel grup, 4 erteleme talebi, 45 davet ve 10 yoklama işareti aktarıldı; yetim kayıt ve yinelenen e-posta kontrolü temiz geçti.
+**15 Eylül 2026 aktarım notu:** Canlı Blob verisi 49 kayıt olarak doğrulandı; aynı öğrencinin eski ve düzeltilmiş e-posta ile oluşturulmuş iki kaydı tek kayda indirildi. Sonuçta Supabase’e 48 öğrenci, 548 ders satırı, 24 özel grup, 4 erteleme talebi, 45 davet ve 10 yoklama işareti aktarıldı. Yetim öğrenci/seans/davet ve yinelenen e-posta kontrolleri temiz geçti.
 
 ## 1. Ece Hoca’nın kaydetme/düzenleme akışı neden bozuluyor?
 

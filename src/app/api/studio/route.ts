@@ -5,7 +5,7 @@ import { getSessionUser } from "@/lib/server/session";
 import { groupIdForSchedule, groupLabelForSchedule } from "@/data/groups";
 import { todayISO } from "@/lib/dates";
 import type { ClassGroup, DayOfWeek } from "@/types/studio";
-import { isSupabaseConfigured, readSupabaseSnapshot, writeSupabaseSnapshot } from "@/lib/server/supabase-rest";
+import { deleteSupabaseStudent, isSupabaseConfigured, readSupabaseSnapshot, writeSupabaseSnapshot } from "@/lib/server/supabase-rest";
 
 type StudioSnapshotResponse = {
   configured?: boolean;
@@ -343,5 +343,37 @@ export async function POST(request: Request) {
       { error: "Stüdyo verisi kaydedilemedi." },
       { status: 500 },
     );
+  }
+}
+
+export async function DELETE(request: Request) {
+  const user = await getSessionUser();
+  if (user?.role !== "super_admin" && user?.role !== "instructor") {
+    return NextResponse.json({ error: "Bu işlem için yönetici oturumu gerekli." }, { status: 403 });
+  }
+  try {
+    const body = (await request.json()) as { studentId?: string };
+    const studentId = body.studentId?.trim();
+    if (!studentId) return NextResponse.json({ error: "Öğrenci kimliği gerekli." }, { status: 400 });
+
+    const current = await readStudioSnapshot();
+    const snapshot = (current.snapshot ?? {}) as {
+      students?: Array<{ id: string; instructorId: string }>;
+      archivedStudents?: Array<{ id: string; instructorId: string }>;
+    };
+    const student = [...(snapshot.students ?? []), ...(snapshot.archivedStudents ?? [])]
+      .find((item) => item.id === studentId);
+    if (!student) return NextResponse.json({ error: "Öğrenci bulunamadı." }, { status: 404 });
+    if (user.role === "instructor") {
+      const shared = ["staff-delfin", "staff-elif"];
+      const allowed = student.instructorId === user.id ||
+        (shared.includes(student.instructorId) && shared.includes(user.id));
+      if (!allowed) return NextResponse.json({ error: "Bu öğrenci sana atanmamış." }, { status: 403 });
+    }
+
+    if (isSupabaseConfigured()) await deleteSupabaseStudent(studentId);
+    return NextResponse.json({ ok: true });
+  } catch {
+    return NextResponse.json({ error: "Öğrenci silinemedi." }, { status: 500 });
   }
 }

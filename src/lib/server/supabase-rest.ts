@@ -61,6 +61,26 @@ export async function deleteSupabaseInvite(token: string) {
   });
 }
 
+/** Permanently remove one student and all dependent records. */
+export async function deleteSupabaseStudent(studentId: string) {
+  const filter = encodeURIComponent(studentId);
+  // Delete dependants first; sessions are also protected by a database FK.
+  await Promise.all([
+    request<unknown>(`attendance_marks?student_id=eq.${filter}`, {
+      method: "DELETE",
+      headers: { Prefer: "return=minimal" },
+    }),
+    request<unknown>(`invites?student_id=eq.${filter}`, {
+      method: "DELETE",
+      headers: { Prefer: "return=minimal" },
+    }),
+  ]);
+  await request<unknown>(`students?id=eq.${filter}`, {
+    method: "DELETE",
+    headers: { Prefer: "return=minimal" },
+  });
+}
+
 export async function listSupabaseInvites() {
   return request<SupabaseInviteRow[]>("invites?select=*&order=created_at.desc");
 }
