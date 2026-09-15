@@ -4,14 +4,16 @@ import { ChevronRightIcon, CloseIcon, PlusIcon, SearchIcon } from "@/components/
 import { LetterIndex } from "@/components/letter-index";
 import { Button, Card, EmptyState } from "@/components/ui";
 import { useStudio } from "@/components/studio-provider";
+import { remainingSessions } from "@/data/accessors";
 import { getClassGroupById } from "@/data/groups";
+import { instructorLabelForId } from "@/data/staff";
 import { firstLetter, sortByName, type TurkishLetter } from "@/lib/alphabet";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 
 export default function StudentsPage() {
-  const { visibleStudents, isSuperAdmin } = useStudio();
+  const { visibleStudents, visibleSessions, isSuperAdmin } = useStudio();
   const router = useRouter();
   const sorted = useMemo(() => sortByName(visibleStudents), [visibleStudents]);
   const initial =
@@ -25,14 +27,29 @@ export default function StudentsPage() {
       value.toLocaleLowerCase("tr-TR").includes(normalizedQuery),
     );
   });
-  function exportCsv() {
+  function exportExcel() {
     const header = ["Ad soyad", "E-posta", "Telefon", "Eğitmen", "Paket başlangıcı", "Kalan ders", "Ödeme"];
-    const rows = sorted.map((student) => [student.name, student.email, student.phone, student.instructorId, student.package.startDate, String(student.package.remainingSessions), student.package.paymentStatus === "paid" ? "Ödendi" : "Ödenmedi"]);
-    const csv = [header, ...rows].map((row) => row.map((value) => `"${value.replaceAll('"', '""')}"`).join(",")).join("\n");
-    const url = URL.createObjectURL(new Blob([`\uFEFF${csv}`], { type: "text/csv;charset=utf-8" }));
+    const rows = sorted.map((student) => [
+      student.name,
+      student.email,
+      student.phone,
+      instructorLabelForId(student.instructorId),
+      student.package.startDate,
+      String(remainingSessions(student, visibleSessions)),
+      student.package.paymentStatus === "paid" ? "Ödendi" : "Ödenmedi",
+    ]);
+    const escapeXml = (value: string) => value
+      .replaceAll("&", "&amp;")
+      .replaceAll("<", "&lt;")
+      .replaceAll(">", "&gt;")
+      .replaceAll('"', "&quot;")
+      .replaceAll("'", "&apos;");
+    const rowXml = (row: string[]) => `<Row>${row.map((value) => `<Cell><Data ss:Type="String">${escapeXml(value)}</Data></Cell>`).join("")}</Row>`;
+    const xml = `<?xml version="1.0" encoding="UTF-8"?><?mso-application progid="Excel.Sheet"?><Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet"><Worksheet ss:Name="Öğrenciler"><Table>${rowXml(header)}${rows.map(rowXml).join("")}</Table></Worksheet></Workbook>`;
+    const url = URL.createObjectURL(new Blob([xml], { type: "application/vnd.ms-excel" }));
     const link = document.createElement("a");
     link.href = url;
-    link.download = `oslo-pilates-ogrenciler-${new Date().toISOString().slice(0, 10)}.csv`;
+    link.download = `oslo-pilates-ogrenciler-${new Date().toISOString().slice(0, 10)}.xls`;
     link.click();
     URL.revokeObjectURL(url);
   }
@@ -45,7 +62,7 @@ export default function StudentsPage() {
           </h1>
         </div>
         <div className="flex flex-wrap justify-end gap-2">
-          <Button variant="secondary" onClick={exportCsv}>CSV dışa aktar</Button>
+          <Button variant="secondary" onClick={exportExcel}>Excel dışa aktar</Button>
           <Button onClick={() => router.push("/admin/ogrenciler/yeni")}>
             <PlusIcon className="h-4 w-4" />
             Kaydet

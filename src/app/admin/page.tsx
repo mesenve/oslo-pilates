@@ -14,7 +14,6 @@ import Link from "next/link";
 
 export default function AdminHomePage() {
   const {
-    postponeRequests,
     visiblePostponeRequests,
     remainingFor,
     visibleStudents,
@@ -71,6 +70,41 @@ export default function AdminHomePage() {
 
       <section className="space-y-4">
         <div className="flex items-baseline justify-between gap-3">
+          <h2 className="font-serif text-2xl">Erteleme talepleri</h2>
+          <Link href="/admin/talepler" className="text-sm font-medium text-accent">
+            Tümünü gör →
+          </Link>
+        </div>
+        {pending.length === 0 ? (
+          <p className="text-sm text-muted">Bekleyen erteleme talebi yok.</p>
+        ) : (
+          pending.slice(0, 3).map((request) => {
+            const session = visibleSessions.find((item) => item.id === request.sessionId);
+            return (
+              <Card
+                key={request.id}
+                className="flex items-center justify-between gap-4 p-4"
+              >
+                <div>
+                  <p className="font-medium">
+                    {studentName(request.studentId, visibleStudents)}
+                  </p>
+                  <p className="mt-1 text-sm text-muted">
+                    {session
+                      ? formatLongDate(session.date)
+                      : formatLongDate(request.createdAt.slice(0, 10))}{" "}
+                    · {remainingFor(request.studentId)} ders kaldı
+                  </p>
+                </div>
+                <RequestBadge status={request.status} />
+              </Card>
+            );
+          })
+        )}
+      </section>
+
+      <section className="space-y-4">
+        <div className="flex items-baseline justify-between gap-3">
           <h2 className="font-serif text-2xl">
             Bugün{todayDay ? ` · ${DAY_LABELS[todayDay]}` : ""}
           </h2>
@@ -104,41 +138,6 @@ export default function AdminHomePage() {
               </Link>
             ) : null}
           </div>
-        )}
-      </section>
-
-      <section className="space-y-4">
-        <div className="flex items-baseline justify-between gap-3">
-          <h2 className="font-serif text-2xl">Son talepler</h2>
-          <Link href="/admin/talepler" className="text-sm font-medium text-accent">
-            Tümünü gör →
-          </Link>
-        </div>
-        {pending.length === 0 ? (
-          <p className="text-sm text-muted">Bekleyen erteleme talebi yok.</p>
-        ) : (
-          pending.slice(0, 3).map((request) => {
-            const session = visibleSessions.find((item) => item.id === request.sessionId);
-            return (
-              <Card
-                key={request.id}
-                className="flex items-center justify-between gap-4 p-4"
-              >
-                <div>
-                  <p className="font-medium">
-                    {studentName(request.studentId, visibleStudents)}
-                  </p>
-                  <p className="mt-1 text-sm text-muted">
-                    {session
-                      ? formatLongDate(session.date)
-                      : formatLongDate(request.createdAt.slice(0, 10))}{" "}
-                    · {remainingFor(request.studentId)} ders kaldı
-                  </p>
-                </div>
-                <RequestBadge status={request.status} />
-              </Card>
-            );
-          })
         )}
       </section>
     </div>
