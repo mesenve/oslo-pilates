@@ -16,6 +16,7 @@ const SUPER_ADMIN_ITEMS: NavItem[] = [
   { href: "/admin/arsiv", label: "Arşiv", icon: "archive" },
   { href: "/admin/takvim", label: "Takvim", icon: "calendar" },
   { href: "/admin/talepler", label: "Talep", icon: "bell" },
+  { href: "/admin/bildirimler", label: "Bildirimler", icon: "bell" },
   { href: "/admin/profil", label: "Profil", icon: "user" },
 ];
 
@@ -25,6 +26,7 @@ const INSTRUCTOR_ITEMS: NavItem[] = [
   { href: "/admin/ogrenciler", label: "Kayıt", icon: "users" },
   { href: "/admin/takvim", label: "Takvim", icon: "calendar" },
   { href: "/admin/talepler", label: "Talep", icon: "bell" },
+  { href: "/admin/bildirimler", label: "Bildirimler", icon: "bell" },
   { href: "/admin/profil", label: "Profil", icon: "user" },
 ];
 

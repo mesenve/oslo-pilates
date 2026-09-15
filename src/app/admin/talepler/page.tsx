@@ -60,7 +60,7 @@ export default function RequestsPage() {
                         )}
                       </p>
                     ) : null}
-                    <p className="mt-3 text-sm">{request.reason}</p>
+                    {request.reason ? <p className="mt-3 text-sm">{request.reason}</p> : null}
                     <p className="mt-2 text-xs text-muted">{student?.email}</p>
                   </div>
                   <RequestBadge status={request.status} />

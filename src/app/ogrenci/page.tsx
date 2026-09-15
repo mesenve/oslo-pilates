@@ -29,6 +29,7 @@ export default function StudentHomePage() {
     markAttended,
     requestPostpone,
     withdrawPostpone,
+    requestRenewal,
   } = useStudio();
   const today = todayISO();
   const [selectedDate, setSelectedDate] = useState(today);
@@ -60,11 +61,11 @@ export default function StudentHomePage() {
   return (
     <div className="space-y-4">
       <section
-        className={`grid gap-3 ${student.package.isLastWeek ? "md:grid-cols-2" : ""}`}
+        className={`grid gap-3 ${remaining <= 2 ? "md:grid-cols-2" : ""}`}
       >
         <DailyQuoteCard date={today} />
-        {student.package.isLastWeek ? (
-          <LastWeekCta studentName={student.name} />
+        {remaining <= 2 ? (
+          <LastWeekCta student={student} onRequestRenewal={requestRenewal} />
         ) : null}
       </section>
 

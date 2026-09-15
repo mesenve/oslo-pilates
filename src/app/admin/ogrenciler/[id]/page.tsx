@@ -39,6 +39,8 @@ export default function StudentDetailPage() {
     archiveStudent,
     resendStudentInvite,
     isSuperAdmin,
+    reviewRenewal,
+    setPackageFrozen,
   } = useStudio();
   const router = useRouter();
   const student = visibleStudents.find((item) => item.id === params.id);
@@ -169,6 +171,12 @@ export default function StudentDetailPage() {
         <p className="text-xs text-muted">
           {student.email} · {student.phone}
         </p>
+        <p className="text-xs text-muted">
+          {student.package.paymentUpdatedAt ? `Ödeme durumu son güncelleme: ${formatLongDate(student.package.paymentUpdatedAt.slice(0, 10))}` : "Ödeme durumu henüz güncellenmedi."}
+        </p>
+        <Button variant="secondary" onClick={() => void setPackageFrozen(student.id, !student.package.frozenAt)}>
+          {student.package.frozenAt ? "Paketi yeniden başlat" : "Paketi dondur"}
+        </Button>
         {student.note?.trim() ? (
           <div className="rounded-2xl bg-accent-soft/60 px-3 py-3">
             <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-accent">
@@ -178,6 +186,16 @@ export default function StudentDetailPage() {
           </div>
         ) : null}
       </Card>
+
+      {student.renewalRequest ? (
+        <Card className="space-y-3 p-4">
+          <div className="flex items-center justify-between gap-3"><h2 className="font-serif text-xl">Yenileme talebi</h2><RequestBadge status={student.renewalRequest.status === "pending" ? "pending" : student.renewalRequest.status} /></div>
+          <p className="text-sm text-muted">{student.renewalRequest.requestedStartDate ? `Tercih edilen başlangıç: ${formatLongDate(student.renewalRequest.requestedStartDate)}` : "Başlangıç tarihi belirtilmedi."}</p>
+          {student.renewalRequest.status === "pending" ? <div className="flex flex-wrap gap-2"><Button onClick={() => void reviewRenewal(student.id, "approved")}>Talebi kabul et</Button><Button variant="danger" onClick={() => void reviewRenewal(student.id, "rejected")}>Reddet</Button></div> : null}
+        </Card>
+      ) : null}
+
+      {student.changeLog?.length ? <Card className="space-y-3 p-4"><h2 className="font-serif text-xl">Değişiklik günlüğü</h2>{student.changeLog.slice(0, 8).map((entry) => <p key={entry.id} className="text-sm text-muted">{formatLongDate(entry.createdAt.slice(0, 10))} · {getStaffById(entry.actorId)?.name ?? entry.actorId} · {entry.field}: {entry.before || "—"} → {entry.after || "—"}</p>)}</Card> : null}
 
       {student.packageHistory?.length ? (
         <Card className="space-y-3 p-4">
@@ -317,11 +335,7 @@ export default function StudentDetailPage() {
                 <SessionBadge status={status} />
               </div>
               {lessonTime ? <p className="text-sm text-muted">{lessonTime}</p> : null}
-              {request ? (
-                <p className="text-sm">
-                  Erteleme: {request.reason}
-                </p>
-              ) : null}
+              {request?.reason ? <p className="text-sm">Erteleme notu: {request.reason}</p> : null}
               {status === "missed" ? (
                 <p className="text-sm text-rose-700">Bu ders yanmış.</p>
               ) : null}
@@ -365,6 +379,7 @@ export default function StudentDetailPage() {
                 {request.status === "pending" ? (
                   <Button onClick={() => approveRequest(request.id)}>Onayla</Button>
                 ) : null}
+                {request.actedAt ? <p className="text-xs text-muted">İşlemi yapan: {getStaffById(request.actedBy ?? "")?.name ?? request.actedBy ?? "—"}</p> : null}
               </Card>
             );
           })

@@ -122,6 +122,8 @@ export async function listSupabaseAttendance() {
 function toStudent(row: SupabaseRow): Student {
   const packageValue = (row.package ?? {}) as Student["package"] & {
     history?: Student["packageHistory"];
+    renewalRequest?: Student["renewalRequest"];
+    changeLog?: Student["changeLog"];
   };
   return {
     id: String(row.id),
@@ -135,6 +137,8 @@ function toStudent(row: SupabaseRow): Student {
     measurements: (row.measurements ?? {}) as Student["measurements"],
     package: packageValue,
     packageHistory: packageValue.history?.length ? packageValue.history : undefined,
+    renewalRequest: packageValue.renewalRequest,
+    changeLog: packageValue.changeLog,
     monthlyPostponeLimit: Number(row.monthly_postpone_limit ?? 1),
     accountStatus: row.account_status as Student["accountStatus"],
     inviteToken: row.invite_token ? String(row.invite_token) : undefined,
@@ -205,6 +209,8 @@ function studentRow(student: Student, archived: boolean) {
     package: {
       ...student.package,
       history: student.packageHistory ?? [],
+      renewalRequest: student.renewalRequest ?? null,
+      changeLog: student.changeLog ?? [],
     },
     monthly_postpone_limit: student.monthlyPostponeLimit,
     account_status: student.accountStatus,

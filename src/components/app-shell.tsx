@@ -50,20 +50,13 @@ export function AppShell({
   const router = useRouter();
   const { user, logout } = useStudio();
   const [menuOpen, setMenuOpen] = useState(false);
-  const [accountMenuOpen, setAccountMenuOpen] = useState(false);
 
   useEffect(() => {
-    setMenuOpen(false);
-    setAccountMenuOpen(false);
-  }, [pathname]);
-
-  useEffect(() => {
-    if (!menuOpen && !accountMenuOpen) return;
+    if (!menuOpen) return;
 
     function onKey(event: KeyboardEvent) {
       if (event.key !== "Escape") return;
       setMenuOpen(false);
-      setAccountMenuOpen(false);
     }
 
     document.addEventListener("keydown", onKey);
@@ -72,16 +65,13 @@ export function AppShell({
       document.removeEventListener("keydown", onKey);
       if (menuOpen) document.body.style.overflow = "";
     };
-  }, [menuOpen, accountMenuOpen]);
+  }, [menuOpen]);
 
   function handleLogout() {
     setMenuOpen(false);
-    setAccountMenuOpen(false);
     logout();
     router.replace("/giris");
   }
-
-  const profileHref = user?.role === "student" ? "/ogrenci/profil" : "/admin/profil";
 
   function isActive(href: string) {
     return (
@@ -120,61 +110,16 @@ export function AppShell({
               />
             ))}
           </nav>
-          <div className="relative">
-            <button
-              type="button"
-              onClick={() => {
-                setMenuOpen(false);
-                setAccountMenuOpen((open) => !open);
-              }}
-              aria-label="Hesap menüsünü aç"
-              aria-haspopup="menu"
-              aria-expanded={accountMenuOpen}
-              className="inline-flex shrink-0 items-center gap-2 rounded-full bg-gradient-to-r from-[#ec407a] to-accent px-3 py-2 text-sm font-medium text-white shadow-[0_6px_18px_rgba(194,24,91,0.28)] hover:from-accent hover:to-accent-hover"
-            >
-              <UserIcon className="h-4 w-4" />
-              <span className="hidden sm:inline">{user?.name ?? "Hesap"}</span>
-            </button>
-            {accountMenuOpen ? (
-              <>
-                <button
-                  type="button"
-                  aria-label="Hesap menüsünü kapat"
-                  onClick={() => setAccountMenuOpen(false)}
-                  className="fixed inset-0 z-30 cursor-default"
-                />
-                <div
-                  role="menu"
-                  aria-label="Hesap menüsü"
-                  className="absolute right-0 top-full z-50 mt-2 w-64 overflow-hidden rounded-2xl border border-border bg-white p-2 shadow-[0_12px_32px_rgba(43,26,34,0.16)]"
-                >
-                  <div className="px-3 py-2">
-                    <p className="font-medium text-foreground">{user?.name ?? "Hesap"}</p>
-                    {user?.email ? <p className="mt-0.5 truncate text-xs text-muted">{user.email}</p> : null}
-                  </div>
-                  <div className="my-1 h-px bg-border" />
-                  <Link
-                    href={profileHref}
-                    role="menuitem"
-                    onClick={() => setAccountMenuOpen(false)}
-                    className="flex items-center gap-2 rounded-xl px-3 py-2.5 text-sm text-muted hover:bg-surface-muted hover:text-foreground"
-                  >
-                    <UserIcon className="h-4 w-4" />
-                    Profil
-                  </Link>
-                  <button
-                    type="button"
-                    role="menuitem"
-                    onClick={handleLogout}
-                    className="flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-left text-sm text-rose-700 hover:bg-rose-50"
-                  >
-                    <LogOutIcon className="h-4 w-4" />
-                    Çıkış yap
-                  </button>
-                </div>
-              </>
-            ) : null}
-          </div>
+          <button
+            type="button"
+            onClick={handleLogout}
+            aria-label={`${user?.name ?? "Hesap"} hesabından çıkış yap`}
+            title="Çıkış yap"
+            className="inline-flex shrink-0 items-center gap-2 rounded-full bg-gradient-to-r from-[#ec407a] to-accent px-3 py-2 text-sm font-medium text-white shadow-[0_6px_18px_rgba(194,24,91,0.28)] hover:from-accent hover:to-accent-hover"
+          >
+            <LogOutIcon className="h-4 w-4" />
+            <span>Çıkış yap</span>
+          </button>
         </div>
       </header>
 
@@ -221,6 +166,7 @@ export function AppShell({
                 item={item}
                 active={isActive(item.href)}
                 stacked
+                onNavigate={() => setMenuOpen(false)}
               />
             ))}
           </nav>
@@ -246,15 +192,18 @@ function NavLink({
   item,
   active,
   stacked = false,
+  onNavigate,
 }: {
   item: NavItem;
   active: boolean;
   stacked?: boolean;
+  onNavigate?: () => void;
 }) {
   const Icon = ICONS[item.icon];
   return (
     <Link
       href={item.href}
+      onClick={onNavigate}
       className={`inline-flex items-center gap-2 rounded-full px-3.5 py-2 text-sm transition-all duration-200 md:px-4 ${
         stacked ? "w-full" : ""
       } ${

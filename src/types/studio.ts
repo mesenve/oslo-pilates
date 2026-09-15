@@ -23,6 +23,27 @@ export type PostponeStatus = "pending" | "approved" | "rejected";
 
 export type PaymentStatus = "paid" | "pending" | "overdue";
 
+export type RenewalRequestStatus = "pending" | "approved" | "rejected";
+
+export type RenewalRequest = {
+  id: string;
+  requestedStartDate?: string;
+  status: RenewalRequestStatus;
+  createdAt: string;
+  actedAt?: string;
+  actedBy?: string;
+};
+
+export type StudentChangeLogEntry = {
+  id: string;
+  actorId: string;
+  action: string;
+  field: string;
+  before: string;
+  after: string;
+  createdAt: string;
+};
+
 export type PackageType = "group_5" | "duet_2" | "private";
 
 export type StudentAccountStatus = "invited" | "active";
@@ -41,6 +62,10 @@ export type StudentPackage = {
   startDate: string;
   endDate: string;
   paymentStatus: PaymentStatus;
+  paymentUpdatedAt?: string;
+  paymentUpdatedBy?: string;
+  frozenAt?: string;
+  resumedAt?: string;
   isLastWeek: boolean;
   customSchedule?: {
     days: DayOfWeek[];
@@ -77,6 +102,8 @@ export type Student = {
   measurements: Measurements;
   package: StudentPackage;
   packageHistory?: PackageHistoryEntry[];
+  renewalRequest?: RenewalRequest;
+  changeLog?: StudentChangeLogEntry[];
   monthlyPostponeLimit: number;
   postponeLessonUsed?: boolean;
   accountStatus: StudentAccountStatus;
@@ -110,6 +137,8 @@ export type PostponeRequest = {
   reason: string;
   status: PostponeStatus;
   createdAt: string;
+  actedAt?: string;
+  actedBy?: string;
 };
 
 export type AuthUser = {

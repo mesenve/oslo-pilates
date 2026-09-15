@@ -96,12 +96,15 @@ type StudioContextValue = {
   rejectAttendance: (sessionIds: string[]) => void;
   requestPostpone: (sessionId: string, reason: string) => void;
   withdrawPostpone: (sessionId: string) => Promise<void>;
+  requestRenewal: (requestedStartDate?: string) => Promise<{ error: string | null }>;
+  reviewRenewal: (studentId: string, status: "approved" | "rejected") => Promise<{ error: string | null }>;
   approveRequest: (requestId: string) => void;
   markSessionByInstructor: (
     sessionId: string,
     outcome: "attended" | "postponed" | "missed" | "upcoming",
   ) => void;
-  setPostponeLessonUsed: (studentId: string, used: boolean) => void;
+  setPostponeLessonUsed: (studentId: string, used: boolean) => Promise<void>;
+  setPackageFrozen: (studentId: string, frozen: boolean) => Promise<void>;
   addStudent: (input: NewStudentInput) => Promise<StudentActionResult>;
   archiveStudent: (studentId: string) => void;
   restoreStudent: (
@@ -659,6 +662,40 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
     }));
   }, []);
 
+  const requestRenewal = useCallback(async (requestedStartDate?: string) => {
+    const response = await fetch("/api/renewals", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ requestedStartDate: requestedStartDate || undefined }),
+    });
+    const data = (await response.json().catch(() => null)) as { error?: string; request?: Student["renewalRequest"]; revision?: string } | null;
+    if (!response.ok || !data?.request) return { error: data?.error ?? "Yenileme talebi gönderilemedi." };
+    setStudioSnapshotRevision(data.revision);
+    setStudioState((current) => ({
+      ...current,
+      students: current.students.map((student) =>
+        student.id === current.user?.id ? { ...student, renewalRequest: data.request } : student,
+      ),
+    }));
+    return { error: null };
+  }, []);
+
+  const reviewRenewal = useCallback(async (studentId: string, status: "approved" | "rejected") => {
+    const response = await fetch("/api/renewals", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ studentId, status }),
+    });
+    const data = (await response.json().catch(() => null)) as { error?: string; request?: Student["renewalRequest"]; revision?: string } | null;
+    if (!response.ok || !data?.request) return { error: data?.error ?? "Yenileme talebi güncellenemedi." };
+    setStudioSnapshotRevision(data.revision);
+    setStudioState((current) => ({
+      ...current,
+      students: current.students.map((student) => student.id === studentId ? { ...student, renewalRequest: data.request } : student),
+    }));
+    return { error: null };
+  }, []);
+
   const approveRequest = useCallback((requestId: string) => {
     void (async () => {
       const current = getStudioSnapshot();
@@ -675,7 +712,7 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
       setStudioState((state) => ({
         ...state,
         postponeRequests: state.postponeRequests.map((item) =>
-          item.id === requestId ? { ...item, status: "approved" } : item,
+          item.id === requestId ? { ...item, status: "approved", actedAt: new Date().toISOString(), actedBy: current.user?.id } : item,
         ),
         sessions: state.sessions.map((session) =>
           session.id === request.sessionId ? { ...session, status: "postponed" } : session,
@@ -795,12 +832,10 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
   );
 
   const setPostponeLessonUsed = useCallback(
-    (studentId: string, used: boolean) => {
+    async (studentId: string, used: boolean) => {
       setStudioState((current) => {
         const student = current.students.find((item) => item.id === studentId);
-        if (!student || !canManageStudent(current.user, studentId, current.students)) {
-          return current;
-        }
+        if (!student || !canManageStudent(current.user, studentId, current.students)) return current;
         return {
           ...current,
           students: current.students.map((item) =>
@@ -808,9 +843,27 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
           ),
         };
         });
+      await flushStudioSnapshotPersistence();
     },
     [],
   );
+
+  const setPackageFrozen = useCallback(async (studentId: string, frozen: boolean) => {
+    const current = getStudioSnapshot();
+    const student = current.students.find((item) => item.id === studentId);
+    if (!student || !canManageStudent(current.user, studentId, current.students)) return;
+    setStudioState((state) => ({
+      ...state,
+      students: state.students.map((item) => item.id !== studentId ? item : {
+        ...item,
+        package: {
+          ...item.package,
+          ...(frozen ? { frozenAt: new Date().toISOString(), resumedAt: undefined } : { frozenAt: undefined, resumedAt: new Date().toISOString() }),
+        },
+      }),
+    }));
+    await flushStudioSnapshotPersistence();
+  }, []);
 
   const addStudent = useCallback(async (input: NewStudentInput) => {
     const name = input.name.trim();
@@ -996,6 +1049,27 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
               Math.min(normalized.totalSessions, normalized.totalSessions - attended),
             );
 
+        if (previous.package.paymentStatus !== student.package.paymentStatus) {
+          student.package.paymentUpdatedAt = new Date().toISOString();
+          student.package.paymentUpdatedBy = current.user?.id ?? "system";
+        } else {
+          student.package.paymentUpdatedAt = previous.package.paymentUpdatedAt;
+          student.package.paymentUpdatedBy = previous.package.paymentUpdatedBy;
+        }
+        const changes = collectStudentChanges(previous, student);
+        if (changes.length > 0) {
+          student.changeLog = [
+            ...changes.map((change) => ({
+              id: `change-${student.id}-${Date.now()}-${change.field}`,
+              actorId: current.user?.id ?? "system",
+              action: "update",
+              ...change,
+              createdAt: new Date().toISOString(),
+            })),
+            ...(previous.changeLog ?? []),
+          ].slice(0, 100);
+        }
+
         if (previous.accountStatus === "invited") {
           const emailChanged = email !== previous.email.toLowerCase();
           if (emailChanged) {
@@ -1171,9 +1245,12 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
       rejectAttendance,
       requestPostpone,
       withdrawPostpone,
+      requestRenewal,
+      reviewRenewal,
       approveRequest,
       markSessionByInstructor,
       setPostponeLessonUsed,
+      setPackageFrozen,
       addStudent,
       archiveStudent,
       restoreStudent,
@@ -1204,7 +1281,10 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
       remainingPostponeFor,
       requestPostpone,
       withdrawPostpone,
+      requestRenewal,
+      reviewRenewal,
       restoreStudent,
+      setPackageFrozen,
       updateStudent,
       state.archivedStudents,
       state.customGroups,
@@ -1258,6 +1338,22 @@ function emailTaken(
     (current.students ?? []).some(match) ||
     (current.archivedStudents ?? []).some(match)
   );
+}
+
+function collectStudentChanges(previous: Student, next: Student) {
+  const values: Array<[string, string, string]> = [
+    ["name", previous.name, next.name],
+    ["email", previous.email, next.email],
+    ["phone", previous.phone, next.phone],
+    ["groupId", previous.groupId, next.groupId],
+    ["instructorId", previous.instructorId, next.instructorId],
+    ["package.startDate", previous.package.startDate, next.package.startDate],
+    ["package.totalSessions", String(previous.package.totalSessions), String(next.package.totalSessions)],
+    ["package.paymentStatus", previous.package.paymentStatus, next.package.paymentStatus],
+  ];
+  return values
+    .filter(([, before, after]) => before !== after)
+    .map(([field, before, after]) => ({ field, before, after }));
 }
 
 function withInvite(student: Student, token = createInviteToken()): Student {
@@ -1339,10 +1435,16 @@ function studentFromInput(
       startDate,
       endDate,
       paymentStatus: input.paymentStatus,
+      paymentUpdatedAt: previous?.package.paymentUpdatedAt,
+      paymentUpdatedBy: previous?.package.paymentUpdatedBy,
+      frozenAt: previous?.package.frozenAt,
+      resumedAt: previous?.package.resumedAt,
       isLastWeek: packagePeriodChanged ? false : previous?.package.isLastWeek ?? false,
       customSchedule,
     },
     packageHistory: packageHistory.length > 0 ? packageHistory : undefined,
+    renewalRequest: previous?.renewalRequest,
+    changeLog: previous?.changeLog,
     monthlyPostponeLimit: Number.isFinite(input.monthlyPostponeLimit)
       ? Math.max(0, Math.round(input.monthlyPostponeLimit))
       : 1,

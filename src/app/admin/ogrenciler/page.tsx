@@ -25,6 +25,17 @@ export default function StudentsPage() {
       value.toLocaleLowerCase("tr-TR").includes(normalizedQuery),
     );
   });
+  function exportCsv() {
+    const header = ["Ad soyad", "E-posta", "Telefon", "Eğitmen", "Paket başlangıcı", "Kalan ders", "Ödeme"];
+    const rows = sorted.map((student) => [student.name, student.email, student.phone, student.instructorId, student.package.startDate, String(student.package.remainingSessions), student.package.paymentStatus === "paid" ? "Ödendi" : "Ödenmedi"]);
+    const csv = [header, ...rows].map((row) => row.map((value) => `"${value.replaceAll('"', '""')}"`).join(",")).join("\n");
+    const url = URL.createObjectURL(new Blob([`\uFEFF${csv}`], { type: "text/csv;charset=utf-8" }));
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `oslo-pilates-ogrenciler-${new Date().toISOString().slice(0, 10)}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+  }
   return (
     <div className="space-y-5">
       <header className="flex items-start justify-between gap-3">
@@ -34,6 +45,7 @@ export default function StudentsPage() {
           </h1>
         </div>
         <div className="flex flex-wrap justify-end gap-2">
+          <Button variant="secondary" onClick={exportCsv}>CSV dışa aktar</Button>
           <Button onClick={() => router.push("/admin/ogrenciler/yeni")}>
             <PlusIcon className="h-4 w-4" />
             Kaydet

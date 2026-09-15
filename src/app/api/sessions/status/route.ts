@@ -106,6 +106,8 @@ export async function POST(request: Request) {
     return {
       ...item,
       status: approvingPostpone ? "approved" : "rejected",
+      actedAt: new Date().toISOString(),
+      actedBy: user.id,
     };
   });
   await writeStudioSnapshot({ configured: true, snapshot });

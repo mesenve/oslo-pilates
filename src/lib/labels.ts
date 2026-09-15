@@ -39,8 +39,8 @@ export const WEEKDAYS: DayOfWeek[] = [
 
 export const PAYMENT_LABELS: Record<PaymentStatus, string> = {
   paid: "Ödendi",
-  pending: "Beklemede",
-  overdue: "Gecikmiş",
+  pending: "Ödenmedi",
+  overdue: "Ödenmedi",
 };
 
 export const SESSION_LABELS: Record<SessionStatus, string> = {
