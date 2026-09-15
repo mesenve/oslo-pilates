@@ -1,4 +1,5 @@
 import { readStudioSnapshot, snapshotRevision, writeStudioSnapshot } from "@/app/api/studio/route";
+import { deleteSupabasePostponeRequest, isSupabaseConfigured } from "@/lib/server/supabase-rest";
 import { getSessionUser } from "@/lib/server/session";
 import { todayISO } from "@/lib/dates";
 import { getClassGroupById } from "@/data/groups";
@@ -43,6 +44,9 @@ export async function POST(request: Request) {
         (item) => item.id !== pendingRequest.id,
       );
       await writeStudioSnapshot({ configured: true, snapshot });
+      if (isSupabaseConfigured()) {
+        await deleteSupabasePostponeRequest(pendingRequest.id);
+      }
       return NextResponse.json({ ok: true, revision: snapshotRevision(snapshot) });
     }
     if (body.status !== "postpone_pending") {

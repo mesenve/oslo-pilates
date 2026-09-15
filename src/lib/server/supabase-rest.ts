@@ -61,6 +61,13 @@ export async function deleteSupabaseInvite(token: string) {
   });
 }
 
+export async function deleteSupabasePostponeRequest(requestId: string) {
+  await request<unknown>(`postpone_requests?id=eq.${encodeURIComponent(requestId)}`, {
+    method: "DELETE",
+    headers: { Prefer: "return=minimal" },
+  });
+}
+
 /** Permanently remove one student and all dependent records. */
 export async function deleteSupabaseStudent(studentId: string) {
   const filter = encodeURIComponent(studentId);
