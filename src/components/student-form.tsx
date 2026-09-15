@@ -38,6 +38,11 @@ import type {
 } from "@/types/studio";
 import { useState } from "react";
 
+const PAYMENT_OPTIONS: { value: PaymentStatus; label: string }[] = [
+  { value: "paid", label: PAYMENT_LABELS.paid },
+  { value: "pending", label: PAYMENT_LABELS.pending },
+];
+
 export function StudentForm({
   student,
   mode,
@@ -326,12 +331,9 @@ export function StudentForm({
           </div>
           <SelectField
             label="Ödeme durumu"
-            value={form.paymentStatus}
+            value={form.paymentStatus === "overdue" ? "pending" : form.paymentStatus}
             onChange={(value) => update("paymentStatus", value)}
-            options={(Object.keys(PAYMENT_LABELS) as PaymentStatus[]).map((status) => ({
-              value: status,
-              label: PAYMENT_LABELS[status],
-            }))}
+            options={PAYMENT_OPTIONS}
           />
         </div>
         <TextAreaField
