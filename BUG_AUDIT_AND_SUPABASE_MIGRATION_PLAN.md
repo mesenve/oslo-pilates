@@ -1,6 +1,6 @@
 # Oslo Pilates — Bug Denetimi ve Veri Saklama Geçiş Planı
 
-> Durum: Denetim tamamlandı; Supabase şeması/RLS ve veri aktarımı uygulanıyor. Bu doküman geliştirme kontrol listesi olarak korunur.
+> Durum: Denetim tamamlandı; Supabase şeması/RLS, veri aktarımı ve kritik veri akışı düzeltmeleri uygulandı. Kalan maddeler regresyon kontrolü için bu listeden izlenir.
 
 **15 Eylül 2026 aktarım notu:** Canlı Blob verisi 49 kayıt olarak doğrulandı; aynı öğrencinin eski ve düzeltilmiş e-posta ile oluşturulmuş iki kaydı tek kayda indirildi. Sonuçta Supabase’e 48 öğrenci, 548 ders satırı, 24 özel grup, 4 erteleme talebi, 45 davet ve 10 yoklama işareti aktarıldı. Yetim öğrenci/seans/davet ve yinelenen e-posta kontrolleri temiz geçti.
 
