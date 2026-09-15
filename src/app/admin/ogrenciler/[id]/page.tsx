@@ -26,6 +26,17 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 
+const CHANGE_FIELD_LABELS: Record<string, string> = {
+  name: "Ad değişikliği",
+  email: "E-posta değişikliği",
+  phone: "Telefon değişikliği",
+  groupId: "Program değişikliği",
+  instructorId: "Eğitmen değişikliği",
+  "package.startDate": "Paket değişikliği",
+  "package.totalSessions": "Paket değişikliği",
+  "package.paymentStatus": "Ödeme durumu değişikliği",
+};
+
 export default function StudentDetailPage() {
   const params = useParams<{ id: string }>();
   const {
@@ -191,7 +202,7 @@ export default function StudentDetailPage() {
         </Card>
       ) : null}
 
-      {student.changeLog?.length ? <Card className="space-y-3 p-4"><h2 className="font-serif text-xl">Değişiklik günlüğü</h2>{student.changeLog.slice(0, 8).map((entry) => <p key={entry.id} className="text-sm text-muted">{formatLongDate(entry.createdAt.slice(0, 10))} · {getStaffById(entry.actorId)?.name ?? entry.actorId} · {entry.field}: {entry.before || "—"} → {entry.after || "—"}</p>)}</Card> : null}
+      {student.changeLog?.length ? <Card className="space-y-3 p-4"><h2 className="font-serif text-xl">Değişiklik günlüğü</h2>{student.changeLog.slice(0, 8).map((entry) => <p key={entry.id} className="text-sm text-muted">{formatLongDate(entry.createdAt.slice(0, 10))} · {getStaffById(entry.actorId)?.name ?? entry.actorId} · {CHANGE_FIELD_LABELS[entry.field] ?? "Bilgi değişikliği"}: {entry.before || "—"} → {entry.after || "—"}</p>)}</Card> : null}
 
       {student.packageHistory?.length ? (
         <Card className="space-y-3 p-4">
