@@ -28,6 +28,7 @@ export default function StudentHomePage() {
     remainingPostponeFor,
     markAttended,
     requestPostpone,
+    withdrawPostpone,
   } = useStudio();
   const today = todayISO();
   const [selectedDate, setSelectedDate] = useState(today);
@@ -167,6 +168,16 @@ export default function StudentHomePage() {
                         Ertele
                       </Button>
                     ) : null}
+                  </div>
+                ) : null}
+                {selectedSession.status === "postpone_pending" ? (
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <Button
+                      variant="secondary"
+                      onClick={() => void withdrawPostpone(selectedSession.id)}
+                    >
+                      Erteleme talebini geri al
+                    </Button>
                   </div>
                 ) : null}
                 {selectedDate > today &&

@@ -95,6 +95,7 @@ type StudioContextValue = {
   approveAttendance: (sessionIds: string[]) => void;
   rejectAttendance: (sessionIds: string[]) => void;
   requestPostpone: (sessionId: string, reason: string) => void;
+  withdrawPostpone: (sessionId: string) => Promise<void>;
   approveRequest: (requestId: string) => void;
   markSessionByInstructor: (
     sessionId: string,
@@ -638,6 +639,28 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
     }));
   }, []);
 
+  const withdrawPostpone = useCallback(async (sessionId: string) => {
+    const response = await fetch("/api/sessions/status", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ sessionId, status: "upcoming" }),
+    });
+    if (!response.ok) return;
+    const data = (await response.json().catch(() => null)) as { revision?: string } | null;
+    setStudioSnapshotRevision(data?.revision);
+    setStudioState((current) => ({
+      ...current,
+      sessions: current.sessions.map((item) =>
+        item.id === sessionId ? { ...item, status: "upcoming" } : item,
+      ),
+      postponeRequests: current.postponeRequests.map((item) =>
+        item.sessionId === sessionId && item.status === "pending"
+          ? { ...item, status: "rejected" }
+          : item,
+      ),
+    }));
+  }, []);
+
   const approveRequest = useCallback((requestId: string) => {
     void (async () => {
       const current = getStudioSnapshot();
@@ -1149,6 +1172,7 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
       approveAttendance,
       rejectAttendance,
       requestPostpone,
+      withdrawPostpone,
       approveRequest,
       markSessionByInstructor,
       setPostponeLessonUsed,
@@ -1181,6 +1205,7 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
       remainingFor,
       remainingPostponeFor,
       requestPostpone,
+      withdrawPostpone,
       restoreStudent,
       updateStudent,
       state.archivedStudents,

@@ -12,7 +12,7 @@ import { type ComponentProps, useEffect, useMemo, useState } from "react";
 
 export default function ProgramPage() {
   const student = useCurrentStudent();
-  const { sessions, markAttended, requestPostpone, remainingPostponeFor } =
+  const { sessions, markAttended, requestPostpone, withdrawPostpone, remainingPostponeFor } =
     useStudio();
   const mine = sessionsForStudent(student?.id ?? "", sessions);
   const today = todayISO();
@@ -74,6 +74,7 @@ export default function ProgramPage() {
             postponeHint={postponeHint}
             onAttend={() => markAttended(session.id)}
             onPostpone={(reason) => requestPostpone(session.id, reason)}
+            onWithdrawPostpone={() => void withdrawPostpone(session.id)}
           />
         ))
       )}

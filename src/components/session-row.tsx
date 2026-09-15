@@ -18,6 +18,7 @@ export function SessionRow({
   postponeHint,
   onAttend,
   onPostpone,
+  onWithdrawPostpone,
 }: {
   session: Session;
   time: string;
@@ -26,6 +27,7 @@ export function SessionRow({
   postponeHint: string;
   onAttend: () => void;
   onPostpone: (reason: string) => void;
+  onWithdrawPostpone?: () => void;
 }) {
   const [open, setOpen] = useState(false);
   const [reason, setReason] = useState("");
@@ -55,6 +57,11 @@ export function SessionRow({
           {session.status === "attend_pending" ||
           session.status === "postpone_pending" ? (
             <p className="text-xs text-muted">Hocanın onayı bekleniyor.</p>
+          ) : null}
+          {session.status === "postpone_pending" && onWithdrawPostpone ? (
+            <Button variant="ghost" onClick={onWithdrawPostpone}>
+              Erteleme talebini geri al
+            </Button>
           ) : null}
           {!locked ? (
             <>
@@ -86,19 +93,8 @@ export function SessionRow({
           <p className="text-sm text-muted">
             {postponeHint} Hoca onaylayınca bu ders ertelenir.
           </p>
-          <label className="mt-3 block text-sm text-muted" htmlFor={`reason-${session.id}`}>
-            Not (isteğe bağlı)
-          </label>
-          <textarea
-            id={`reason-${session.id}`}
-            value={reason}
-            onChange={(event) => setReason(event.target.value)}
-            rows={2}
-            className="mt-2 w-full resize-none rounded-xl border border-border bg-surface-muted px-3 py-2 text-sm outline-none focus:border-accent"
-            placeholder="Hocaya kısa bir not bırakabilirsin."
-          />
           <div className="mt-3 flex gap-2">
-            <Button type="submit">Bu dersi ertele</Button>
+            <Button type="submit">Erteleme talebi gönder</Button>
             <Button variant="ghost" onClick={() => setOpen(false)}>
               Vazgeç
             </Button>

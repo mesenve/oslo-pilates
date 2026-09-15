@@ -26,7 +26,26 @@ export async function POST(request: Request) {
   const session = snapshot?.sessions?.find((item) => item.id === body.sessionId);
   const student = snapshot?.students?.find((item) => item.id === session?.studentId);
   if (user.role === "student") {
-    if (body.status !== "postpone_pending" || !snapshot || !session || !student || student.id !== user.id) {
+    if (!snapshot || !session || !student || student.id !== user.id) {
+      return NextResponse.json({ error: "Bu işlem için yetkiniz yok." }, { status: 403 });
+    }
+    if (body.status === "upcoming") {
+      const pendingRequest = snapshot.postponeRequests?.find(
+        (item) => item.sessionId === session.id && item.status === "pending",
+      );
+      if (session.status !== "postpone_pending" || !pendingRequest) {
+        return NextResponse.json({ error: "Geri alınabilecek bir erteleme talebi yok." }, { status: 409 });
+      }
+      snapshot.sessions = snapshot.sessions?.map((item) =>
+        item.id === session.id ? { ...item, status: "upcoming" } : item,
+      );
+      snapshot.postponeRequests = snapshot.postponeRequests?.map((item) =>
+        item.id === pendingRequest.id ? { ...item, status: "rejected" } : item,
+      );
+      await writeStudioSnapshot({ configured: true, snapshot });
+      return NextResponse.json({ ok: true, revision: snapshotRevision(snapshot) });
+    }
+    if (body.status !== "postpone_pending") {
       return NextResponse.json({ error: "Bu işlem için yetkiniz yok." }, { status: 403 });
     }
     if (session.status !== "upcoming") {
