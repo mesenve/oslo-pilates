@@ -65,7 +65,7 @@ export default function StudentHomePage() {
       >
         <DailyQuoteCard date={today} />
         {remaining <= 2 ? (
-          <LastWeekCta student={student} onRequestRenewal={requestRenewal} />
+          <LastWeekCta student={student} remaining={remaining} onRequestRenewal={requestRenewal} />
         ) : null}
       </section>
 

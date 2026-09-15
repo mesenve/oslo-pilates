@@ -5,7 +5,7 @@ import { Button } from "@/components/ui";
 import type { Student } from "@/types/studio";
 import { useState } from "react";
 
-export function LastWeekCta({ student, onRequestRenewal }: { student: Student; onRequestRenewal: (date?: string) => Promise<{ error: string | null }> }) {
+export function LastWeekCta({ student, remaining, onRequestRenewal }: { student: Student; remaining: number; onRequestRenewal: (date?: string) => Promise<{ error: string | null }> }) {
   const [date, setDate] = useState("");
   const [status, setStatus] = useState<"idle" | "sending" | "sent" | "error">("idle");
   const [error, setError] = useState<string | null>(null);
@@ -23,7 +23,7 @@ export function LastWeekCta({ student, onRequestRenewal }: { student: Student; o
         Paket hatırlatması
       </p>
       <h2 className="mt-1 font-serif text-lg leading-snug">
-        Paketinizde {Math.max(0, student.package.remainingSessions)} ders kaldı.
+        Paketinizde {Math.max(0, remaining)} ders kaldı.
       </h2>
       <p className="mt-1 text-xs text-white/80">
         Ders programınızın kesintisiz devamı için yenileme talebinizi iletmek ister misiniz?
