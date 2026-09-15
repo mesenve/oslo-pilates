@@ -17,7 +17,7 @@ const snapshotPath = path.join(process.cwd(), ".data", "studio.json");
 const BLOB_STORE_NAME = "oslo-pilates-studio";
 const SNAPSHOT_KEY = "snapshot:current";
 
-function snapshotRevision(snapshot: unknown) {
+export function snapshotRevision(snapshot: unknown) {
   const value = snapshot && typeof snapshot === "object" ? snapshot as Record<string, unknown> : {};
   const sortById = (rows: unknown) => [...(Array.isArray(rows) ? rows : [])]
     .sort((a, b) => String((a as { id?: string }).id).localeCompare(String((b as { id?: string }).id)));

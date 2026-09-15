@@ -1,4 +1,4 @@
-import { readStudioSnapshot, writeStudioSnapshot } from "@/app/api/studio/route";
+import { readStudioSnapshot, snapshotRevision, writeStudioSnapshot } from "@/app/api/studio/route";
 import { getSessionUser } from "@/lib/server/session";
 import { todayISO } from "@/lib/dates";
 import { getClassGroupById } from "@/data/groups";
@@ -55,7 +55,7 @@ export async function POST(request: Request) {
     );
     snapshot.postponeRequests = [nextRequest, ...(snapshot.postponeRequests ?? [])];
     await writeStudioSnapshot({ configured: true, snapshot });
-    return NextResponse.json({ ok: true, request: nextRequest });
+    return NextResponse.json({ ok: true, request: nextRequest, revision: snapshotRevision(snapshot) });
   }
   const sharedPair = ["staff-delfin", "staff-elif"];
   const allowed = user.role === "super_admin" || Boolean(student && (
@@ -88,5 +88,5 @@ export async function POST(request: Request) {
     };
   });
   await writeStudioSnapshot({ configured: true, snapshot });
-  return NextResponse.json({ ok: true });
+  return NextResponse.json({ ok: true, revision: snapshotRevision(snapshot) });
 }

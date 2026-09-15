@@ -624,9 +624,11 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
     if (!response.ok) return;
     const data = (await response.json().catch(() => null)) as {
       request?: StudioState["postponeRequests"][number];
+      revision?: string;
     } | null;
     const request = data?.request;
     if (!request) return;
+    setStudioSnapshotRevision(data?.revision);
     setStudioState((current) => ({
       ...current,
       sessions: current.sessions.map((item) =>
@@ -647,6 +649,8 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
         body: JSON.stringify({ sessionId: request.sessionId, status: "postponed" }),
       });
       if (!response.ok) return;
+      const data = (await response.json().catch(() => null)) as { revision?: string } | null;
+      setStudioSnapshotRevision(data?.revision);
       setStudioState((state) => ({
         ...state,
         postponeRequests: state.postponeRequests.map((item) =>
@@ -672,12 +676,16 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
       if (session.date > todayISO() && outcome !== "upcoming") {
         return;
       }
-      void fetch("/api/sessions/status", {
+      void (async () => {
+        const response = await fetch("/api/sessions/status", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ sessionId, status: outcome }),
-      });
-      setStudioState((current) => {
+        });
+        if (!response.ok) return;
+        const data = (await response.json().catch(() => null)) as { revision?: string } | null;
+        setStudioSnapshotRevision(data?.revision);
+        setStudioState((current) => {
         const session = current.sessions.find((item) => item.id === sessionId);
         if (!session) return current;
         if (!canManageStudent(current.user, session.studentId, current.students)) {
@@ -759,7 +767,8 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
             ...current.postponeRequests,
           ],
         };
-      });
+        });
+      })();
     },
     [],
   );
@@ -777,7 +786,7 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
             item.id === studentId ? { ...item, postponeLessonUsed: used } : item,
           ),
         };
-      });
+        });
     },
     [],
   );
