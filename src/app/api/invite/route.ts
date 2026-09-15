@@ -10,6 +10,7 @@ import type { Session, Student } from "@/types/studio";
 import { NextResponse } from "next/server";
 import { getSessionUser } from "@/lib/server/session";
 import { readStudioSnapshot } from "@/app/api/studio/route";
+import { canManageStudent } from "@/lib/access";
 
 type InviteRequestBody = {
   name?: string;
@@ -68,7 +69,7 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   const user = await getSessionUser();
-  if (user?.role !== "super_admin") {
+  if (!user || (user.role !== "super_admin" && user.role !== "instructor")) {
     return NextResponse.json({ error: "Bu işlem için yönetici oturumu gerekli." }, { status: 403 });
   }
   let body: InviteRequestBody;
@@ -122,6 +123,12 @@ export async function POST(request: Request) {
       { error: "Davet kaydedilemedi. Lütfen tekrar dene." },
       { status: 500 },
     );
+  }
+
+  const current = await readStudioSnapshot();
+  const currentStudents = ((current.snapshot as { students?: Student[] } | null)?.students ?? []);
+  if (!canManageStudent(user, student.id, currentStudents)) {
+    return NextResponse.json({ error: "Bu öğrenci için davet gönderme yetkin yok." }, { status: 403 });
   }
 
   if (body.sendEmail === false) {

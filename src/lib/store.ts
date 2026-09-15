@@ -12,6 +12,7 @@ let memory: StudioState = createSeedState();
 const serverSnapshot = memory;
 let hydrated = false;
 let studioSnapshotPersistenceEnabled = false;
+let persistenceQueue: Promise<void> = Promise.resolve();
 const listeners = new Set<() => void>();
 
 function readStorage(): StudioState {
@@ -72,10 +73,19 @@ export function setStudioState(
         postponeRequests: memory.postponeRequests,
         customGroups: memory.customGroups,
       };
-      void fetch("/api/studio", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ snapshot }),
+      persistenceQueue = persistenceQueue.then(async () => {
+        const response = await fetch("/api/studio", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ snapshot }),
+        });
+        if (!response.ok && typeof window !== "undefined") {
+          window.dispatchEvent(new CustomEvent("studio:persistence-error"));
+        }
+      }).catch(() => {
+        if (typeof window !== "undefined") {
+          window.dispatchEvent(new CustomEvent("studio:persistence-error"));
+        }
       });
     }
   }

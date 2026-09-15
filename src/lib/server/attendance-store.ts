@@ -1,5 +1,10 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
+import {
+  isSupabaseConfigured,
+  listSupabaseAttendance,
+  saveSupabaseAttendance,
+} from "@/lib/server/supabase-rest";
 
 export type AttendanceMarkStatus = "attend_pending" | "attended" | "upcoming";
 
@@ -109,6 +114,18 @@ export async function saveAttendanceMark(input: {
     updatedAt: new Date().toISOString(),
   };
 
+  if (isSupabaseConfigured()) {
+    await saveSupabaseAttendance({
+      session_id: mark.sessionId,
+      student_id: mark.studentId,
+      session_date: mark.date,
+      group_id: mark.groupId,
+      status: mark.status,
+      updated_at: mark.updatedAt,
+    });
+    return mark;
+  }
+
   const blobs = await getBlobAdapter();
   if (blobs) {
     await blobs.saveMark(mark);
@@ -125,6 +142,20 @@ export async function listAttendanceMarks(filter?: {
   status?: AttendanceMarkStatus;
   studentId?: string;
 }) {
+  if (isSupabaseConfigured()) {
+    const marks = (await listSupabaseAttendance()).map((mark) => ({
+      sessionId: mark.session_id,
+      studentId: mark.student_id,
+      date: mark.session_date,
+      groupId: mark.group_id,
+      status: mark.status,
+      updatedAt: mark.updated_at ?? new Date().toISOString(),
+    }));
+    return marks.filter((mark) =>
+      (!filter?.status || mark.status === filter.status) &&
+      (!filter?.studentId || mark.studentId === filter.studentId),
+    );
+  }
   const blobs = await getBlobAdapter();
   if (blobs) {
     return blobs.listMarks(filter);

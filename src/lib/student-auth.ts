@@ -8,7 +8,8 @@ export const DEFAULT_STUDENT_PASSWORDS: Record<string, string> = {
 };
 
 export function createInviteToken() {
-  return `inv_${Date.now()}_${Math.random().toString(36).slice(2, 14)}`;
+  const uuid = globalThis.crypto?.randomUUID?.();
+  return `inv_${uuid ?? `${Date.now()}_${Math.random().toString(36).slice(2, 14)}`}`;
 }
 
 export function inviteExpiresAt(from = new Date()) {

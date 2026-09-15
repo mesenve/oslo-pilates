@@ -5,6 +5,7 @@ import { getSessionUser } from "@/lib/server/session";
 import { groupIdForSchedule, groupLabelForSchedule } from "@/data/groups";
 import { todayISO } from "@/lib/dates";
 import type { ClassGroup, DayOfWeek } from "@/types/studio";
+import { isSupabaseConfigured, readSupabaseSnapshot, writeSupabaseSnapshot } from "@/lib/server/supabase-rest";
 
 type StudioSnapshotResponse = {
   configured?: boolean;
@@ -118,6 +119,14 @@ function normalizeCustomScheduleGroups(snapshot: Record<string, unknown>) {
 }
 
 export async function readStudioSnapshot(): Promise<StudioSnapshotResponse> {
+  if (isSupabaseConfigured()) {
+    try {
+      const snapshot = await readSupabaseSnapshot();
+      return { configured: true, snapshot };
+    } catch {
+      // Supabase geçici olarak erişilemiyorsa mevcut Blob fallback'i kullanılır.
+    }
+  }
   try {
     const { getStore } = await import("@netlify/blobs");
     const store = getStore(BLOB_STORE_NAME);
@@ -137,6 +146,23 @@ export async function readStudioSnapshot(): Promise<StudioSnapshotResponse> {
 }
 
 export async function writeStudioSnapshot(snapshot: StudioSnapshotResponse) {
+  if (isSupabaseConfigured() && snapshot.snapshot && typeof snapshot.snapshot === "object") {
+    const value = snapshot.snapshot as {
+      students?: Parameters<typeof writeSupabaseSnapshot>[0]["students"];
+      archivedStudents?: Parameters<typeof writeSupabaseSnapshot>[0]["archivedStudents"];
+      sessions?: Parameters<typeof writeSupabaseSnapshot>[0]["sessions"];
+      postponeRequests?: Parameters<typeof writeSupabaseSnapshot>[0]["postponeRequests"];
+      customGroups?: Parameters<typeof writeSupabaseSnapshot>[0]["customGroups"];
+    };
+    await writeSupabaseSnapshot({
+      students: value.students ?? [],
+      archivedStudents: value.archivedStudents ?? [],
+      sessions: value.sessions ?? [],
+      postponeRequests: value.postponeRequests ?? [],
+      customGroups: value.customGroups ?? [],
+    });
+    return;
+  }
   try {
     const { getStore } = await import("@netlify/blobs");
     const store = getStore(BLOB_STORE_NAME);
@@ -170,8 +196,9 @@ export async function GET(request: Request) {
         customGroups?: Array<{ id: string }>;
         blockedEmails?: string[];
         staffPasswords?: Record<string, string>;
+        studentPasswords?: Record<string, string>;
       };
-    const { staffPasswords: _staffPasswords, ...publicSnapshot } = snapshot;
+    const { staffPasswords: _staffPasswords, studentPasswords: _studentPasswords, ...publicSnapshot } = snapshot;
     const visibleStudentIds = new Set(
       user.role === "super_admin"
         ? (snapshot.students ?? []).map((student) => student.id)

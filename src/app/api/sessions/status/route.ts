@@ -1,27 +1,62 @@
 import { readStudioSnapshot, writeStudioSnapshot } from "@/app/api/studio/route";
 import { getSessionUser } from "@/lib/server/session";
 import { todayISO } from "@/lib/dates";
+import { getClassGroupById } from "@/data/groups";
+import { remainingPostponeRights } from "@/data/accessors";
+import { isAtLeast24HoursAway, weekdayFromISO } from "@/lib/dates";
+import type { Student, StudioState } from "@/types/studio";
 import { NextResponse } from "next/server";
 
-const allowedStatuses = new Set(["attended", "postponed", "missed", "upcoming"]);
+const allowedStatuses = new Set(["attended", "postponed", "missed", "upcoming", "postpone_pending"]);
 
 export async function POST(request: Request) {
   const user = await getSessionUser();
-  if (!user || user.role === "student") {
-    return NextResponse.json({ error: "Bu işlem için eğitmen oturumu gerekli." }, { status: 403 });
-  }
-  const body = (await request.json().catch(() => null)) as { sessionId?: string; status?: string } | null;
+  if (!user) return NextResponse.json({ error: "Oturum gerekli." }, { status: 401 });
+  const body = (await request.json().catch(() => null)) as { sessionId?: string; status?: string; reason?: string } | null;
   if (!body?.sessionId || !body.status || !allowedStatuses.has(body.status)) {
     return NextResponse.json({ error: "Geçersiz ders durumu." }, { status: 400 });
   }
   const state = await readStudioSnapshot();
   const snapshot = state.snapshot as {
-    students?: Array<{ id: string; instructorId: string }>;
-    sessions?: Array<{ id: string; studentId: string; date: string; status: string }>;
-    postponeRequests?: Array<{ sessionId: string; status: string }>;
+    students?: Array<{ id: string; instructorId: string; monthlyPostponeLimit?: number }>;
+    sessions?: Array<{ id: string; studentId: string; groupId: string; date: string; status: string }>;
+    postponeRequests?: Array<{ id: string; studentId: string; sessionId: string; reason: string; status: string; createdAt: string }>;
+    customGroups?: Array<{ id: string; time: string; timeByDay?: Record<string, string> }>;
   } | null;
   const session = snapshot?.sessions?.find((item) => item.id === body.sessionId);
   const student = snapshot?.students?.find((item) => item.id === session?.studentId);
+  if (user.role === "student") {
+    if (body.status !== "postpone_pending" || !snapshot || !session || !student || student.id !== user.id) {
+      return NextResponse.json({ error: "Bu işlem için yetkiniz yok." }, { status: 403 });
+    }
+    if (session.status !== "upcoming") {
+      return NextResponse.json({ error: "Bu ders için erteleme yapılamaz." }, { status: 409 });
+    }
+    const group = getClassGroupById(session.groupId) ?? snapshot.customGroups?.find((item) => item.id === session.groupId);
+    const day = weekdayFromISO(session.date);
+    const time = (day && group?.timeByDay?.[day]) ?? group?.time ?? "";
+    const hasRight = remainingPostponeRights(
+      { ...(student as Student), monthlyPostponeLimit: 1 },
+      (snapshot.postponeRequests ?? []) as StudioState["postponeRequests"],
+    ) > 0;
+    if (!hasRight || !isAtLeast24HoursAway(session.date, time)) {
+      return NextResponse.json({ error: "Erteleme koşulları sağlanmıyor." }, { status: 409 });
+    }
+    const nextRequest = {
+      id: `req-${session.id}-${Date.now()}`,
+      studentId: user.id,
+      sessionId: session.id,
+      reason: body.reason?.trim() || "Bu dersi ertelemek istiyorum.",
+      status: "pending",
+      createdAt: new Date().toISOString(),
+    };
+    snapshot.sessions = snapshot.sessions?.map((item) =>
+      item.id === session.id ? { ...item, status: "postpone_pending" } : item,
+    );
+    snapshot.postponeRequests = [nextRequest, ...(snapshot.postponeRequests ?? [])];
+    await writeStudioSnapshot({ configured: true, snapshot });
+    return NextResponse.json({ ok: true, request: nextRequest });
+  }
   const sharedPair = ["staff-delfin", "staff-elif"];
   const allowed = user.role === "super_admin" || Boolean(student && (
     student.instructorId === user.id ||

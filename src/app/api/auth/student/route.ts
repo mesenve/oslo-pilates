@@ -1,5 +1,6 @@
 import { findActivatedInviteByEmail } from "@/lib/server/invite-store";
 import { sessionCookie } from "@/lib/server/session";
+import { verifyPassword } from "@/lib/server/staff-credentials";
 import { NextResponse } from "next/server";
 
 type StudentLoginBody = {
@@ -24,7 +25,7 @@ export async function POST(request: Request) {
   }
 
   const invite = await findActivatedInviteByEmail(email);
-  if (!invite?.password || invite.password !== password) {
+  if (!invite?.password || !(await verifyPassword(password, invite.password))) {
     return NextResponse.json({ error: "E-posta veya şifre hatalı." }, { status: 401 });
   }
 

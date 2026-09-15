@@ -73,31 +73,36 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Geçersiz durum." }, { status: 400 });
   }
 
+  const state = await readStudioSnapshot();
+  const snapshot = state.snapshot as {
+    students?: Array<{ id: string; instructorId: string }>;
+    sessions?: Array<{ id: string; studentId: string; date: string; groupId: string; status: string }>;
+  } | null;
+  const session = snapshot?.sessions?.find((item) => item.id === sessionId);
+  const sessionStudent = snapshot?.students?.find((item) => item.id === session?.studentId);
+  const sharedPair = ["staff-delfin", "staff-elif"];
+  const managed = Boolean(sessionStudent && (
+    user.role === "super_admin" ||
+    sessionStudent.instructorId === user.id ||
+    (sharedPair.includes(sessionStudent.instructorId) && sharedPair.includes(user.id))
+  ));
   if (user.role === "student") {
-    if (studentId !== user.id || status !== "attend_pending") {
-      return NextResponse.json({ error: "Bu yoklama onayı için yetkiniz yok." }, { status: 403 });
-    }
-    const state = await readStudioSnapshot();
-    const snapshot = state.snapshot as {
-      sessions?: Array<{ id: string; studentId: string; status: string }>;
-    } | null;
-    const session = snapshot?.sessions?.find((item) => item.id === sessionId);
-    if (
-      !session ||
-      session.studentId !== user.id ||
-      session.status !== "upcoming" ||
-      date !== todayISO()
-    ) {
+    if (studentId !== user.id || status !== "attend_pending" || !session || session.studentId !== user.id || session.status !== "upcoming" || date !== todayISO()) {
       return NextResponse.json({ error: "Bu ders için yoklama onayı verilemez." }, { status: 403 });
     }
+  } else if (!managed) {
+    return NextResponse.json({ error: "Bu öğrenci için yoklama yetkin yok." }, { status: 403 });
   }
+  const canonicalStudentId = session?.studentId ?? studentId;
+  const canonicalDate = session?.date ?? date;
+  const canonicalGroupId = session?.groupId ?? groupId;
 
   try {
     const mark = await saveAttendanceMark({
       sessionId,
-      studentId,
-      date,
-      groupId,
+      studentId: canonicalStudentId,
+      date: canonicalDate,
+      groupId: canonicalGroupId,
       status,
     });
     return NextResponse.json({ ok: true, mark });

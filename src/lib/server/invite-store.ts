@@ -1,6 +1,16 @@
 import type { Session, Student } from "@/types/studio";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { hashPassword } from "@/lib/server/staff-credentials";
+import {
+  getSupabaseInvite,
+  activateSupabaseStudent,
+  deleteSupabaseInvite,
+  isSupabaseConfigured,
+  listSupabaseInvites,
+  saveSupabaseInvite,
+  type SupabaseInviteRow,
+} from "@/lib/server/supabase-rest";
 
 export type StoredInvite = {
   token: string;
@@ -156,7 +166,7 @@ async function activateInviteInFile(token: string, password: string) {
   const invite = store.invites[token];
   if (!invite) return null;
 
-  invite.password = password;
+  invite.password = await hashPassword(password);
   invite.activatedAt = new Date().toISOString();
   invite.student = {
     ...invite.student,
@@ -184,6 +194,24 @@ async function findActivatedInviteByEmailInFile(email: string) {
 }
 
 export async function saveInvite(invite: StoredInvite) {
+  if (isSupabaseConfigured()) {
+    const existing = (await listSupabaseInvites()).find((row) => row.student_id === invite.student.id);
+    await saveSupabaseInvite({
+      token: invite.token,
+      student_id: invite.student.id,
+      student: invite.student,
+      sessions: invite.sessions,
+      expires_at: invite.expiresAt,
+      password: invite.password ?? null,
+      activated_at: invite.activatedAt ?? null,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    });
+    if (existing && existing.token !== invite.token) {
+      await deleteSupabaseInvite(existing.token);
+    }
+    return;
+  }
   const blobs = await getBlobAdapter();
   if (blobs) {
     await blobs.saveInvite(invite);
@@ -194,6 +222,10 @@ export async function saveInvite(invite: StoredInvite) {
 }
 
 export async function getInviteByToken(token: string) {
+  if (isSupabaseConfigured()) {
+    const row = await getSupabaseInvite(token);
+    return row ? fromSupabaseRow(row) : null;
+  }
   const blobs = await getBlobAdapter();
   if (blobs) {
     return blobs.getInvite(token);
@@ -203,6 +235,11 @@ export async function getInviteByToken(token: string) {
 }
 
 export async function getInviteByStudentId(studentId: string) {
+  if (isSupabaseConfigured()) {
+    const rows = await listSupabaseInvites();
+    const row = rows.find((item) => item.student_id === studentId);
+    return row ? fromSupabaseRow(row) : null;
+  }
   const blobs = await getBlobAdapter();
   if (blobs) return blobs.getInviteByStudentId(studentId);
 
@@ -220,7 +257,7 @@ export async function activateInvite(token: string, password: string) {
 
   const activated: StoredInvite = {
     ...invite,
-    password,
+    password: await hashPassword(password),
     activatedAt: new Date().toISOString(),
     student: {
       ...invite.student,
@@ -229,6 +266,22 @@ export async function activateInvite(token: string, password: string) {
       inviteExpiresAt: undefined,
     },
   };
+
+  if (isSupabaseConfigured()) {
+    await activateSupabaseStudent(activated.student.id);
+    await saveSupabaseInvite({
+      token: activated.token,
+      student_id: activated.student.id,
+      student: activated.student,
+      sessions: activated.sessions,
+      expires_at: activated.expiresAt,
+      password: activated.password,
+      activated_at: activated.activatedAt,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    });
+    return activated;
+  }
 
   const blobs = await getBlobAdapter();
   if (blobs) {
@@ -240,6 +293,14 @@ export async function activateInvite(token: string, password: string) {
 }
 
 export async function findActivatedInviteByEmail(email: string) {
+  if (isSupabaseConfigured()) {
+    const normalized = email.trim().toLowerCase();
+    const rows = await listSupabaseInvites();
+    const row = rows.find(
+      (item) => item.student.email.toLowerCase() === normalized && item.password && item.activated_at,
+    );
+    return row ? fromSupabaseRow(row) : null;
+  }
   const blobs = await getBlobAdapter();
   if (blobs) {
     return blobs.findActivatedByEmail(email);
@@ -249,6 +310,11 @@ export async function findActivatedInviteByEmail(email: string) {
 }
 
 export async function listActivatedInvites() {
+  if (isSupabaseConfigured()) {
+    return (await listSupabaseInvites())
+      .filter((row) => row.activated_at && row.password)
+      .map(fromSupabaseRow);
+  }
   const blobs = await getBlobAdapter();
   if (blobs) {
     return blobs.listActivated();
@@ -258,6 +324,17 @@ export async function listActivatedInvites() {
   return Object.values(store.invites).filter(
     (invite) => invite.activatedAt && invite.password,
   );
+}
+
+function fromSupabaseRow(row: SupabaseInviteRow): StoredInvite {
+  return {
+    token: row.token,
+    student: row.student,
+    sessions: row.sessions ?? [],
+    expiresAt: row.expires_at,
+    password: row.password ?? undefined,
+    activatedAt: row.activated_at ?? undefined,
+  };
 }
 
 export function inviteTokenFromUrl(link: string) {

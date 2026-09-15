@@ -10,7 +10,7 @@ import { getClassGroupById, legacyGroupFromId, setCustomGroups } from "@/data/gr
 import { studentsForUser, sessionsForUser, postponeRequestsForUser, canManageStudent, isStaffRole } from "@/lib/access";
 import { fetchAttendanceMarks, pushAttendanceMark } from "@/lib/attendance-client";
 import { mergeActivatedInvites, mergeAttendanceMarks } from "@/lib/attendance-sync";
-import { addDays, isAtLeast24HoursAway, startOfWeekMonday, toISODate, todayISO, weekdayFromISO } from "@/lib/dates";
+import { addDays, startOfWeekMonday, toISODate, todayISO } from "@/lib/dates";
 import {
   createInviteToken,
   getStudentPassword,
@@ -299,7 +299,8 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
       (item) => item.email.toLowerCase() === normalizedEmail,
     );
 
-    if (localStudent) {
+    // Demo-only shortcut: production authentication always goes through the server.
+    if (process.env.NODE_ENV !== "production" && localStudent) {
       if (localStudent.accountStatus === "invited") {
         return {
           error:
@@ -607,63 +608,48 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
     })();
   }, []);
 
-  const requestPostpone = useCallback((sessionId: string, reason: string) => {
-    setStudioState((current) => {
-      const session = current.sessions.find((item) => item.id === sessionId);
-      if (!session || session.status !== "upcoming") return current;
-      const student = current.students.find((item) => item.id === session.studentId);
-      if (!student) return current;
-      const group = getClassGroupById(session.groupId);
-      const day = weekdayFromISO(session.date);
-      const time = (day && group?.timeByDay?.[day]) ?? group?.time ?? "";
-      const studentHasRight =
-        student.monthlyPostponeLimit > 0 &&
-        remainingPostponeRights({ ...student, monthlyPostponeLimit: 1 }, current.postponeRequests) > 0;
-      if (!studentHasRight || !isAtLeast24HoursAway(session.date, time)) {
-        return current;
-      }
-      return {
-        ...current,
-        sessions: current.sessions.map((item) =>
-          item.id === sessionId ? { ...item, status: "postpone_pending" } : item,
-        ),
-        postponeRequests: [
-          {
-            id: `req-${sessionId}-${Date.now()}`,
-            studentId: session.studentId,
-            sessionId,
-            reason: reason.trim() || "Bu dersi ertelemek istiyorum.",
-            status: "pending",
-            createdAt: `${todayISO()}T12:00:00`,
-          },
-          ...current.postponeRequests,
-        ],
-      };
+  const requestPostpone = useCallback(async (sessionId: string, reason: string) => {
+    const response = await fetch("/api/sessions/status", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ sessionId, status: "postpone_pending", reason }),
     });
+    if (!response.ok) return;
+    const data = (await response.json().catch(() => null)) as {
+      request?: StudioState["postponeRequests"][number];
+    } | null;
+    const request = data?.request;
+    if (!request) return;
+    setStudioState((current) => ({
+      ...current,
+      sessions: current.sessions.map((item) =>
+        item.id === sessionId ? { ...item, status: "postpone_pending" } : item,
+      ),
+      postponeRequests: [request, ...current.postponeRequests.filter((item) => item.id !== request.id)],
+    }));
   }, []);
 
   const approveRequest = useCallback((requestId: string) => {
-    setStudioState((current) => {
+    void (async () => {
+      const current = getStudioSnapshot();
       const request = current.postponeRequests.find((item) => item.id === requestId);
-      if (
-        !request ||
-        request.status !== "pending" ||
-        !canManageStudent(current.user, request.studentId, current.students)
-      ) {
-        return current;
-      }
-      return {
-        ...current,
-        postponeRequests: current.postponeRequests.map((item) =>
+      if (!request || request.status !== "pending" || !canManageStudent(current.user, request.studentId, current.students)) return;
+      const response = await fetch("/api/sessions/status", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sessionId: request.sessionId, status: "postponed" }),
+      });
+      if (!response.ok) return;
+      setStudioState((state) => ({
+        ...state,
+        postponeRequests: state.postponeRequests.map((item) =>
           item.id === requestId ? { ...item, status: "approved" } : item,
         ),
-        sessions: current.sessions.map((session) =>
-          session.id === request.sessionId
-            ? { ...session, status: "postponed" }
-            : session,
+        sessions: state.sessions.map((session) =>
+          session.id === request.sessionId ? { ...session, status: "postponed" } : session,
         ),
-      };
-    });
+      }));
+    })();
   }, []);
 
   const markSessionByInstructor = useCallback(
