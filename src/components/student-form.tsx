@@ -434,6 +434,10 @@ function toInput(
   lockedInstructorId?: string,
   newGroup?: ClassGroup,
 ): NewStudentInput {
+  const monthlyPostponeRaw = form.monthlyPostponeLimit.trim();
+  const monthlyPostponeLimit = monthlyPostponeRaw === ""
+    ? 1
+    : Number(monthlyPostponeRaw);
   return {
     name: form.name,
     email: form.email,
@@ -449,8 +453,8 @@ function toInput(
     totalSessions: Number(form.totalSessions),
     paymentStatus: form.paymentStatus,
     note: form.note,
-    monthlyPostponeLimit: Number.isFinite(Number(form.monthlyPostponeLimit))
-      ? Math.max(0, Math.round(Number(form.monthlyPostponeLimit)))
+    monthlyPostponeLimit: Number.isFinite(monthlyPostponeLimit)
+      ? Math.max(0, Math.round(monthlyPostponeLimit))
       : 1,
     startDate: form.startDate || todayISO(),
     customDays: form.customDays,

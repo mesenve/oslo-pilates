@@ -34,13 +34,26 @@ function hasUsableSchedule(group: ClassGroup) {
 }
 
 export function groupIdForSchedule(days: ClassGroup["days"], time: string) {
-  const dayPart = days.map((day) => ({ monday: "pzt", tuesday: "sal", wednesday: "car", thursday: "per", friday: "cum", saturday: "cmt", sunday: "paz" })[day]).join("-");
-  return `${dayPart}-${time.replace(/[^0-9]/g, "")}`;
+  const dayCode: Record<ClassGroup["days"][number], string> = {
+    monday: "pzt", tuesday: "sal", wednesday: "car", thursday: "per",
+    friday: "cum", saturday: "cmt", sunday: "paz",
+  };
+  const dayOrder: Record<ClassGroup["days"][number], number> = {
+    monday: 1, tuesday: 2, wednesday: 3, thursday: 4,
+    friday: 5, saturday: 6, sunday: 7,
+  };
+  const dayPart = [...days]
+    .sort((a, b) => dayOrder[a] - dayOrder[b])
+    .map((day) => dayCode[day])
+    .join("-");
+  const normalizedTime = time.trim().replace(/:/g, ".");
+  return `${dayPart}-${normalizedTime.replace(/[^0-9]/g, "")}`;
 }
 
 export function groupLabelForSchedule(days: ClassGroup["days"], time: string) {
   const labels = { monday: "Pazartesi", tuesday: "Salı", wednesday: "Çarşamba", thursday: "Perşembe", friday: "Cuma", saturday: "Cumartesi", sunday: "Pazar" };
-  return `${days.map((day) => labels[day]).join("–")} ${time}`;
+  const ordered = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"] as const;
+  return `${ordered.filter((day) => days.includes(day)).map((day) => labels[day]).join("–")} ${time.trim().replace(/:/g, ".")}`;
 }
 
 function readableGroupLabel(group: ClassGroup) {
