@@ -65,7 +65,13 @@ export async function POST(request: Request) {
   if (!session || !allowed || !snapshot) {
     return NextResponse.json({ error: "Bu ders için yetkiniz yok." }, { status: 403 });
   }
-  if (session.date > todayISO() && body.status !== "upcoming") {
+  const pendingPostpone = snapshot.postponeRequests?.find(
+    (item) => item.sessionId === session.id && item.status === "pending",
+  );
+  const approvingPostpone = body.status === "postponed" &&
+    session.status === "postpone_pending" &&
+    Boolean(pendingPostpone);
+  if (session.date > todayISO() && body.status !== "upcoming" && !approvingPostpone) {
     return NextResponse.json(
       { error: "Gelecekteki dersler bekleniyor olarak kalır." },
       { status: 400 },
@@ -74,11 +80,13 @@ export async function POST(request: Request) {
   snapshot.sessions = snapshot.sessions?.map((item) =>
     item.id === session.id ? { ...item, status: body.status! } : item,
   );
-  if (body.status !== "postponed") {
-    snapshot.postponeRequests = snapshot.postponeRequests?.map((item) =>
-      item.sessionId === session.id && item.status !== "rejected" ? { ...item, status: "rejected" } : item,
-    );
-  }
+  snapshot.postponeRequests = snapshot.postponeRequests?.map((item) => {
+    if (item.sessionId !== session.id || item.status !== "pending") return item;
+    return {
+      ...item,
+      status: approvingPostpone ? "approved" : "rejected",
+    };
+  });
   await writeStudioSnapshot({ configured: true, snapshot });
   return NextResponse.json({ ok: true });
 }
