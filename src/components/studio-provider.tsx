@@ -249,7 +249,7 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
       window.removeEventListener("focus", onFocus);
       document.removeEventListener("visibilitychange", onVisible);
     };
-  }, [ready, state.user?.id, state.user?.role]);
+  }, [ready, state.user, state.user?.id, state.user?.role]);
 
   const loginAs = useCallback((role: Role, staffId?: string) => {
     if (role === "super_admin" || role === "instructor") {
@@ -1214,7 +1214,6 @@ export function useCurrentStudent() {
   if (!user || user.role !== "student") return null;
   return students.find((student) => student.id === user.id) ?? null;
 }
-
 function normalizeStudentInput(
   input: NewStudentInput,
   user: StudioState["user"],
@@ -1333,16 +1332,3 @@ function studentFromInput(
   };
 }
 
-function slugEmail(name: string) {
-  const slug = name
-    .toLocaleLowerCase("tr-TR")
-    .replaceAll("ı", "i")
-    .replaceAll("ğ", "g")
-    .replaceAll("ü", "u")
-    .replaceAll("ş", "s")
-    .replaceAll("ö", "o")
-    .replaceAll("ç", "c")
-    .replace(/[^a-z0-9]+/g, ".")
-    .replace(/^\.|\.$/g, "");
-  return `${slug || "ogrenci"}@oslo`;
-}
