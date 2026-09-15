@@ -365,13 +365,22 @@ function TimePickerField({
   value: string;
   onChange: (value: string) => void;
 }) {
-  const [rawHour = "", rawMinute = ""] = value.split(/[.:]/);
+  // Some older custom schedules store a per-day range such as
+  // "19.00–20.00". The picker edits the first time while preserving the
+  // remaining range instead of showing an empty minute field.
+  const firstTime = value.match(/\d{1,2}[.:]\d{2}/)?.[0] ?? "";
+  const [rawHour = "", rawMinute = ""] = firstTime.split(/[.:]/);
   const hour = rawHour.padStart(2, "0");
   const minute = rawMinute.padStart(2, "0");
   const hours = Array.from({ length: 24 }, (_, index) => String(index).padStart(2, "0"));
   const minutes = Array.from({ length: 12 }, (_, index) => String(index * 5).padStart(2, "0"));
   const updateTime = (nextHour: string, nextMinute: string) => {
-    onChange(nextHour && nextMinute ? `${nextHour}.${nextMinute}` : "");
+    if (!nextHour || !nextMinute) {
+      onChange("");
+      return;
+    }
+    const suffix = value.match(/^\s*\d{1,2}[.:]\d{2}(.*)$/)?.[1] ?? "";
+    onChange(`${nextHour}.${nextMinute}${suffix}`);
   };
 
   return (
