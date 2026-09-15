@@ -234,14 +234,19 @@ export async function writeSupabaseSnapshot(snapshot: Pick<StudioState, "student
     label: group.label,
   }));
 
-  const upsert = (table: string, rows: SupabaseRow[], conflict: string) =>
-    rows.length
-      ? request<SupabaseRow[]>(`${table}?on_conflict=${conflict}`, {
-          method: "POST",
-          headers: { Prefer: "resolution=merge-duplicates,return=minimal" },
-          body: JSON.stringify(rows),
-        })
-      : Promise.resolve([]);
+  // Keep REST payloads small.  A full studio snapshot contains hundreds of
+  // sessions; sending them as one request can be rejected by the proxy and
+  // leaves the preceding student upsert committed while sessions are lost.
+  const upsert = async (table: string, rows: SupabaseRow[], conflict: string) => {
+    const chunkSize = 100;
+    for (let offset = 0; offset < rows.length; offset += chunkSize) {
+      await request<SupabaseRow[]>(`${table}?on_conflict=${conflict}`, {
+        method: "POST",
+        headers: { Prefer: "resolution=merge-duplicates,return=minimal" },
+        body: JSON.stringify(rows.slice(offset, offset + chunkSize)),
+      });
+    }
+  };
 
   await upsert("students", students, "id");
   await upsert("sessions", sessions, "id");
