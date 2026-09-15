@@ -13,6 +13,7 @@ const serverSnapshot = memory;
 let hydrated = false;
 let studioSnapshotPersistenceEnabled = false;
 let persistenceQueue: Promise<void> = Promise.resolve();
+let studioSnapshotRevision: string | null = null;
 const listeners = new Set<() => void>();
 
 function readStorage(): StudioState {
@@ -77,8 +78,11 @@ export function setStudioState(
         const response = await fetch("/api/studio", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ snapshot }),
+          body: JSON.stringify({ snapshot, revision: studioSnapshotRevision }),
         });
+        const data = (await response.json().catch(() => null)) as { revision?: string } | null;
+        if (response.ok && data?.revision) studioSnapshotRevision = data.revision;
+        if (response.status === 409) studioSnapshotPersistenceEnabled = false;
         if (!response.ok && typeof window !== "undefined") {
           window.dispatchEvent(new CustomEvent("studio:persistence-error"));
         }
@@ -94,6 +98,15 @@ export function setStudioState(
 
 export function enableStudioSnapshotPersistence() {
   studioSnapshotPersistenceEnabled = true;
+}
+
+/** Wait until all queued snapshot writes have settled before a destructive action. */
+export async function flushStudioSnapshotPersistence() {
+  await persistenceQueue;
+}
+
+export function setStudioSnapshotRevision(revision: string | null | undefined) {
+  studioSnapshotRevision = revision ?? null;
 }
 
 function hydrateStudent(student: Student): Student {

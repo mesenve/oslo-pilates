@@ -6,6 +6,7 @@ import { groupIdForSchedule, groupLabelForSchedule } from "@/data/groups";
 import { todayISO } from "@/lib/dates";
 import type { ClassGroup, DayOfWeek } from "@/types/studio";
 import { deleteSupabaseStudent, isSupabaseConfigured, readSupabaseSnapshot, writeSupabaseSnapshot } from "@/lib/server/supabase-rest";
+import { createHash } from "node:crypto";
 
 type StudioSnapshotResponse = {
   configured?: boolean;
@@ -15,6 +16,20 @@ type StudioSnapshotResponse = {
 const snapshotPath = path.join(process.cwd(), ".data", "studio.json");
 const BLOB_STORE_NAME = "oslo-pilates-studio";
 const SNAPSHOT_KEY = "snapshot:current";
+
+function snapshotRevision(snapshot: unknown) {
+  const value = snapshot && typeof snapshot === "object" ? snapshot as Record<string, unknown> : {};
+  const sortById = (rows: unknown) => [...(Array.isArray(rows) ? rows : [])]
+    .sort((a, b) => String((a as { id?: string }).id).localeCompare(String((b as { id?: string }).id)));
+  const stable = {
+    students: sortById(value.students),
+    archivedStudents: sortById(value.archivedStudents),
+    sessions: sortById(value.sessions),
+    postponeRequests: sortById(value.postponeRequests),
+    customGroups: sortById(value.customGroups),
+  };
+  return createHash("sha256").update(JSON.stringify(stable)).digest("hex").slice(0, 24);
+}
 
 type SnapshotStudent = {
   id: string;
@@ -212,6 +227,7 @@ export async function GET(request: Request) {
 
     return NextResponse.json({
       ...response,
+      revision: snapshotRevision(snapshot),
       snapshot: {
           ...publicSnapshot,
         students: (snapshot.students ?? []).filter((student) => visibleStudentIds.has(student.id)),
@@ -234,7 +250,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Bu işlem için yönetici oturumu gerekli." }, { status: 403 });
   }
   try {
-    const body = (await request.json()) as { snapshot?: unknown };
+    const body = (await request.json()) as { snapshot?: unknown; revision?: string | null };
     if (!body.snapshot || typeof body.snapshot !== "object") {
       return NextResponse.json({ error: "Geçersiz stüdyo verisi." }, { status: 400 });
     }
@@ -245,6 +261,12 @@ export async function POST(request: Request) {
       existing.snapshot && typeof existing.snapshot === "object"
         ? existing.snapshot
         : {};
+    if (body.revision && body.revision !== snapshotRevision(currentSnapshot)) {
+      return NextResponse.json(
+        { error: "Veriler başka bir sekmede güncellendi. Sayfayı yenileyip tekrar dene.", revision: snapshotRevision(currentSnapshot) },
+        { status: 409 },
+      );
+    }
     if (user.role === "instructor") {
       const current = currentSnapshot as {
         students?: Array<{ id: string; instructorId: string; groupId?: string }>;
@@ -286,18 +308,19 @@ export async function POST(request: Request) {
           { status: 409 },
         );
       }
+      const savedSnapshot = {
+        ...current,
+        students: mergedStudents,
+        archivedStudents: current.archivedStudents,
+        sessions: mergeByStudent(current.sessions, incoming.sessions),
+        postponeRequests: mergeByStudent(current.postponeRequests, incoming.postponeRequests),
+        customGroups: [...(current.customGroups ?? []), ...groupsCreatedForOwnedStudents],
+      };
       await writeStudioSnapshot({
         configured: true,
-        snapshot: {
-          ...current,
-          students: mergedStudents,
-          archivedStudents: current.archivedStudents,
-          sessions: mergeByStudent(current.sessions, incoming.sessions),
-          postponeRequests: mergeByStudent(current.postponeRequests, incoming.postponeRequests),
-          customGroups: [...(current.customGroups ?? []), ...groupsCreatedForOwnedStudents],
-        },
+        snapshot: savedSnapshot,
       });
-      return NextResponse.json({ ok: true });
+      return NextResponse.json({ ok: true, revision: snapshotRevision(savedSnapshot) });
     }
 
     const currentForValidation = currentSnapshot as {

@@ -110,6 +110,12 @@ export async function POST(request: Request) {
     );
   }
 
+  const current = await readStudioSnapshot();
+  const currentStudents = ((current.snapshot as { students?: Student[] } | null)?.students ?? []);
+  if (!canManageStudent(user, student.id, currentStudents)) {
+    return NextResponse.json({ error: "Bu öğrenci için davet gönderme yetkin yok." }, { status: 403 });
+  }
+
   try {
     await saveInvite({
       token,
@@ -123,12 +129,6 @@ export async function POST(request: Request) {
       { error: "Davet kaydedilemedi. Lütfen tekrar dene." },
       { status: 500 },
     );
-  }
-
-  const current = await readStudioSnapshot();
-  const currentStudents = ((current.snapshot as { students?: Student[] } | null)?.students ?? []);
-  if (!canManageStudent(user, student.id, currentStudents)) {
-    return NextResponse.json({ error: "Bu öğrenci için davet gönderme yetkin yok." }, { status: 403 });
   }
 
   if (body.sendEmail === false) {

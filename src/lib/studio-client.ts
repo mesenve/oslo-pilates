@@ -7,6 +7,11 @@ export type RemoteStudioSnapshot = Pick<
   blockedEmails?: string[];
 };
 
+export type RemoteStudioResult = {
+  snapshot: RemoteStudioSnapshot;
+  revision?: string;
+};
+
 export async function fetchStudioSnapshot(input?: {
   studentId?: string;
   includeBlockedEmails?: boolean;
@@ -21,8 +26,9 @@ export async function fetchStudioSnapshot(input?: {
   const data = (await response.json()) as {
     configured?: boolean;
     snapshot?: RemoteStudioSnapshot | null;
+    revision?: string;
   };
 
   if (!response.ok || !data.configured || !data.snapshot) return null;
-  return data.snapshot;
+  return { snapshot: data.snapshot, revision: data.revision };
 }

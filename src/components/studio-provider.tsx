@@ -28,8 +28,10 @@ import {
 import { fetchStudioSnapshot } from "@/lib/studio-client";
 import {
   enableStudioSnapshotPersistence,
+  flushStudioSnapshotPersistence,
   getServerStudioSnapshot,
   getStudioSnapshot,
+  setStudioSnapshotRevision,
   setStudioState,
   subscribeStudio,
 } from "@/lib/store";
@@ -184,17 +186,20 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
               ? fetchStudioSnapshot()
               : Promise.resolve(null);
 
-        const [marks, invites, remoteStudio] = await Promise.all([
+        const [marks, invites, remoteStudioResult] = await Promise.all([
           marksPromise,
           invitesPromise,
           studioPromise,
         ]);
+        const remoteStudio = remoteStudioResult?.snapshot ?? null;
         if (
           cancelled ||
           (marks.length === 0 && invites.length === 0 && !remoteStudio)
         ) {
           return;
         }
+
+        if (remoteStudioResult) setStudioSnapshotRevision(remoteStudioResult.revision);
 
         setStudioState((current) => {
           let next = remoteStudio
@@ -217,7 +222,9 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
           }
           return next;
         });
-        if (remoteStudio) enableStudioSnapshotPersistence();
+        if (remoteStudioResult) {
+          enableStudioSnapshotPersistence();
+        }
       } catch {
         // Ağ hatasında yerel durum korunur.
       }
@@ -1008,27 +1015,31 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
   );
 
   const permanentlyDeleteStudent = useCallback((studentId: string) => {
-    setStudioState((current) => ({
-      ...current,
-      archivedStudents: current.archivedStudents.filter(
-        (item) => item.id !== studentId,
-      ),
-      sessions: current.sessions.filter((session) => session.studentId !== studentId),
-      postponeRequests: current.postponeRequests.filter(
-        (request) => request.studentId !== studentId,
-      ),
-    }));
-    void fetch("/api/studio", {
+    void (async () => {
+      // Finish any earlier full-snapshot writes first. Otherwise a queued stale
+      // snapshot can race the DELETE and recreate the student immediately.
+      await flushStudioSnapshotPersistence();
+      const response = await fetch("/api/studio", {
       method: "DELETE",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ studentId }),
-    }).then(async (response) => {
+      });
       if (!response.ok) {
         window.dispatchEvent(new CustomEvent("studio:persistence-error", {
           detail: "Öğrenci kalıcı olarak silinemedi. Sayfayı yenileyip tekrar deneyin.",
         }));
+        return;
       }
-    }).catch(() => {
+      setStudioState((current) => ({
+        ...current,
+        students: current.students.filter((item) => item.id !== studentId),
+        archivedStudents: current.archivedStudents.filter((item) => item.id !== studentId),
+        sessions: current.sessions.filter((session) => session.studentId !== studentId),
+        postponeRequests: current.postponeRequests.filter(
+          (request) => request.studentId !== studentId,
+        ),
+      }));
+    })().catch(() => {
       window.dispatchEvent(new CustomEvent("studio:persistence-error", {
         detail: "Öğrenci kalıcı olarak silinemedi. Bağlantınızı kontrol edin.",
       }));
