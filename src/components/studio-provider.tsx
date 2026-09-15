@@ -653,10 +653,8 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
       sessions: current.sessions.map((item) =>
         item.id === sessionId ? { ...item, status: "upcoming" } : item,
       ),
-      postponeRequests: current.postponeRequests.map((item) =>
-        item.sessionId === sessionId && item.status === "pending"
-          ? { ...item, status: "rejected" }
-          : item,
+      postponeRequests: current.postponeRequests.filter(
+        (item) => !(item.sessionId === sessionId && item.status === "pending"),
       ),
     }));
   }, []);

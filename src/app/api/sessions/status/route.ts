@@ -39,8 +39,8 @@ export async function POST(request: Request) {
       snapshot.sessions = snapshot.sessions?.map((item) =>
         item.id === session.id ? { ...item, status: "upcoming" } : item,
       );
-      snapshot.postponeRequests = snapshot.postponeRequests?.map((item) =>
-        item.id === pendingRequest.id ? { ...item, status: "rejected" } : item,
+      snapshot.postponeRequests = snapshot.postponeRequests?.filter(
+        (item) => item.id !== pendingRequest.id,
       );
       await writeStudioSnapshot({ configured: true, snapshot });
       return NextResponse.json({ ok: true, revision: snapshotRevision(snapshot) });
