@@ -117,7 +117,11 @@ export function isAtLeast24HoursAway(date: string, time: string, now = new Date(
   const match = time.trim().match(/^(\d{1,2})[.:](\d{2})$/);
   if (!match) return false;
   const [year, month, day] = date.split("-").map(Number);
-  const startsAt = new Date(year, month - 1, day, Number(match[1]), Number(match[2]));
+  // Istanbul is UTC+03:00 year-round. Build the lesson instant explicitly in
+  // UTC so the rule is identical on a UTC Netlify worker and in a local browser.
+  const startsAt = new Date(
+    Date.UTC(year, month - 1, day, Number(match[1]) - 3, Number(match[2])),
+  );
   return startsAt.getTime() - now.getTime() >= 24 * 60 * 60 * 1000;
 }
 
