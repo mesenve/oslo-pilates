@@ -51,13 +51,11 @@ export default function StudentDetailPage() {
     exists: boolean;
     activated: boolean;
   } | null>(null);
+  const studentId = student?.id;
   useEffect(() => {
-    if (!student) {
-      setInviteAccount(null);
-      return;
-    }
+    if (!studentId) return;
     let cancelled = false;
-    void fetch(`/api/invite/status?studentId=${encodeURIComponent(student.id)}`)
+    void fetch(`/api/invite/status?studentId=${encodeURIComponent(studentId)}`)
       .then((response) => (response.ok ? response.json() : null))
       .then((data) => {
         if (!cancelled && data) setInviteAccount(data);
@@ -68,7 +66,7 @@ export default function StudentDetailPage() {
     return () => {
       cancelled = true;
     };
-  }, [student?.id]);
+  }, [studentId]);
   const mine = sessionsForStudent(student?.id ?? "", visibleSessions);
   const today = todayISO();
   const defaultDate =
@@ -85,10 +83,13 @@ export default function StudentDetailPage() {
   const counts = sessionCounts(student?.id ?? "", visibleSessions);
   const group = student ? getClassGroupById(student.groupId) : undefined;
   const customSchedule = student?.package.customSchedule;
+  const customTime = customSchedule?.time?.trim() ?? "";
+  const hasCustomTime = Boolean(customTime && customTime !== "Belirtilmedi" && customTime !== "—");
   const scheduleLabel = customSchedule?.days.length
-    ? `${customSchedule.days.map((day) => DAY_LABELS[day]).join(", ")} ${customSchedule.time}`
+    ? `${customSchedule.days.map((day) => DAY_LABELS[day]).join(", ")} · ${hasCustomTime ? customTime : "Saat bilgisi yok"}`
     : "";
-  const lessonTime = customSchedule?.time ?? group?.time ?? "";
+  const groupLabel = group?.label ?? "Program bilgisi yok";
+  const lessonTime = hasCustomTime ? customTime : (group?.time && group.time !== "Belirtilmedi" && group.time !== "—" ? group.time : "Saat bilgisi yok");
   const requests = visiblePostponeRequests.filter(
     (request) => request.studentId === student?.id,
   );
@@ -139,7 +140,7 @@ export default function StudentDetailPage() {
           </div>
         </div>
         <p className="mt-1 text-sm text-muted">
-          {group?.label}
+          {groupLabel}
           {scheduleLabel ? ` · ${scheduleLabel}` : ""}
           {getStaffById(student.instructorId)
             ? ` · Eğitmen: ${instructorLabelForId(student.instructorId)}`
