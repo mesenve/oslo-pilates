@@ -64,8 +64,6 @@ export type StudentPackage = {
   paymentStatus: PaymentStatus;
   paymentUpdatedAt?: string;
   paymentUpdatedBy?: string;
-  frozenAt?: string;
-  resumedAt?: string;
   isLastWeek: boolean;
   customSchedule?: {
     days: DayOfWeek[];

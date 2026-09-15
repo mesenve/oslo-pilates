@@ -104,7 +104,6 @@ type StudioContextValue = {
     outcome: "attended" | "postponed" | "missed" | "upcoming",
   ) => void;
   setPostponeLessonUsed: (studentId: string, used: boolean) => Promise<void>;
-  setPackageFrozen: (studentId: string, frozen: boolean) => Promise<void>;
   addStudent: (input: NewStudentInput) => Promise<StudentActionResult>;
   archiveStudent: (studentId: string) => void;
   restoreStudent: (
@@ -848,23 +847,6 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
     [],
   );
 
-  const setPackageFrozen = useCallback(async (studentId: string, frozen: boolean) => {
-    const current = getStudioSnapshot();
-    const student = current.students.find((item) => item.id === studentId);
-    if (!student || !canManageStudent(current.user, studentId, current.students)) return;
-    setStudioState((state) => ({
-      ...state,
-      students: state.students.map((item) => item.id !== studentId ? item : {
-        ...item,
-        package: {
-          ...item.package,
-          ...(frozen ? { frozenAt: new Date().toISOString(), resumedAt: undefined } : { frozenAt: undefined, resumedAt: new Date().toISOString() }),
-        },
-      }),
-    }));
-    await flushStudioSnapshotPersistence();
-  }, []);
-
   const addStudent = useCallback(async (input: NewStudentInput) => {
     const name = input.name.trim();
     if (!name) return { error: "Ad soyad gerekli.", id: null };
@@ -1250,7 +1232,6 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
       approveRequest,
       markSessionByInstructor,
       setPostponeLessonUsed,
-      setPackageFrozen,
       addStudent,
       archiveStudent,
       restoreStudent,
@@ -1284,7 +1265,6 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
       requestRenewal,
       reviewRenewal,
       restoreStudent,
-      setPackageFrozen,
       updateStudent,
       state.archivedStudents,
       state.customGroups,
@@ -1437,8 +1417,6 @@ function studentFromInput(
       paymentStatus: input.paymentStatus,
       paymentUpdatedAt: previous?.package.paymentUpdatedAt,
       paymentUpdatedBy: previous?.package.paymentUpdatedBy,
-      frozenAt: previous?.package.frozenAt,
-      resumedAt: previous?.package.resumedAt,
       isLastWeek: packagePeriodChanged ? false : previous?.package.isLastWeek ?? false,
       customSchedule,
     },

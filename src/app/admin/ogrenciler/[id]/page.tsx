@@ -40,7 +40,6 @@ export default function StudentDetailPage() {
     resendStudentInvite,
     isSuperAdmin,
     reviewRenewal,
-    setPackageFrozen,
   } = useStudio();
   const router = useRouter();
   const student = visibleStudents.find((item) => item.id === params.id);
@@ -174,9 +173,6 @@ export default function StudentDetailPage() {
         <p className="text-xs text-muted">
           {student.package.paymentUpdatedAt ? `Ödeme durumu son güncelleme: ${formatLongDate(student.package.paymentUpdatedAt.slice(0, 10))}` : "Ödeme durumu henüz güncellenmedi."}
         </p>
-        <Button variant="secondary" onClick={() => void setPackageFrozen(student.id, !student.package.frozenAt)}>
-          {student.package.frozenAt ? "Paketi yeniden başlat" : "Paketi dondur"}
-        </Button>
         {student.note?.trim() ? (
           <div className="rounded-2xl bg-accent-soft/60 px-3 py-3">
             <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-accent">
