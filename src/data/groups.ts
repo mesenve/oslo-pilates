@@ -16,7 +16,10 @@ export function isIrregularGroup(groupId: string) {
 }
 
 export function getClassGroups(): ClassGroup[] {
-  return [...CLASS_GROUPS, ...customGroups.filter(hasUsableSchedule)].map((group) => ({
+  const byId = new Map<string, ClassGroup>();
+  for (const group of CLASS_GROUPS) byId.set(group.id, group);
+  for (const group of customGroups.filter(hasUsableSchedule)) byId.set(group.id, group);
+  return [...byId.values()].map((group) => ({
     ...group,
     label: readableGroupLabel(group),
   }));
