@@ -48,6 +48,14 @@ export type StudentPackage = {
   };
 };
 
+/** Immutable record of a previous package period. Kept inside the student
+ * package JSON so it remains compatible with the existing Supabase schema. */
+export type PackageHistoryEntry = StudentPackage & {
+  id: string;
+  createdAt: string;
+  endedAt: string;
+};
+
 export type ClassGroup = {
   id: string;
   days: DayOfWeek[];
@@ -68,6 +76,7 @@ export type Student = {
   note: string;
   measurements: Measurements;
   package: StudentPackage;
+  packageHistory?: PackageHistoryEntry[];
   monthlyPostponeLimit: number;
   postponeLessonUsed?: boolean;
   accountStatus: StudentAccountStatus;

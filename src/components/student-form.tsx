@@ -76,12 +76,15 @@ export function StudentForm({
       const groupDays = getClassGroupById(groupId)?.days ?? [];
       if (!isNowIrregular) {
         // Hazır bir grup seçildiğinde öğrencinin programı doğrudan grubun
-        // gün ve saatini kullanır; bunu özel program alanına kopyalamayız.
+        // gün ve saatini kullanır; aynı özel program grubu düzenleniyorsa
+        // mevcut alanları temizleyip paketin geçmişini bozmayız.
+        const editingSameCustomGroup =
+          current.groupId === groupId && current.customDays.length > 0;
         return {
           ...current,
           groupId,
-          customDays: [],
-          customTime: "",
+          customDays: editingSameCustomGroup ? current.customDays : [],
+          customTime: editingSameCustomGroup ? current.customTime : "",
         };
       }
       return {
@@ -107,7 +110,7 @@ export function StudentForm({
     setError(null);
   }
 
-  function handleSubmit(event: React.FormEvent) {
+  async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
     if (!form.groupId) {
       setError("Gün ve saat seç.");
@@ -143,12 +146,12 @@ export function StudentForm({
     }
         : undefined;
     const input = toInput(form, lockInstructor ? user?.id : undefined, newGroup);
-    const result =
+    const result = await (
       resolvedMode === "restore" && student
         ? restoreStudent(student.id, input)
         : resolvedMode === "edit" && student
           ? updateStudent(student.id, input)
-          : addStudent(input);
+          : addStudent(input));
     if (result.error || !result.id) {
       setError(result.error ?? "Kayıt yapılamadı.");
       return;

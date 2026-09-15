@@ -101,16 +101,16 @@ type StudioContextValue = {
     outcome: "attended" | "postponed" | "missed" | "upcoming",
   ) => void;
   setPostponeLessonUsed: (studentId: string, used: boolean) => void;
-  addStudent: (input: NewStudentInput) => StudentActionResult;
+  addStudent: (input: NewStudentInput) => Promise<StudentActionResult>;
   archiveStudent: (studentId: string) => void;
   restoreStudent: (
     studentId: string,
     input: NewStudentInput,
-  ) => StudentActionResult;
+  ) => Promise<StudentActionResult>;
   updateStudent: (
     studentId: string,
     input: NewStudentInput,
-  ) => StudentActionResult;
+  ) => Promise<StudentActionResult>;
   permanentlyDeleteStudent: (studentId: string) => void;
   remainingFor: (studentId: string) => number;
   remainingPostponeFor: (studentId: string) => number;
@@ -791,7 +791,7 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
     [],
   );
 
-  const addStudent = useCallback((input: NewStudentInput) => {
+  const addStudent = useCallback(async (input: NewStudentInput) => {
     const name = input.name.trim();
     if (!name) return { error: "Ad soyad gerekli.", id: null };
     if (!input.groupId) return { error: "Grup seç.", id: null };
@@ -834,6 +834,15 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
         ],
       };
     });
+    if (!error) {
+      const persisted = await flushStudioSnapshotPersistence();
+      if (!persisted) {
+        return {
+          error: "Kayıt sunucuya yazılamadı. Form bilgileri korunuyor; bağlantıyı kontrol edip tekrar deneyin.",
+          id: null,
+        };
+      }
+    }
     return { error, id, inviteUrl: nextInviteUrl };
   }, []);
 
@@ -854,7 +863,7 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const restoreStudent = useCallback(
-    (studentId: string, input: NewStudentInput) => {
+    async (studentId: string, input: NewStudentInput) => {
       const name = input.name.trim();
       if (!name) return { error: "Ad soyad gerekli.", id: null };
       if (!input.groupId) return { error: "Grup seç.", id: null };
@@ -907,13 +916,22 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
           ],
         };
       });
+      if (!error) {
+        const persisted = await flushStudioSnapshotPersistence();
+        if (!persisted) {
+          return {
+            error: "Kayıt sunucuya yazılamadı. Form bilgileri korunuyor; bağlantıyı kontrol edip tekrar deneyin.",
+            id: null,
+          };
+        }
+      }
       return { error, id, inviteUrl: nextInviteUrl };
     },
     [],
   );
 
   const updateStudent = useCallback(
-    (studentId: string, input: NewStudentInput) => {
+    async (studentId: string, input: NewStudentInput) => {
       const name = input.name.trim();
       if (!name) return { error: "Ad soyad gerekli.", id: null };
       if (!input.groupId) return { error: "Grup seç.", id: null };
@@ -948,10 +966,14 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
         const attended =
           previous.package.totalSessions - previous.package.remainingSessions;
         let student = studentFromInput(studentId, normalized, email, previous);
-        student.package.remainingSessions = Math.max(
-          0,
-          Math.min(normalized.totalSessions, normalized.totalSessions - attended),
-        );
+        const periodChanged =
+          student.packageHistory?.length !== (previous.packageHistory?.length ?? 0);
+        student.package.remainingSessions = periodChanged
+          ? normalized.totalSessions
+          : Math.max(
+              0,
+              Math.min(normalized.totalSessions, normalized.totalSessions - attended),
+            );
 
         if (previous.accountStatus === "invited") {
           const emailChanged = email !== previous.email.toLowerCase();
@@ -1018,6 +1040,15 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
               : current.user,
         };
       });
+      if (!error) {
+        const persisted = await flushStudioSnapshotPersistence();
+        if (!persisted) {
+          return {
+            error: "Kayıt sunucuya yazılamadı. Form bilgileri korunuyor; bağlantıyı kontrol edip tekrar deneyin.",
+            id: null,
+          };
+        }
+      }
       return { error, id };
     },
     [],
@@ -1238,6 +1269,26 @@ function studentFromInput(
     input.customDays?.length && input.customTime?.trim()
       ? { days: input.customDays, time: input.customTime.trim() }
       : undefined;
+  // A new package period is explicit: changing the start date or the number
+  // of sessions creates history. Program/payment edits keep the current
+  // period and therefore do not reset remaining lessons.
+  const packagePeriodChanged = Boolean(
+    previous &&
+      (startDate !== previous.package.startDate ||
+        input.totalSessions !== previous.package.totalSessions),
+  );
+  const packageHistory = [...(previous?.packageHistory ?? [])];
+  if (previous && packagePeriodChanged) {
+    const historyId = `pkg-${previous.id}-${previous.package.startDate}`;
+    if (!packageHistory.some((entry) => entry.id === historyId)) {
+      packageHistory.push({
+        ...previous.package,
+        id: historyId,
+        createdAt: previous.package.startDate,
+        endedAt: new Date().toISOString(),
+      });
+    }
+  }
   const endDate =
     sessionDates.at(-1) ??
     previous?.package.endDate ??
@@ -1261,13 +1312,16 @@ function studentFromInput(
     },
     package: {
       totalSessions: input.totalSessions,
-      remainingSessions: previous?.package.remainingSessions ?? input.totalSessions,
+      remainingSessions: packagePeriodChanged
+        ? input.totalSessions
+        : previous?.package.remainingSessions ?? input.totalSessions,
       startDate,
       endDate,
       paymentStatus: input.paymentStatus,
-      isLastWeek: previous?.package.isLastWeek ?? false,
+      isLastWeek: packagePeriodChanged ? false : previous?.package.isLastWeek ?? false,
       customSchedule,
     },
+    packageHistory: packageHistory.length > 0 ? packageHistory : undefined,
     monthlyPostponeLimit: Number.isFinite(input.monthlyPostponeLimit)
       ? Math.max(0, Math.round(input.monthlyPostponeLimit))
       : 1,

@@ -120,6 +120,9 @@ export async function listSupabaseAttendance() {
 }
 
 function toStudent(row: SupabaseRow): Student {
+  const packageValue = (row.package ?? {}) as Student["package"] & {
+    history?: Student["packageHistory"];
+  };
   return {
     id: String(row.id),
     name: String(row.name ?? ""),
@@ -130,7 +133,8 @@ function toStudent(row: SupabaseRow): Student {
     packageType: row.package_type as Student["packageType"],
     note: String(row.note ?? ""),
     measurements: (row.measurements ?? {}) as Student["measurements"],
-    package: (row.package ?? {}) as Student["package"],
+    package: packageValue,
+    packageHistory: packageValue.history?.length ? packageValue.history : undefined,
     monthlyPostponeLimit: Number(row.monthly_postpone_limit ?? 1),
     accountStatus: row.account_status as Student["accountStatus"],
     inviteToken: row.invite_token ? String(row.invite_token) : undefined,
@@ -196,7 +200,12 @@ function studentRow(student: Student, archived: boolean) {
     package_type: student.packageType,
     note: student.note,
     measurements: student.measurements,
-    package: student.package,
+    // Keep history inside the existing JSONB package column so no destructive
+    // schema migration is needed; the UI still exposes it as packageHistory.
+    package: {
+      ...student.package,
+      history: student.packageHistory ?? [],
+    },
     monthly_postpone_limit: student.monthlyPostponeLimit,
     account_status: student.accountStatus,
     invite_token: student.inviteToken ?? null,

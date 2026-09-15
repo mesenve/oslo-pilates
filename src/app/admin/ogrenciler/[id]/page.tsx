@@ -179,7 +179,33 @@ export default function StudentDetailPage() {
         ) : null}
       </Card>
 
-      {student.accountStatus === "invited" || inviteAccount?.activated === false ? (
+      {student.packageHistory?.length ? (
+        <Card className="space-y-3 p-4">
+          <div>
+            <h2 className="font-serif text-xl">Paket geçmişi</h2>
+            <p className="mt-1 text-xs text-muted">
+              Önceki paket dönemleri saklanır; mevcut paket düzenlenirken silinmez.
+            </p>
+          </div>
+          <div className="space-y-2">
+            {[...student.packageHistory].reverse().map((item) => (
+              <div
+                key={item.id}
+                className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-surface-muted/50 px-3 py-2 text-sm"
+              >
+                <span>
+                  {formatLongDate(item.startDate)} – {formatLongDate(item.endDate)}
+                </span>
+                <span className="text-muted">
+                  {item.totalSessions} seans · {item.paymentStatus === "paid" ? "Ödendi" : item.paymentStatus === "pending" ? "Bekliyor" : "Gecikmiş"}
+                </span>
+              </div>
+            ))}
+          </div>
+        </Card>
+      ) : null}
+
+      {student.accountStatus === "invited" || inviteAccount?.activated === false || inviteAccount?.exists === false ? (
         <Card className="space-y-3 p-4">
           <p className="text-sm font-medium text-amber-800">Davet bekliyor</p>
           <p className="text-sm text-muted">
