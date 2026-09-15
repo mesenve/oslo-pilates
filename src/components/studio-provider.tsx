@@ -1246,7 +1246,6 @@ function withInvite(student: Student, token = createInviteToken()): Student {
     invitedAt: new Date().toISOString(),
   };
 }
-
 function studentFromInput(
   id: string,
   input: NewStudentInput,
@@ -1331,4 +1330,3 @@ function studentFromInput(
     invitedAt: previous?.invitedAt,
   };
 }
-
