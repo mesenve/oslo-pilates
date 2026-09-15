@@ -56,6 +56,7 @@ export function StudentForm({
   const [form, setForm] = useState(() =>
     formFromStudent(student, groups[0]?.value ?? "", defaultInstructorId),
   );
+  const [saving, setSaving] = useState(false);
   const resolvedMode = mode ?? (student ? "edit" : "create");
   const lockInstructor = !isSuperAdmin && user?.role === "instructor";
 
@@ -112,6 +113,7 @@ export function StudentForm({
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
+    if (saving) return;
     if (!form.groupId) {
       setError("Gün ve saat seç.");
       return;
@@ -146,12 +148,14 @@ export function StudentForm({
     }
         : undefined;
     const input = toInput(form, lockInstructor ? user?.id : undefined, newGroup);
+    setSaving(true);
     const result = await (
       resolvedMode === "restore" && student
         ? restoreStudent(student.id, input)
         : resolvedMode === "edit" && student
           ? updateStudent(student.id, input)
           : addStudent(input));
+    setSaving(false);
     if (result.error || !result.id) {
       setError(result.error ?? "Kayıt yapılamadı.");
       return;
@@ -340,7 +344,7 @@ export function StudentForm({
 
       {error ? <p className="text-sm text-red-700">{error}</p> : null}
       <Button type="submit" className="w-full">
-        {submitLabel}
+        {saving ? "Kaydediliyor…" : submitLabel}
       </Button>
     </form>
   );
