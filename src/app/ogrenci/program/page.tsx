@@ -90,6 +90,7 @@ function ProgramSessionRow({
   postponeHint,
   onAttend,
   onPostpone,
+  onWithdrawPostpone,
 }: ComponentProps<typeof SessionRow>) {
   const group = getClassGroupById(session.groupId);
   const day = weekdayFromISO(session.date);
@@ -110,6 +111,7 @@ function ProgramSessionRow({
       postponeHint={hint}
       onAttend={onAttend}
       onPostpone={onPostpone}
+      onWithdrawPostpone={onWithdrawPostpone}
     />
   );
 }
