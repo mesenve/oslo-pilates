@@ -811,7 +811,10 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
         students: [student, ...current.students],
         sessions: [
           ...current.sessions,
-          ...buildSessionsForStudent(student, { fromPackageStart: true }),
+          ...buildSessionsForStudent(student, {
+            fromPackageStart: true,
+            group: input.customGroup ?? current.customGroups.find((group) => group.id === student.groupId),
+          }),
         ],
       };
     });
@@ -881,7 +884,10 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
           ),
           sessions: [
             ...current.sessions.filter((session) => session.studentId !== studentId),
-            ...buildSessionsForStudent(student, { fromPackageStart: true }),
+            ...buildSessionsForStudent(student, {
+              fromPackageStart: true,
+              group: input.customGroup ?? current.customGroups.find((group) => group.id === student.groupId),
+            }),
           ],
         };
       });
@@ -961,6 +967,7 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
         );
         const updatedSessions = buildSessionsForStudent(student, {
           fromPackageStart: true,
+          group: normalized.customGroup ?? current.customGroups.find((group) => group.id === student.groupId),
         }).map((session) => ({
           ...session,
           status: statusByDate.get(session.date) ?? session.status,

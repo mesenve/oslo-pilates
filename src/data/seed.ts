@@ -11,6 +11,7 @@ import {
 import { DEFAULT_STAFF_PASSWORDS } from "@/lib/staff-auth";
 import { DEFAULT_STUDENT_PASSWORDS } from "@/lib/student-auth";
 import type {
+  ClassGroup,
   DayOfWeek,
   PostponeRequest,
   Session,
@@ -46,9 +47,9 @@ export function collectSessionDates(
 
 export function buildSessionsForStudent(
   student: Student,
-  options?: { fromToday?: boolean; fromPackageStart?: boolean },
+  options?: { fromToday?: boolean; fromPackageStart?: boolean; group?: ClassGroup },
 ): Session[] {
-  const group = getClassGroupById(student.groupId);
+  const group = options?.group ?? getClassGroupById(student.groupId);
   const days = student.package.customSchedule?.days?.length
     ? student.package.customSchedule.days
     : group?.days ?? [];
