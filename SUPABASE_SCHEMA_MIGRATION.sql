@@ -13,6 +13,12 @@ create index if not exists sessions_student_date_idx on public.sessions(student_
 create index if not exists postpone_requests_session_idx on public.postpone_requests(session_id);
 create unique index if not exists students_email_lower_unique on public.students(lower(email));
 alter table public.custom_groups enable row level security;
+alter table public.students enable row level security;
+alter table public.sessions enable row level security;
+alter table public.invites enable row level security;
+alter table public.attendance_marks enable row level security;
+alter table public.postpone_requests enable row level security;
+alter table public.blocked_emails enable row level security;
 drop policy if exists "custom_groups_no_client_write" on public.custom_groups;
 create policy "custom_groups_no_client_write" on public.custom_groups for all to anon, authenticated using (false) with check (false);
 drop policy if exists "students_select_own" on public.students;
