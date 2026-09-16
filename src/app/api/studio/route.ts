@@ -1,5 +1,3 @@
-import { mkdir, readFile, writeFile } from "node:fs/promises";
-import path from "node:path";
 import { NextResponse } from "next/server";
 import { getSessionUser } from "@/lib/server/session";
 import { groupIdForSchedule, groupLabelForSchedule } from "@/data/groups";
@@ -12,10 +10,6 @@ type StudioSnapshotResponse = {
   configured?: boolean;
   snapshot?: unknown;
 };
-
-const snapshotPath = path.join(process.cwd(), ".data", "studio.json");
-const BLOB_STORE_NAME = "oslo-pilates-studio";
-const SNAPSHOT_KEY = "snapshot:current";
 
 export function snapshotRevision(snapshot: unknown) {
   const value = snapshot && typeof snapshot === "object" ? snapshot as Record<string, unknown> : {};
@@ -154,34 +148,19 @@ function normalizeCustomScheduleGroups(snapshot: Record<string, unknown>) {
 }
 
 export async function readStudioSnapshot(): Promise<StudioSnapshotResponse> {
-  if (isSupabaseConfigured()) {
-    try {
-      const snapshot = await readSupabaseSnapshot();
-      return { configured: true, snapshot };
-    } catch {
-      // Supabase geçici olarak erişilemiyorsa mevcut Blob fallback'i kullanılır.
-    }
-  }
-  try {
-    const { getStore } = await import("@netlify/blobs");
-    const store = getStore(BLOB_STORE_NAME);
-    const snapshot = (await store.get(SNAPSHOT_KEY, {
-      type: "json",
-    })) as StudioSnapshotResponse | null;
-    if (snapshot?.configured && snapshot.snapshot) return snapshot;
-  } catch {
-    // Yerelde veya Netlify Blobs erişilemezse yerel dosya kullanılır.
-  }
-
-  try {
-    return JSON.parse(await readFile(snapshotPath, "utf8")) as StudioSnapshotResponse;
-  } catch {
-    return {};
-  }
+  // Once Supabase is configured, it is the only authoritative source. Falling
+  // back to a stale Blob/file snapshot would make an outage look like a
+  // successful read and could overwrite newer database data on the next save.
+  if (!isSupabaseConfigured()) return { configured: false, snapshot: null };
+  const snapshot = await readSupabaseSnapshot();
+  return { configured: true, snapshot };
 }
 
 export async function writeStudioSnapshot(snapshot: StudioSnapshotResponse) {
-  if (isSupabaseConfigured() && snapshot.snapshot && typeof snapshot.snapshot === "object") {
+  if (!isSupabaseConfigured()) {
+    throw new Error("Supabase yapılandırılmadı.");
+  }
+  if (snapshot.snapshot && typeof snapshot.snapshot === "object") {
     const value = snapshot.snapshot as {
       students?: Parameters<typeof writeSupabaseSnapshot>[0]["students"];
       archivedStudents?: Parameters<typeof writeSupabaseSnapshot>[0]["archivedStudents"];
@@ -198,17 +177,6 @@ export async function writeStudioSnapshot(snapshot: StudioSnapshotResponse) {
     });
     return;
   }
-  try {
-    const { getStore } = await import("@netlify/blobs");
-    const store = getStore(BLOB_STORE_NAME);
-    await store.setJSON(SNAPSHOT_KEY, snapshot);
-    return;
-  } catch {
-    // Yerelde Netlify Blobs yoksa yerel dosya kullanılır.
-  }
-
-  await mkdir(path.dirname(snapshotPath), { recursive: true });
-  await writeFile(snapshotPath, JSON.stringify(snapshot, null, 2), "utf8");
 }
 
 export async function GET(request: Request) {

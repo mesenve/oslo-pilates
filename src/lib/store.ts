@@ -15,7 +15,6 @@ const emptyStudioState: StudioState = {
 
 let memory: StudioState = emptyStudioState;
 const serverSnapshot = memory;
-let hydrated = false;
 let studioSnapshotPersistenceEnabled = false;
 let persistenceQueue: Promise<void> = Promise.resolve();
 let persistenceHealthy = true;
@@ -31,7 +30,6 @@ export function getServerStudioSnapshot(): StudioState {
 }
 
 export function subscribeStudio(listener: () => void) {
-  hydrated = true;
   listeners.add(listener);
   return () => listeners.delete(listener);
 }
@@ -42,7 +40,6 @@ export function setStudioState(
 ) {
   memory = typeof updater === "function" ? updater(memory) : updater;
   if (typeof window !== "undefined") {
-    hydrated = true;
     if (options.persist !== false && studioSnapshotPersistenceEnabled && (memory.user?.role === "super_admin" || memory.user?.role === "instructor")) {
       const snapshot = {
         students: memory.students,
