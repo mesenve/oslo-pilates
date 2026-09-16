@@ -204,6 +204,8 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
 
         if (remoteStudioResult) setStudioSnapshotRevision(remoteStudioResult.revision);
 
+        // Remote hydration must never enqueue the fetched (possibly older)
+        // snapshot as a new write. User mutations are persisted separately.
         setStudioState((current) => {
           let next = remoteStudio
             ? {
@@ -224,7 +226,7 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
             };
           }
           return next;
-        });
+        }, { persist: false });
         if (remoteStudioResult) {
           enableStudioSnapshotPersistence();
         }
@@ -994,6 +996,10 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
 
       let error: string | null = null;
       let id: string | null = null;
+      // A form can be submitted before the first remote hydration completes.
+      // Enable persistence here so the user's explicit change is not left only
+      // in localStorage.
+      enableStudioSnapshotPersistence();
       setStudioState((current) => {
         const previous = current.students.find((item) => item.id === studentId);
         if (!previous) {

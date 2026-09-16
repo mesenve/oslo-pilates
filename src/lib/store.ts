@@ -62,12 +62,13 @@ export function subscribeStudio(listener: () => void) {
 
 export function setStudioState(
   updater: StudioState | ((current: StudioState) => StudioState),
+  options: { persist?: boolean } = {},
 ) {
   memory = typeof updater === "function" ? updater(memory) : updater;
   if (typeof window !== "undefined") {
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(memory));
     hydrated = true;
-    if (studioSnapshotPersistenceEnabled && (memory.user?.role === "super_admin" || memory.user?.role === "instructor")) {
+    if (options.persist !== false && studioSnapshotPersistenceEnabled && (memory.user?.role === "super_admin" || memory.user?.role === "instructor")) {
       const snapshot = {
         students: memory.students,
         archivedStudents: memory.archivedStudents,
