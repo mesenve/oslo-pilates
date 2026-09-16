@@ -62,6 +62,26 @@ function hasDuplicateStudentEmail(students: SnapshotStudentIdentity[] = []) {
   return false;
 }
 
+function mergeById<T extends { id: string }>(current: T[] = [], incoming: T[] = []) {
+  const incomingById = new Map(incoming.map((item) => [item.id, item]));
+  const currentIds = new Set(current.map((item) => item.id));
+  return [
+    ...current.map((item) => incomingById.get(item.id) ?? item),
+    ...incoming.filter((item) => !currentIds.has(item.id)),
+  ];
+}
+
+function mergeStudentRows<T extends { studentId: string }>(
+  current: T[] = [],
+  incoming: T[] = [],
+  incomingStudentIds: Set<string>,
+) {
+  return [
+    ...current.filter((item) => !incomingStudentIds.has(item.studentId)),
+    ...incoming,
+  ];
+}
+
 function normalizeFutureAttendanceStatuses(snapshot: Record<string, unknown>) {
   const sessions = (snapshot.sessions ?? []) as SnapshotSession[];
   let changed = false;
@@ -261,12 +281,6 @@ export async function POST(request: Request) {
       existing.snapshot && typeof existing.snapshot === "object"
         ? existing.snapshot
         : {};
-    if (body.revision && body.revision !== snapshotRevision(currentSnapshot)) {
-      return NextResponse.json(
-        { error: "Veriler başka bir sekmede güncellendi. Sayfayı yenileyip tekrar dene.", revision: snapshotRevision(currentSnapshot) },
-        { status: 409 },
-      );
-    }
     if (user.role === "instructor") {
       const current = currentSnapshot as {
         students?: Array<{ id: string; instructorId: string; groupId?: string }>;
@@ -287,21 +301,14 @@ export async function POST(request: Request) {
         ? { ...student, instructorId: (current.students ?? []).find((item) => item.id === student.id)?.instructorId ?? student.instructorId }
         : student,
       );
-      const allowedIds = new Set(incomingStudents.map((student) => student.id));
-      const mergeByStudent = <T extends { studentId: string }>(existing: T[] = [], updated: T[] = []) => [
-        ...existing.filter((item) => !allowedIds.has(item.studentId)),
-        ...updated.filter((item) => allowedIds.has(item.studentId)),
-      ];
       const existingGroupIds = new Set((current.customGroups ?? []).map((group) => group.id));
       const groupsCreatedForOwnedStudents = (incoming.customGroups ?? []).filter(
         (group) =>
           !existingGroupIds.has(group.id) &&
           incomingStudents.some((student) => student.groupId === group.id),
       );
-      const mergedStudents = [
-        ...(current.students ?? []).filter((student) => !existingOwnedIds.has(student.id)),
-        ...incomingStudents,
-      ];
+      const incomingOwnedIds = new Set(incomingStudents.map((student) => student.id));
+      const mergedStudents = mergeById(current.students ?? [], incomingStudents);
       if (hasDuplicateStudentEmail(mergedStudents)) {
         return NextResponse.json(
           { error: "Bu e-posta ile kayıtlı başka bir öğrenci var." },
@@ -312,8 +319,8 @@ export async function POST(request: Request) {
         ...current,
         students: mergedStudents,
         archivedStudents: current.archivedStudents,
-        sessions: mergeByStudent(current.sessions, incoming.sessions),
-        postponeRequests: mergeByStudent(current.postponeRequests, incoming.postponeRequests),
+        sessions: mergeStudentRows(current.sessions, incoming.sessions, incomingOwnedIds),
+        postponeRequests: mergeStudentRows(current.postponeRequests, incoming.postponeRequests, incomingOwnedIds),
         customGroups: [...(current.customGroups ?? []), ...groupsCreatedForOwnedStudents],
       };
       await writeStudioSnapshot({
@@ -335,18 +342,6 @@ export async function POST(request: Request) {
     };
     const incomingStudents = incomingSnapshot.students ?? [];
     const incomingArchived = incomingSnapshot.archivedStudents ?? [];
-    const currentTotal = currentStudents.length + currentArchived.length;
-    const incomingTotal = incomingStudents.length + incomingArchived.length;
-
-    // A stale browser must never be able to replace the studio with a much
-    // smaller cached list. A single intentional permanent deletion remains
-    // possible, while a partial sync is rejected and refreshed instead.
-    if (incomingTotal < currentTotal - 1) {
-      return NextResponse.json(
-        { error: "Eksik öğrenci listesi kaydedilmedi. Sayfayı yenileyip tekrar dene." },
-        { status: 409 },
-      );
-    }
     if (hasDuplicateStudentEmail([...incomingStudents, ...incomingArchived])) {
       return NextResponse.json(
         { error: "Bu e-posta ile kayıtlı başka bir öğrenci var." },
@@ -354,9 +349,39 @@ export async function POST(request: Request) {
       );
     }
 
+    const mergedStudents = mergeById(currentStudents, incomingStudents);
+    const incomingActiveIds = new Set(incomingStudents.map((student) => student.id));
+    const mergedArchivedStudents = mergeById(currentArchived, incomingArchived)
+      .filter((student) => !incomingActiveIds.has(student.id));
+    const incomingStudentIds = new Set([
+      ...incomingStudents.map((student) => student.id),
+      ...incomingArchived.map((student) => student.id),
+    ]);
+    const currentValue = currentSnapshot as {
+      sessions?: Array<{ id: string; studentId: string }>;
+      postponeRequests?: Array<{ id: string; studentId: string }>;
+      customGroups?: Array<{ id: string }>;
+    };
+    const incomingValue = body.snapshot as {
+      sessions?: Array<{ id: string; studentId: string }>;
+      postponeRequests?: Array<{ id: string; studentId: string }>;
+      customGroups?: Array<{ id: string }>;
+    };
     const next = {
       configured: true,
-      snapshot: { ...currentSnapshot, ...body.snapshot },
+      snapshot: {
+        ...currentSnapshot,
+        ...body.snapshot,
+        students: mergedStudents,
+        archivedStudents: mergedArchivedStudents,
+        sessions: mergeStudentRows(currentValue.sessions, incomingValue.sessions, incomingStudentIds),
+        postponeRequests: mergeStudentRows(
+          currentValue.postponeRequests,
+          incomingValue.postponeRequests,
+          incomingStudentIds,
+        ),
+        customGroups: mergeById(currentValue.customGroups, incomingValue.customGroups),
+      },
     };
 
     await writeStudioSnapshot(next);
