@@ -179,7 +179,7 @@ export async function writeStudioSnapshot(snapshot: StudioSnapshotResponse) {
   }
 }
 
-export async function GET(request: Request) {
+export async function GET() {
   const user = await getSessionUser();
   if (!user) return NextResponse.json({ error: "Oturum gerekli." }, { status: 401 });
   const response = await readStudioSnapshot();
@@ -201,7 +201,9 @@ export async function GET(request: Request) {
         staffPasswords?: Record<string, string>;
         studentPasswords?: Record<string, string>;
       };
-    const { staffPasswords: _staffPasswords, studentPasswords: _studentPasswords, ...publicSnapshot } = snapshot;
+    const publicSnapshot = { ...snapshot };
+    delete publicSnapshot.staffPasswords;
+    delete publicSnapshot.studentPasswords;
     const visibleStudentIds = new Set(
       user.role === "super_admin"
         ? (snapshot.students ?? []).map((student) => student.id)
