@@ -64,6 +64,19 @@ export function StudentForm({
   const [saving, setSaving] = useState(false);
   const resolvedMode = mode ?? (student ? "edit" : "create");
   const lockInstructor = !isSuperAdmin && user?.role === "instructor";
+  const groupOptions = (() => {
+    if (!student || !form.groupId || groups.some((group) => group.value === form.groupId)) {
+      return groups;
+    }
+
+    // Eski aktarımlarda saat belirtilmeden kaydedilmiş gruplar bulunabiliyor.
+    // Mevcut değer formda görünür kalsın; hoca isterse aynı ekrandan yeni saat
+    // seçerek bu programı düzenleyebilsin.
+    const label = form.customDays.length
+      ? groupLabelForSchedule(form.customDays, form.customTime.trim() || "Saat belirtilmedi")
+      : `Mevcut program (${form.groupId})`;
+    return [{ value: form.groupId, label }, ...groups];
+  })();
 
   function update(field: keyof typeof form, value: string) {
     setForm((current) => ({ ...current, [field]: value }));
@@ -271,7 +284,7 @@ export function StudentForm({
             label="Gün ve saat"
             value={form.groupId}
             onChange={selectGroup}
-            options={groups}
+            options={groupOptions}
           />
           <DateField
             label="Ders başlangıç tarihi"
