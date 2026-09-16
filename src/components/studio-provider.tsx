@@ -997,8 +997,7 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
       let error: string | null = null;
       let id: string | null = null;
       // A form can be submitted before the first remote hydration completes.
-      // Enable persistence here so the user's explicit change is not left only
-      // in localStorage.
+      // Enable persistence here so the explicit change is sent to Supabase.
       enableStudioSnapshotPersistence();
       setStudioState((current) => {
         const previous = current.students.find((item) => item.id === studentId);

@@ -1,14 +1,19 @@
-import { createSeedState } from "@/data/seed";
-import { getStudents } from "@/data/students";
-import { DEFAULT_INSTRUCTOR_ID } from "@/data/staff";
-import { hydrateStaffPasswords } from "@/lib/staff-auth";
-import { hydrateStudentPasswords } from "@/lib/student-auth";
-import type { AuthUser, Student, StudioState } from "@/types/studio";
+import type { StudioState } from "@/types/studio";
 
-// v13: Eski tarayıcı önbelleğinin güncel yerel stüdyo verisini geri yazmasını önler.
-export const STORAGE_KEY = "oslo-pilates-demo-v13";
+// Supabase is the sole source of truth for studio data. The in-memory store is
+// only a render cache and is intentionally never hydrated from browser storage.
+const emptyStudioState: StudioState = {
+  user: null,
+  students: [],
+  archivedStudents: [],
+  sessions: [],
+  postponeRequests: [],
+  customGroups: [],
+  staffPasswords: {},
+  studentPasswords: {},
+};
 
-let memory: StudioState = createSeedState();
+let memory: StudioState = emptyStudioState;
 const serverSnapshot = memory;
 let hydrated = false;
 let studioSnapshotPersistenceEnabled = false;
@@ -16,32 +21,6 @@ let persistenceQueue: Promise<void> = Promise.resolve();
 let persistenceHealthy = true;
 let studioSnapshotRevision: string | null = null;
 const listeners = new Set<() => void>();
-
-function readStorage(): StudioState {
-  try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
-    if (!raw) return memory;
-    const parsed = JSON.parse(raw) as StudioState;
-    if (!parsed.sessions || !parsed.postponeRequests) {
-      return createSeedState();
-    }
-    const students = (parsed.students?.length ? parsed.students : getStudents()).map(
-      hydrateStudent,
-    );
-    const user = hydrateUser(parsed.user);
-    return {
-      ...parsed,
-      user,
-      students,
-      archivedStudents: (parsed.archivedStudents ?? []).map(hydrateStudent),
-      customGroups: parsed.customGroups ?? [],
-      staffPasswords: hydrateStaffPasswords(parsed.staffPasswords),
-      studentPasswords: hydrateStudentPasswords(parsed.studentPasswords),
-    };
-  } catch {
-    return createSeedState();
-  }
-}
 
 export function getStudioSnapshot(): StudioState {
   return memory;
@@ -52,10 +31,7 @@ export function getServerStudioSnapshot(): StudioState {
 }
 
 export function subscribeStudio(listener: () => void) {
-  if (typeof window !== "undefined" && !hydrated) {
-    memory = readStorage();
-    hydrated = true;
-  }
+  hydrated = true;
   listeners.add(listener);
   return () => listeners.delete(listener);
 }
@@ -66,7 +42,6 @@ export function setStudioState(
 ) {
   memory = typeof updater === "function" ? updater(memory) : updater;
   if (typeof window !== "undefined") {
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(memory));
     hydrated = true;
     if (options.persist !== false && studioSnapshotPersistenceEnabled && (memory.user?.role === "super_admin" || memory.user?.role === "instructor")) {
       const snapshot = {
@@ -121,20 +96,3 @@ export function setStudioSnapshotRevision(revision: string | null | undefined) {
   studioSnapshotRevision = revision ?? null;
 }
 
-function hydrateStudent(student: Student): Student {
-  return {
-    ...student,
-    instructorId: student.instructorId ?? DEFAULT_INSTRUCTOR_ID,
-    note: student.note ?? "",
-    monthlyPostponeLimit: student.monthlyPostponeLimit ?? 1,
-    accountStatus: student.accountStatus ?? "active",
-  };
-}
-
-function hydrateUser(user: AuthUser | null | undefined): AuthUser | null {
-  if (!user) return null;
-  if ((user.role as string) === "admin") {
-    return { ...user, role: "super_admin" };
-  }
-  return user;
-}
