@@ -44,7 +44,9 @@ const GROUP_IDS = [
   "sal-per-2100",
 ] as const;
 
-const PAYMENTS: PaymentStatus[] = ["paid", "paid", "pending", "overdue"];
+// All existing packages are paid at migration time. Teachers can still change
+// an individual student's status to "pending" from the admin form when needed.
+const PAYMENTS: PaymentStatus[] = ["paid"];
 
 const NOTES = [
   "Düzenli devam ediyor.",
@@ -104,7 +106,7 @@ const FEATURED: Student[] = [
       remainingSessions: 6,
       startDate: toISODate(packageStart),
       endDate: toISODate(packageEnd),
-      paymentStatus: "pending",
+      paymentStatus: "paid",
       isLastWeek: false,
     },
     monthlyPostponeLimit: 1,
@@ -131,7 +133,7 @@ const FEATURED: Student[] = [
       remainingSessions: 2,
       startDate: toISODate(packageStart),
       endDate: toISODate(packageEnd),
-      paymentStatus: "overdue",
+      paymentStatus: "paid",
       isLastWeek: false,
     },
     monthlyPostponeLimit: 1,

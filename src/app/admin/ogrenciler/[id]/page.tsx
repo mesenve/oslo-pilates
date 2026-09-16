@@ -79,7 +79,7 @@ export default function StudentDetailPage() {
       cancelled = true;
     };
   }, [studentId]);
-  const mine = sessionsForStudent(student?.id ?? "", visibleSessions);
+  const mine = sessionsForStudent(student?.id ?? "", visibleSessions, student);
   const today = todayISO();
   const defaultDate =
     mine.find((session) => session.date >= today)?.date ??
@@ -92,7 +92,7 @@ export default function StudentDetailPage() {
     status: effectiveSessionStatus(session),
   }));
   const selected = mine.filter((session) => session.date === selectedDate);
-  const counts = sessionCounts(student?.id ?? "", visibleSessions);
+  const counts = sessionCounts(student?.id ?? "", visibleSessions, student);
   const group = student ? getClassGroupById(student.groupId) : undefined;
   const customSchedule = student?.package.customSchedule;
   const customTime = customSchedule?.time?.trim() ?? "";

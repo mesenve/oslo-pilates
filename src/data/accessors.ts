@@ -21,10 +21,8 @@ export function remainingSessions(
   student: Student,
   sessions: Session[],
 ): number {
-  const consumed = sessions.filter(
-    (session) =>
-      session.studentId === student.id &&
-      (session.status === "attended" || session.status === "missed"),
+  const consumed = sessionsForStudent(student.id, sessions, student).filter(
+    (session) => session.status === "attended" || session.status === "missed",
   ).length;
   return Math.max(0, student.package.totalSessions - consumed);
 }
@@ -42,9 +40,22 @@ export function lastAttendanceLabel(
   return attended[0]?.date ?? "";
 }
 
-export function sessionsForStudent(studentId: string, sessions: Session[]) {
+export function sessionsForStudent(
+  studentId: string,
+  sessions: Session[],
+  student?: Student,
+) {
+  // Session rows from earlier package periods remain in the database for
+  // attendance history. Student-facing views and package counters must only
+  // operate on the active package period.
+  const startDate = student?.package.startDate;
+  const endDate = student?.package.endDate;
+  const hasPackagePeriod = Boolean(startDate && endDate && startDate <= endDate);
   return sessions
     .filter((session) => session.studentId === studentId)
+    .filter((session) =>
+      !hasPackagePeriod || (session.date >= startDate! && session.date <= endDate!),
+    )
     .sort((a, b) => a.date.localeCompare(b.date));
 }
 
@@ -126,8 +137,12 @@ export function remainingPostponeRights(
   return Math.max(0, limit - postponeUsedThisMonth(student.id, requests));
 }
 
-export function sessionCounts(studentId: string, sessions: Session[]) {
-  const mine = sessionsForStudent(studentId, sessions);
+export function sessionCounts(
+  studentId: string,
+  sessions: Session[],
+  student?: Student,
+) {
+  const mine = sessionsForStudent(studentId, sessions, student);
   return {
     attended: mine.filter((session) => effectiveSessionStatus(session) === "attended").length,
     postponed: mine.filter((session) => {

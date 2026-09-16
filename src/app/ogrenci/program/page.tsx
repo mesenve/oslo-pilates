@@ -14,7 +14,7 @@ export default function ProgramPage() {
   const student = useCurrentStudent();
   const { sessions, markAttended, requestPostpone, withdrawPostpone, remainingPostponeFor } =
     useStudio();
-  const mine = sessionsForStudent(student?.id ?? "", sessions);
+  const mine = sessionsForStudent(student?.id ?? "", sessions, student ?? undefined);
   const today = todayISO();
   const defaultDate =
     mine.find((session) => session.date >= today)?.date ??

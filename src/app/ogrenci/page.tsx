@@ -38,7 +38,7 @@ export default function StudentHomePage() {
 
   const remaining = remainingFor(student.id);
   const group = getClassGroupById(student.groupId);
-  const mine = sessionsForStudent(student.id, sessions);
+  const mine = sessionsForStudent(student.id, sessions, student);
   const monday = startOfWeekMonday();
   const selectedSession = mine.find((session) => session.date === selectedDate);
   const selectedStatus = selectedSession
