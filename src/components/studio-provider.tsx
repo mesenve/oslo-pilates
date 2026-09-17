@@ -48,6 +48,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useState,
   useSyncExternalStore,
 } from "react";
 
@@ -62,6 +63,8 @@ type StudentActionResult = {
 
 type StudioContextValue = {
   ready: boolean;
+  studioDataStatus: "idle" | "loading" | "ready" | "error";
+  retryStudioData: () => Promise<void>;
   user: StudioState["user"];
   students: Student[];
   visibleStudents: Student[];
@@ -130,6 +133,15 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
     getStudioSnapshot,
     getServerStudioSnapshot,
   );
+  const [studioLoad, setStudioLoad] = useState<{
+    userId: string;
+    status: "loading" | "ready" | "error";
+  } | null>(null);
+  const studioDataStatus = !state.user
+    ? "idle"
+    : studioLoad?.userId === state.user.id
+      ? studioLoad.status
+      : "loading";
 
   useEffect(() => {
     const groups = [...(state.customGroups ?? [])];
@@ -159,102 +171,107 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
     return () => { cancelled = true; };
   }, [ready]);
 
+  const refreshRemoteState = useCallback(async (
+    user: NonNullable<StudioState["user"]>,
+    isCancelled: () => boolean = () => false,
+  ) => {
+    const isStale = () => isCancelled() || getStudioSnapshot().user?.id !== user.id;
+    const markLoadError = () => setStudioLoad((current) =>
+      current?.userId === user.id && current.status === "ready"
+        ? current
+        : { userId: user.id, status: "error" },
+    );
+
+    try {
+      const marksPromise = (
+        user.role === "student"
+          ? fetchAttendanceMarks({ studentId: user.id })
+          : isStaffRole(user.role)
+            ? fetchAttendanceMarks()
+            : Promise.resolve([])
+      ).catch(() => []);
+      const invitesPromise = (
+        user.role === "super_admin"
+          ? fetchActivatedInvites()
+          : Promise.resolve([])
+      ).catch(() => []);
+      const studioPromise =
+        user.role === "student"
+          ? fetchStudioSnapshot({ studentId: user.id, includeBlockedEmails: false })
+          : isStaffRole(user.role)
+            ? fetchStudioSnapshot()
+            : Promise.resolve(null);
+
+      // The dashboard only needs the studio snapshot. Do not make its first
+      // count wait for attendance-mark or invite-activation requests.
+      const remoteStudioResult = await studioPromise;
+      const remoteStudio = remoteStudioResult?.snapshot ?? null;
+      if (isStale()) return;
+
+      if (remoteStudioResult && remoteStudio) {
+        setStudioSnapshotRevision(remoteStudioResult.revision);
+        // Remote hydration must never enqueue the fetched (possibly older)
+        // snapshot as a new write. User mutations are persisted separately.
+        setStudioState((current) => ({
+          ...current,
+          ...remoteStudio,
+          user: current.user,
+          staffPasswords: current.staffPasswords,
+          studentPasswords: current.studentPasswords,
+        }), { persist: false });
+        enableStudioSnapshotPersistence();
+        setStudioLoad({ userId: user.id, status: "ready" });
+      } else {
+        markLoadError();
+      }
+
+      const [marks, invites] = await Promise.all([marksPromise, invitesPromise]);
+      if (isStale() || (marks.length === 0 && invites.length === 0)) return;
+
+      setStudioState((current) => {
+        let next = current;
+        if (invites.length > 0) next = mergeActivatedInvites(next, invites);
+        if (marks.length > 0) {
+          next = { ...next, sessions: mergeAttendanceMarks(next.sessions, marks) };
+        }
+        return next;
+      }, { persist: false });
+    } catch {
+      if (!isStale()) markLoadError();
+    }
+  }, []);
+
   useEffect(() => {
     if (!ready || !state.user) return;
 
     let cancelled = false;
+    const user = state.user;
+    const syncRemoteState = () => {
+      void refreshRemoteState(user, () => cancelled);
+    };
 
-    async function syncRemoteState() {
-      try {
-        const user = state.user!;
-        const marksPromise =
-          user.role === "student"
-            ? fetchAttendanceMarks({ studentId: user.id })
-            : isStaffRole(user.role)
-              ? fetchAttendanceMarks()
-              : Promise.resolve([]);
-
-        const invitesPromise =
-          user.role === "super_admin"
-            ? fetchActivatedInvites()
-            : Promise.resolve([]);
-
-        const studioPromise =
-          user.role === "student"
-            ? fetchStudioSnapshot({
-                studentId: user.id,
-                includeBlockedEmails: false,
-              })
-            : isStaffRole(user.role)
-              ? fetchStudioSnapshot()
-              : Promise.resolve(null);
-
-        const [marks, invites, remoteStudioResult] = await Promise.all([
-          marksPromise,
-          invitesPromise,
-          studioPromise,
-        ]);
-        const remoteStudio = remoteStudioResult?.snapshot ?? null;
-        if (
-          cancelled ||
-          (marks.length === 0 && invites.length === 0 && !remoteStudio)
-        ) {
-          return;
-        }
-
-        if (remoteStudioResult) setStudioSnapshotRevision(remoteStudioResult.revision);
-
-        // Remote hydration must never enqueue the fetched (possibly older)
-        // snapshot as a new write. User mutations are persisted separately.
-        setStudioState((current) => {
-          let next = remoteStudio
-            ? {
-                ...current,
-                ...remoteStudio,
-                user: current.user,
-                staffPasswords: current.staffPasswords,
-                studentPasswords: current.studentPasswords,
-              }
-            : current;
-          if (invites.length > 0) {
-            next = mergeActivatedInvites(next, invites);
-          }
-          if (marks.length > 0) {
-            next = {
-              ...next,
-              sessions: mergeAttendanceMarks(next.sessions, marks),
-            };
-          }
-          return next;
-        }, { persist: false });
-        if (remoteStudioResult) {
-          enableStudioSnapshotPersistence();
-        }
-      } catch {
-        // Ağ hatasında yerel durum korunur.
-      }
-    }
-
-    void syncRemoteState();
+    syncRemoteState();
     const interval = window.setInterval(syncRemoteState, 12000);
-    const onFocus = () => {
-      void syncRemoteState();
-    };
     const onVisible = () => {
-      if (document.visibilityState === "visible") {
-        void syncRemoteState();
-      }
+      if (document.visibilityState === "visible") syncRemoteState();
     };
-    window.addEventListener("focus", onFocus);
+    window.addEventListener("focus", syncRemoteState);
     document.addEventListener("visibilitychange", onVisible);
 
     return () => {
       cancelled = true;
       window.clearInterval(interval);
-      window.removeEventListener("focus", onFocus);
+      window.removeEventListener("focus", syncRemoteState);
       document.removeEventListener("visibilitychange", onVisible);
     };
-  }, [ready, state.user, state.user?.id, state.user?.role]);
+  }, [ready, state.user, refreshRemoteState]);
+
+  const retryStudioData = useCallback(async () => {
+    const user = state.user;
+    if (!user) return;
+    setStudioLoad({ userId: user.id, status: "loading" });
+    await refreshRemoteState(user);
+  }, [refreshRemoteState, state.user]);
 
   const loginAs = useCallback((role: Role, staffId?: string) => {
     if (role === "super_admin" || role === "instructor") {
@@ -1210,6 +1227,8 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
   const value = useMemo<StudioContextValue>(
     () => ({
       ready,
+      studioDataStatus,
+      retryStudioData,
       user: state.user,
       students: state.students,
       visibleStudents,
@@ -1265,6 +1284,7 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
       ready,
       remainingFor,
       remainingPostponeFor,
+      retryStudioData,
       requestPostpone,
       withdrawPostpone,
       requestRenewal,
@@ -1277,6 +1297,7 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
       state.sessions,
       state.students,
       state.user,
+      studioDataStatus,
       visiblePostponeRequests,
       visibleSessions,
       visibleStudents,

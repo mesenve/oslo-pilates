@@ -3,7 +3,7 @@
 import { AttendanceBoard } from "@/components/attendance-board";
 import { DailyQuoteCard } from "@/components/daily-quote-card";
 import { GroupClassCard } from "@/components/group-class-card";
-import { Card, RequestBadge } from "@/components/ui";
+import { Button, Card, RequestBadge } from "@/components/ui";
 import { useStudio } from "@/components/studio-provider";
 import { pendingAttendanceBatches, studentName } from "@/data/accessors";
 import { getInstructors } from "@/data/staff";
@@ -19,6 +19,8 @@ export default function AdminHomePage() {
     visibleStudents,
     visibleSessions,
     isSuperAdmin,
+    studioDataStatus,
+    retryStudioData,
   } = useStudio();
 
   const activeIds = new Set(visibleStudents.map((student) => student.id));
@@ -46,17 +48,38 @@ export default function AdminHomePage() {
       <div
         className={`grid grid-cols-2 gap-3 ${isSuperAdmin ? "sm:grid-cols-4" : "sm:grid-cols-3"}`}
       >
-        <StatCard label="Öğrenci" value={String(visibleStudents.length)} href="/admin/ogrenciler" />
+        <StatCard
+          label="Öğrenci"
+          value={String(visibleStudents.length)}
+          href="/admin/ogrenciler"
+          status={studioDataStatus === "idle" ? "loading" : studioDataStatus}
+        />
         <StatCard
           label="Yoklama"
           value={String(attendancePending.length)}
           href="/admin/yoklama"
+          status={studioDataStatus === "idle" ? "loading" : studioDataStatus}
         />
-        <StatCard label="Talep" value={String(pending.length)} href="/admin/talepler" />
+        <StatCard
+          label="Talep"
+          value={String(pending.length)}
+          href="/admin/talepler"
+          status={studioDataStatus === "idle" ? "loading" : studioDataStatus}
+        />
         {isSuperAdmin ? (
           <StatCard label="Ekip" value={String(teamCount)} href="/admin/ekip" />
         ) : null}
       </div>
+      {studioDataStatus === "error" ? (
+        <Card className="flex flex-wrap items-center justify-between gap-3 p-4">
+          <p role="alert" className="text-sm text-muted">
+            Öğrenci verileri şu an yüklenemedi. Lütfen tekrar deneyin.
+          </p>
+          <Button variant="secondary" onClick={() => void retryStudioData()}>
+            Tekrar dene
+          </Button>
+        </Card>
+      ) : null}
 
       <section className="space-y-4">
         <div className="flex items-baseline justify-between gap-3">
@@ -148,17 +171,29 @@ function StatCard({
   label,
   value,
   href,
+  status = "ready",
 }: {
   label: string;
   value: string;
   href: string;
+  status?: "loading" | "ready" | "error";
 }) {
-  return (
-    <Link href={href}>
-      <Card className="p-4">
-        <p className="text-[10px] uppercase tracking-[0.12em] text-muted">{label}</p>
+  const content = (
+    <Card className="p-4">
+      <p className="text-[10px] uppercase tracking-[0.12em] text-muted">{label}</p>
+      {status === "loading" ? (
+        <div
+          role="status"
+          aria-label={`${label} yükleniyor`}
+          className="mt-2 h-7 w-12 animate-pulse rounded-lg bg-accent-soft"
+        />
+      ) : status === "error" ? (
+        <p className="mt-1 text-sm text-muted">Yüklenemedi</p>
+      ) : (
         <p className="mt-1 font-serif text-2xl">{value}</p>
-      </Card>
-    </Link>
+      )}
+    </Card>
   );
+
+  return status === "ready" ? <Link href={href}>{content}</Link> : content;
 }
