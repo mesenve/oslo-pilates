@@ -8,28 +8,52 @@ import { sessionsForStudent } from "@/data/accessors";
 import { getClassGroupById } from "@/data/groups";
 import { isAtLeast24HoursAway, todayISO, weekdayFromISO } from "@/lib/dates";
 import { postponeRightLabel } from "@/lib/labels";
-import { type ComponentProps, useEffect, useMemo, useState } from "react";
+import { type ComponentProps, useMemo, useState, useSyncExternalStore } from "react";
+
+function subscribeToLocation(onChange: () => void) {
+  window.addEventListener("popstate", onChange);
+  return () => window.removeEventListener("popstate", onChange);
+}
+
+function getRequestedDate() {
+  return new URLSearchParams(window.location.search).get("date");
+}
 
 export default function ProgramPage() {
   const student = useCurrentStudent();
-  const { sessions, markAttended, requestPostpone, withdrawPostpone, remainingPostponeFor } =
-    useStudio();
+  const {
+    sessions,
+    postponeRequests,
+    markAttended,
+    requestPostpone,
+    withdrawPostpone,
+    remainingPostponeFor,
+  } = useStudio();
   const mine = sessionsForStudent(student?.id ?? "", sessions, student ?? undefined);
   const today = todayISO();
   const defaultDate =
     mine.find((session) => session.date >= today)?.date ??
     mine.at(-1)?.date ??
     today;
-  const [selectedDate, setSelectedDate] = useState(defaultDate);
-  useEffect(() => {
-    const requestedDate = new URLSearchParams(window.location.search).get("date");
-    if (requestedDate && mine.some((session) => session.date === requestedDate)) {
-      setSelectedDate(requestedDate);
-    }
-  }, [mine]);
+  const requestedDate = useSyncExternalStore(
+    subscribeToLocation,
+    getRequestedDate,
+    () => null,
+  );
+  const [manuallySelectedDate, setManuallySelectedDate] = useState<string | null>(null);
+  const selectedDate =
+    manuallySelectedDate ??
+    (requestedDate && mine.some((session) => session.date === requestedDate)
+      ? requestedDate
+      : defaultDate);
   const marks = useMemo(
-    () => mine.map((session) => ({ date: session.date, status: session.status })),
-    [mine],
+    () => mine.map((session) => ({
+      date: session.date,
+      status: postponeRequests.some(
+        (request) => request.sessionId === session.id && request.status === "pending",
+      ) ? "postpone_pending" : session.status,
+    })),
+    [mine, postponeRequests],
   );
   const selected = mine.filter((session) => session.date === selectedDate);
   const group = student ? getClassGroupById(student.groupId) : undefined;
@@ -51,7 +75,7 @@ export default function ProgramPage() {
       <ClassCalendar
         marks={marks}
         selectedDate={selectedDate}
-        onSelectDate={setSelectedDate}
+        onSelectDate={setManuallySelectedDate}
       />
 
       <div className="flex flex-wrap gap-3 text-[11px] text-muted">
@@ -68,6 +92,9 @@ export default function ProgramPage() {
           <ProgramSessionRow
             key={session.id}
             session={session}
+            hasPendingPostpone={postponeRequests.some(
+              (request) => request.sessionId === session.id && request.status === "pending",
+            )}
             time={group?.time ?? ""}
             canPostpone={postponeRemaining > 0 && session.date > today}
             canAttend={session.date === today}
@@ -84,6 +111,7 @@ export default function ProgramPage() {
 
 function ProgramSessionRow({
   session,
+  hasPendingPostpone,
   time,
   canPostpone,
   canAttend,
@@ -105,6 +133,7 @@ function ProgramSessionRow({
   return (
     <SessionRow
       session={session}
+      hasPendingPostpone={hasPendingPostpone}
       time={sessionTime}
       canPostpone={canPostponeAtThisTime}
       canAttend={canAttend}

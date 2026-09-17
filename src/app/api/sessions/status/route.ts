@@ -34,7 +34,7 @@ export async function POST(request: Request) {
       const pendingRequest = snapshot.postponeRequests?.find(
         (item) => item.sessionId === session.id && item.status === "pending",
       );
-      if (session.status !== "postpone_pending" || !pendingRequest) {
+      if (!pendingRequest || !["upcoming", "postpone_pending"].includes(session.status)) {
         return NextResponse.json({ error: "Geri alınabilecek bir erteleme talebi yok." }, { status: 409 });
       }
       snapshot.sessions = snapshot.sessions?.map((item) =>
@@ -51,6 +51,12 @@ export async function POST(request: Request) {
     }
     if (body.status !== "postpone_pending") {
       return NextResponse.json({ error: "Bu işlem için yetkiniz yok." }, { status: 403 });
+    }
+    const existingPendingRequest = snapshot.postponeRequests?.some(
+      (item) => item.sessionId === session.id && item.status === "pending",
+    );
+    if (existingPendingRequest) {
+      return NextResponse.json({ error: "Bu ders için zaten bekleyen bir erteleme talebiniz var." }, { status: 409 });
     }
     if (session.status !== "upcoming") {
       return NextResponse.json({ error: "Bu ders için erteleme yapılamaz." }, { status: 409 });

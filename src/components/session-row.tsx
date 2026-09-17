@@ -12,6 +12,7 @@ import { useState } from "react";
 
 export function SessionRow({
   session,
+  hasPendingPostpone = false,
   time,
   canPostpone,
   canAttend,
@@ -21,6 +22,7 @@ export function SessionRow({
   onWithdrawPostpone,
 }: {
   session: Session;
+  hasPendingPostpone?: boolean;
   time: string;
   canPostpone: boolean;
   canAttend: boolean;
@@ -31,7 +33,8 @@ export function SessionRow({
 }) {
   const [open, setOpen] = useState(false);
   const [reason, setReason] = useState("");
-  const locked = session.status !== "upcoming" || isBefore(session.date, todayISO());
+  const displayStatus = hasPendingPostpone ? "postpone_pending" : session.status;
+  const locked = displayStatus !== "upcoming" || isBefore(session.date, todayISO());
 
   return (
     <Card className="px-4 py-4 sm:px-5">
@@ -53,12 +56,12 @@ export function SessionRow({
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          {session.status !== "upcoming" ? <SessionBadge status={session.status} /> : null}
-          {session.status === "attend_pending" ||
-          session.status === "postpone_pending" ? (
+          {displayStatus !== "upcoming" ? <SessionBadge status={displayStatus} /> : null}
+          {displayStatus === "attend_pending" ||
+          displayStatus === "postpone_pending" ? (
             <p className="text-xs text-muted">Hocanın onayı bekleniyor.</p>
           ) : null}
-          {session.status === "postpone_pending" && onWithdrawPostpone ? (
+          {hasPendingPostpone && onWithdrawPostpone ? (
             <Button variant="ghost" onClick={onWithdrawPostpone}>
               Erteleme talebini geri al
             </Button>

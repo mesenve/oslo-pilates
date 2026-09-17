@@ -24,6 +24,7 @@ export default function StudentHomePage() {
   const student = useCurrentStudent();
   const {
     sessions,
+    postponeRequests,
     remainingFor,
     remainingPostponeFor,
     markAttended,
@@ -41,8 +42,15 @@ export default function StudentHomePage() {
   const mine = sessionsForStudent(student.id, sessions, student);
   const monday = startOfWeekMonday();
   const selectedSession = mine.find((session) => session.date === selectedDate);
+  const hasPendingPostpone = Boolean(
+    selectedSession && postponeRequests.some(
+      (request) => request.sessionId === selectedSession.id && request.status === "pending",
+    ),
+  );
   const selectedStatus = selectedSession
-    ? effectiveSessionStatus(selectedSession)
+    ? hasPendingPostpone
+      ? "postpone_pending"
+      : effectiveSessionStatus(selectedSession)
     : null;
   const isActiveSelected =
     selectedStatus === "upcoming" ||
@@ -80,6 +88,11 @@ export default function StudentHomePage() {
           {Array.from({ length: 7 }, (_, index) => {
             const iso = toISODate(addDays(monday, index));
             const session = mine.find((item) => item.date === iso);
+            const hasPendingPostpone = Boolean(
+              session && postponeRequests.some(
+                (request) => request.sessionId === session.id && request.status === "pending",
+              ),
+            );
             const isSelected = iso === selectedDate;
             const isToday = iso === today;
             const label = addDays(monday, index).toLocaleDateString("tr-TR", {
@@ -107,7 +120,8 @@ export default function StudentHomePage() {
                     session
                       ? session.status === "attended"
                         ? "bg-emerald-500"
-                        : session.status === "attend_pending" ||
+                        : hasPendingPostpone ||
+                            session.status === "attend_pending" ||
                             session.status === "postpone_pending"
                           ? "bg-amber-500"
                           : "bg-accent"
@@ -155,7 +169,7 @@ export default function StudentHomePage() {
                     student.monthlyPostponeLimit > 0 ? 1 : 0,
                   )}
                 </p>
-                {selectedSession.status === "upcoming" ? (
+                {selectedStatus === "upcoming" ? (
                   <div className="mt-3 flex flex-wrap gap-2">
                     {selectedDate === today ? (
                       <Button onClick={() => markAttended(selectedSession.id)}>
@@ -171,7 +185,7 @@ export default function StudentHomePage() {
                     ) : null}
                   </div>
                 ) : null}
-                {selectedSession.status === "postpone_pending" ? (
+                {hasPendingPostpone ? (
                   <div className="mt-3 flex flex-wrap gap-2">
                     <Button
                       variant="secondary"
@@ -182,7 +196,7 @@ export default function StudentHomePage() {
                   </div>
                 ) : null}
                 {selectedDate > today &&
-                selectedSession.status === "upcoming" &&
+                selectedStatus === "upcoming" &&
                 !canPostponeSelected ? (
                   <p className="mt-3 text-sm text-muted">
                     {remainingPostponeFor(student.id) <= 0
