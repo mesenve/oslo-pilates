@@ -8,10 +8,13 @@ import { getClassGroupById } from "@/data/groups";
 import { formatLongDate } from "@/lib/dates";
 import Link from "next/link";
 import { useParams } from "next/navigation";
+import { useState } from "react";
 
 export default function InstructorLessonPage() {
   const params = useParams<{ date: string; groupId: string }>();
   const { visibleStudents, visibleSessions, markSessionByInstructor } = useStudio();
+  const [error, setError] = useState<string | null>(null);
+  const [busyId, setBusyId] = useState<string | null>(null);
 
   const date = params.date;
   const groupId = params.groupId;
@@ -42,6 +45,23 @@ export default function InstructorLessonPage() {
     );
   }
 
+  async function setStatus(
+    sessionId: string,
+    outcome: "attended" | "postponed" | "missed",
+  ) {
+    if (busyId) return;
+    setBusyId(sessionId);
+    setError(null);
+    try {
+      const ok = await markSessionByInstructor(sessionId, outcome);
+      if (!ok) setError("Ders durumu güncellenemedi. Tekrar dene.");
+    } catch {
+      setError("Ders durumu güncellenemedi. Tekrar dene.");
+    } finally {
+      setBusyId(null);
+    }
+  }
+
   return (
     <div className="space-y-5">
       <Link
@@ -60,6 +80,8 @@ export default function InstructorLessonPage() {
           {groupId === "duzensiz" ? "Özel program" : `${group.time} · ${group.label}`}
         </p>
       </header>
+
+      {error ? <p className="text-sm text-red-700">{error}</p> : null}
 
       {sessions.length === 0 ? (
         <EmptyState>Bu derste öğrencin yok.</EmptyState>
@@ -91,33 +113,30 @@ export default function InstructorLessonPage() {
                   </p>
                 ) : null}
                 <div className="flex flex-wrap gap-2">
-                    <Button
-                      className="px-3 py-1.5"
-                      onClick={() =>
-                        markSessionByInstructor(session.id, "attended")
-                      }
-                    >
-                      Geldi
-                    </Button>
-                    <Button
-                      variant="secondary"
-                      className="px-3 py-1.5"
-                      onClick={() =>
-                        markSessionByInstructor(session.id, "postponed")
-                      }
-                    >
-                      Erteleme
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      className="px-3 py-1.5 text-red-700"
-                      onClick={() =>
-                        markSessionByInstructor(session.id, "missed")
-                      }
-                    >
-                      Yandı
-                    </Button>
-                  </div>
+                  <Button
+                    className="px-3 py-1.5"
+                    disabled={busyId !== null}
+                    onClick={() => void setStatus(session.id, "attended")}
+                  >
+                    Geldi
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    className="px-3 py-1.5"
+                    disabled={busyId !== null}
+                    onClick={() => void setStatus(session.id, "postponed")}
+                  >
+                    Erteleme
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    className="px-3 py-1.5 text-red-700"
+                    disabled={busyId !== null}
+                    onClick={() => void setStatus(session.id, "missed")}
+                  >
+                    Yandı
+                  </Button>
+                </div>
               </Card>
             );
           })}

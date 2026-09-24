@@ -41,6 +41,8 @@ export default function StudentHomePage() {
   const [selectedDate, setSelectedDate] = useState(today);
   const [postponing, setPostponing] = useState(false);
   const [withdrawing, setWithdrawing] = useState(false);
+  const [attending, setAttending] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
 
   if (!student) return null;
 
@@ -192,8 +194,25 @@ export default function StudentHomePage() {
                 {selectedStatus === "upcoming" ? (
                   <div className="mt-3 flex flex-wrap gap-2">
                     {selectedDate === today ? (
-                      <Button onClick={() => markAttended(selectedSession.id)}>
-                        Geldim
+                      <Button
+                        disabled={attending}
+                        onClick={() => {
+                          if (attending) return;
+                          setActionError(null);
+                          setAttending(true);
+                          void markAttended(selectedSession.id)
+                            .then((ok) => {
+                              if (!ok) {
+                                setActionError("Yoklama kaydedilemedi. Tekrar dene.");
+                              }
+                            })
+                            .catch(() => {
+                              setActionError("Yoklama kaydedilemedi. Tekrar dene.");
+                            })
+                            .finally(() => setAttending(false));
+                        }}
+                      >
+                        {attending ? "Kaydediliyor…" : "Geldim"}
                       </Button>
                     ) : selectedDate > today && canPostponeSelected ? (
                       <Button
@@ -201,9 +220,21 @@ export default function StudentHomePage() {
                         disabled={postponing}
                         onClick={() => {
                           if (postponing) return;
+                          setActionError(null);
                           setPostponing(true);
                           void requestPostpone(selectedSession.id, "")
-                            .catch(() => undefined)
+                            .then((ok) => {
+                              if (!ok) {
+                                setActionError(
+                                  "Erteleme talebi gönderilemedi. Tekrar dene.",
+                                );
+                              }
+                            })
+                            .catch(() => {
+                              setActionError(
+                                "Erteleme talebi gönderilemedi. Tekrar dene.",
+                              );
+                            })
                             .finally(() => setPostponing(false));
                         }}
                       >
@@ -219,15 +250,30 @@ export default function StudentHomePage() {
                       disabled={withdrawing}
                       onClick={() => {
                         if (withdrawing) return;
+                        setActionError(null);
                         setWithdrawing(true);
                         void withdrawPostpone(selectedSession.id)
-                          .catch(() => undefined)
+                          .then((ok) => {
+                            if (!ok) {
+                              setActionError(
+                                "Erteleme talebi geri alınamadı. Tekrar dene.",
+                              );
+                            }
+                          })
+                          .catch(() => {
+                            setActionError(
+                              "Erteleme talebi geri alınamadı. Tekrar dene.",
+                            );
+                          })
                           .finally(() => setWithdrawing(false));
                       }}
                     >
                       {withdrawing ? "Geri alınıyor…" : "Erteleme talebini geri al"}
                     </Button>
                   </div>
+                ) : null}
+                {actionError ? (
+                  <p className="mt-3 text-sm text-red-700">{actionError}</p>
                 ) : null}
                 {selectedDate > today &&
                 selectedStatus === "upcoming" &&

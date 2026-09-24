@@ -47,11 +47,11 @@ export default function SifremiUnuttumPage() {
         <Card className="p-6">
           {sent ? (
             <div className="space-y-4">
-              <h1 className="font-serif text-2xl">Mail gönderildi</h1>
+              <h1 className="font-serif text-2xl">Talep alındı</h1>
               <p className="text-sm text-muted">
                 <span className="font-medium text-foreground">{email.trim()}</span>{" "}
-                adresine kayıtlı bir hesap varsa şifre sıfırlama bağlantısı
-                gönderildi. Gelen kutunu ve spam klasörünü kontrol et.
+                adresine kayıtlı bir hesap varsa sıfırlama bağlantısı kısa süre
+                içinde gelir. Gelen kutunu ve spam klasörünü kontrol et.
               </p>
               <Link
                 href="/giris"

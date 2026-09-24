@@ -14,6 +14,7 @@ export default function RequestsPage() {
     useStudio();
   const visibleRequests = visiblePostponeRequests;
   const [approvingId, setApprovingId] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   return (
     <div className="space-y-8">
@@ -25,6 +26,8 @@ export default function RequestsPage() {
       </header>
 
       <OpeningsBoard requests={visibleRequests} sessions={visibleSessions} />
+
+      {error ? <p className="text-sm text-red-700">{error}</p> : null}
 
       <section className="space-y-3">
         <h2 className="font-serif text-2xl">Erteleme talepleri</h2>
@@ -91,9 +94,17 @@ export default function RequestsPage() {
                       disabled={approvingId === request.id}
                       onClick={() => {
                         if (approvingId) return;
+                        setError(null);
                         setApprovingId(request.id);
                         void approveRequest(request.id)
-                          .catch(() => undefined)
+                          .then((ok) => {
+                            if (!ok) {
+                              setError("Talep onaylanamadı. Tekrar dene.");
+                            }
+                          })
+                          .catch(() => {
+                            setError("Talep onaylanamadı. Tekrar dene.");
+                          })
                           .finally(() => setApprovingId(null));
                       }}
                     >

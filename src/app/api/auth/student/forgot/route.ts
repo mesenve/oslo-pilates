@@ -19,7 +19,7 @@ export async function POST(request: Request) {
   const ok = NextResponse.json({
     ok: true,
     message:
-      "E-posta kayıtlıysa şifre sıfırlama bağlantısı gönderildi. Gelen kutunu kontrol et.",
+      "Talep alındı. E-posta kayıtlıysa kısa süre içinde sıfırlama bağlantısı gelir. Gelen kutunu ve spam klasörünü kontrol et.",
   });
 
   if (!email) {

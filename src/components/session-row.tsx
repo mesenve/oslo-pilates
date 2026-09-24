@@ -29,14 +29,16 @@ export function SessionRow({
   canAttend: boolean;
   postponeHint: string;
   postponeNote?: string;
-  onAttend: () => void;
+  onAttend: () => void | Promise<boolean | void>;
   onPostpone: (reason: string) => void | Promise<boolean | void>;
-  onWithdrawPostpone?: () => void | Promise<void>;
+  onWithdrawPostpone?: () => void | Promise<boolean | void>;
 }) {
   const [open, setOpen] = useState(false);
   const [reason, setReason] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [withdrawing, setWithdrawing] = useState(false);
+  const [attending, setAttending] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
   const displayStatus = hasPendingPostpone ? "postpone_pending" : session.status;
   const locked = displayStatus !== "upcoming" || isBefore(session.date, todayISO());
 
@@ -71,9 +73,17 @@ export function SessionRow({
               disabled={withdrawing}
               onClick={() => {
                 if (withdrawing) return;
+                setActionError(null);
                 setWithdrawing(true);
                 void Promise.resolve(onWithdrawPostpone())
-                  .catch(() => undefined)
+                  .then((ok) => {
+                    if (ok === false) {
+                      setActionError("Erteleme talebi geri alınamadı. Tekrar dene.");
+                    }
+                  })
+                  .catch(() => {
+                    setActionError("Erteleme talebi geri alınamadı. Tekrar dene.");
+                  })
                   .finally(() => setWithdrawing(false));
               }}
             >
@@ -82,7 +92,28 @@ export function SessionRow({
           ) : null}
           {!locked ? (
             <>
-              {canAttend ? <Button onClick={onAttend}>Geldim</Button> : null}
+              {canAttend ? (
+                <Button
+                  disabled={attending}
+                  onClick={() => {
+                    if (attending) return;
+                    setActionError(null);
+                    setAttending(true);
+                    void Promise.resolve(onAttend())
+                      .then((ok) => {
+                        if (ok === false) {
+                          setActionError("Yoklama kaydedilemedi. Tekrar dene.");
+                        }
+                      })
+                      .catch(() => {
+                        setActionError("Yoklama kaydedilemedi. Tekrar dene.");
+                      })
+                      .finally(() => setAttending(false));
+                  }}
+                >
+                  {attending ? "Kaydediliyor…" : "Geldim"}
+                </Button>
+              ) : null}
               {canPostpone ? (
                 <Button variant="secondary" onClick={() => setOpen(true)}>
                   Ertele
@@ -105,20 +136,28 @@ export function SessionRow({
         </p>
       ) : null}
 
+      {actionError ? <p className="mt-3 text-sm text-red-700">{actionError}</p> : null}
+
       {open ? (
         <form
           className="mt-4 border-t border-border pt-4"
           onSubmit={(event) => {
             event.preventDefault();
             if (submitting) return;
+            setActionError(null);
             setSubmitting(true);
             void Promise.resolve(onPostpone(reason))
               .then((ok) => {
-                if (ok === false) return;
+                if (ok === false) {
+                  setActionError("Erteleme talebi gönderilemedi. Tekrar dene.");
+                  return;
+                }
                 setReason("");
                 setOpen(false);
               })
-              .catch(() => undefined)
+              .catch(() => {
+                setActionError("Erteleme talebi gönderilemedi. Tekrar dene.");
+              })
               .finally(() => setSubmitting(false));
           }}
         >
@@ -142,4 +181,3 @@ export function SessionRow({
     </Card>
   );
 }
-

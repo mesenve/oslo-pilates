@@ -4,23 +4,46 @@ import { Button, Card, EmptyState } from "@/components/ui";
 import { useStudio } from "@/components/studio-provider";
 import { groupLabel, pendingAttendanceBatches, studentName } from "@/data/accessors";
 import { formatLongDate } from "@/lib/dates";
+import { useState } from "react";
 
 export function AttendanceBoard() {
   const { visibleSessions, visibleStudents, approveAttendance, rejectAttendance } =
     useStudio();
   const activeIds = new Set(visibleStudents.map((student) => student.id));
   const batches = pendingAttendanceBatches(visibleSessions, activeIds);
+  const [busyKey, setBusyKey] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   if (batches.length === 0) {
     return <EmptyState>Bekleyen yoklama onayı yok.</EmptyState>;
   }
 
+  async function runAction(
+    key: string,
+    action: () => Promise<boolean>,
+    failMessage: string,
+  ) {
+    if (busyKey) return;
+    setBusyKey(key);
+    setError(null);
+    try {
+      const ok = await action();
+      if (!ok) setError(failMessage);
+    } catch {
+      setError(failMessage);
+    } finally {
+      setBusyKey(null);
+    }
+  }
+
   return (
     <div className="space-y-3">
+      {error ? <p className="text-sm text-red-700">{error}</p> : null}
       {batches.map((batch) => {
         const batchIds = batch.sessions.map((session) => session.id);
+        const batchKey = `${batch.date}-${batch.groupId}`;
         return (
-          <Card key={`${batch.date}-${batch.groupId}`} className="p-5">
+          <Card key={batchKey} className="p-5">
             <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
               <div className="min-w-0 flex-1">
                 <p className="font-serif text-2xl">{batch.dayLabel} grubu</p>
@@ -31,10 +54,29 @@ export function AttendanceBoard() {
               </div>
               {batch.sessions.length > 1 ? (
                 <div className="flex flex-wrap gap-2">
-                  <Button onClick={() => approveAttendance(batchIds)}>
+                  <Button
+                    disabled={busyKey !== null}
+                    onClick={() =>
+                      void runAction(
+                        `${batchKey}-approve-all`,
+                        () => approveAttendance(batchIds),
+                        "Yoklama onaylanamadı. Tekrar dene.",
+                      )
+                    }
+                  >
                     Tümünü onayla
                   </Button>
-                  <Button variant="ghost" onClick={() => rejectAttendance(batchIds)}>
+                  <Button
+                    variant="ghost"
+                    disabled={busyKey !== null}
+                    onClick={() =>
+                      void runAction(
+                        `${batchKey}-reject-all`,
+                        () => rejectAttendance(batchIds),
+                        "Yoklama geri alınamadı. Tekrar dene.",
+                      )
+                    }
+                  >
                     Tümünü geri al
                   </Button>
                 </div>
@@ -64,12 +106,28 @@ export function AttendanceBoard() {
                       ) : null}
                     </div>
                     <div className="flex flex-wrap gap-2">
-                      <Button onClick={() => approveAttendance([session.id])}>
+                      <Button
+                        disabled={busyKey !== null}
+                        onClick={() =>
+                          void runAction(
+                            `${session.id}-approve`,
+                            () => approveAttendance([session.id]),
+                            "Yoklama onaylanamadı. Tekrar dene.",
+                          )
+                        }
+                      >
                         Onayla
                       </Button>
                       <Button
                         variant="ghost"
-                        onClick={() => rejectAttendance([session.id])}
+                        disabled={busyKey !== null}
+                        onClick={() =>
+                          void runAction(
+                            `${session.id}-reject`,
+                            () => rejectAttendance([session.id]),
+                            "Yoklama geri alınamadı. Tekrar dene.",
+                          )
+                        }
                       >
                         Geri al
                       </Button>

@@ -59,6 +59,7 @@ export default function StudentDetailPage() {
   const student = visibleStudents.find((item) => item.id === params.id);
   const [copiedInvite, setCopiedInvite] = useState(false);
   const [approvingId, setApprovingId] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
   const [resendStatus, setResendStatus] = useState<"idle" | "sending" | "sent" | "error">(
     "idle",
   );
@@ -220,7 +221,34 @@ export default function StudentDetailPage() {
         <Card className="space-y-3 p-4">
           <div className="flex items-center justify-between gap-3"><h2 className="font-serif text-xl">Yenileme talebi</h2><RequestBadge status={student.renewalRequest.status === "pending" ? "pending" : student.renewalRequest.status} /></div>
           <p className="text-sm text-muted">{student.renewalRequest.requestedStartDate ? `Tercih edilen başlangıç: ${formatLongDate(student.renewalRequest.requestedStartDate)}` : "Başlangıç tarihi belirtilmedi."}</p>
-          {student.renewalRequest.status === "pending" ? <div className="flex flex-wrap gap-2"><Button onClick={() => void reviewRenewal(student.id, "approved")}>Talebi kabul et</Button><Button variant="danger" onClick={() => void reviewRenewal(student.id, "rejected")}>Reddet</Button></div> : null}
+          {student.renewalRequest.status === "pending" ? (
+            <div className="flex flex-wrap gap-2">
+              <Button
+                onClick={() => {
+                  setActionError(null);
+                  void reviewRenewal(student.id, "approved").then((result) => {
+                    if (result.error) setActionError(result.error);
+                  });
+                }}
+              >
+                Talebi kabul et
+              </Button>
+              <Button
+                variant="danger"
+                onClick={() => {
+                  setActionError(null);
+                  void reviewRenewal(student.id, "rejected").then((result) => {
+                    if (result.error) setActionError(result.error);
+                  });
+                }}
+              >
+                Reddet
+              </Button>
+            </div>
+          ) : null}
+          {actionError && student.renewalRequest.status === "pending" ? (
+            <p className="text-sm text-red-700">{actionError}</p>
+          ) : null}
         </Card>
       ) : null}
 
@@ -335,9 +363,16 @@ export default function StudentDetailPage() {
                     });
                     await navigator.clipboard.writeText(link);
                     setCopiedInvite(true);
+                    setResendError(null);
                     window.setTimeout(() => setCopiedInvite(false), 2000);
-                  } catch {
+                  } catch (error) {
                     setCopiedInvite(false);
+                    setResendStatus("error");
+                    setResendError(
+                      error instanceof Error
+                        ? error.message
+                        : "Davet linki kaydedilemedi / kopyalanamadı.",
+                    );
                   }
                 }}
               >
@@ -482,9 +517,15 @@ export default function StudentDetailPage() {
                     disabled={approvingId === request.id}
                     onClick={() => {
                       if (approvingId) return;
+                      setActionError(null);
                       setApprovingId(request.id);
                       void approveRequest(request.id)
-                        .catch(() => undefined)
+                        .then((ok) => {
+                          if (!ok) setActionError("Talep onaylanamadı. Tekrar dene.");
+                        })
+                        .catch(() => {
+                          setActionError("Talep onaylanamadı. Tekrar dene.");
+                        })
                         .finally(() => setApprovingId(null));
                     }}
                   >
@@ -497,6 +538,8 @@ export default function StudentDetailPage() {
           })
         )}
       </section>
+
+      {actionError ? <p className="text-sm text-red-700">{actionError}</p> : null}
 
       <PostponeUsedCard
         key={`${
@@ -525,9 +568,7 @@ export default function StudentDetailPage() {
               })()
             : null
         }
-        onChange={(used, usedAt) =>
-          void setPostponeLessonUsed(student.id, used, usedAt)
-        }
+        onChange={(used, usedAt) => setPostponeLessonUsed(student.id, used, usedAt)}
         onSaveNote={
           noteRequest
             ? (reason) => setPostponeRequestReason(noteRequest.id, reason)
@@ -561,9 +602,14 @@ export default function StudentDetailPage() {
               {canChangeStatus ? (
                 <AttendanceStatusPicker
                   status={pickerStatus as "attended" | "postponed" | "missed"}
-                  onChange={(nextStatus) =>
-                    markSessionByInstructor(session.id, nextStatus)
-                  }
+                  onChange={(nextStatus) => {
+                    setActionError(null);
+                    void markSessionByInstructor(session.id, nextStatus).then((ok) => {
+                      if (!ok) {
+                        setActionError("Ders durumu güncellenemedi. Tekrar dene.");
+                      }
+                    });
+                  }}
                 />
               ) : (
                 <SessionBadge status={status} />
@@ -678,12 +724,13 @@ function PostponeUsedCard({
   usedAt: string;
   note: string;
   noteLessonLabel?: string | null;
-  onChange: (used: boolean, usedAt?: string) => void;
-  onSaveNote?: (reason: string) => Promise<void>;
+  onChange: (used: boolean, usedAt?: string) => Promise<boolean>;
+  onSaveNote?: (reason: string) => Promise<boolean>;
 }) {
   const [dateValue, setDateValue] = useState(usedAt || todayISO());
   const [noteDraft, setNoteDraft] = useState(note);
   const [savingNote, setSavingNote] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const noteDirty = noteDraft.trim() !== (note ?? "").trim();
 
   return (
@@ -692,9 +739,12 @@ function PostponeUsedCard({
         <input
           type="checkbox"
           checked={used}
-          onChange={(event) =>
-            onChange(event.target.checked, dateValue || todayISO())
-          }
+          onChange={(event) => {
+            setError(null);
+            void onChange(event.target.checked, dateValue || todayISO()).then((ok) => {
+              if (!ok) setError("Erteleme hakkı güncellenemedi. Tekrar dene.");
+            });
+          }}
           className="peer sr-only"
         />
         <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg border border-accent/35 bg-accent-soft/30 text-white shadow-[0_3px_10px_rgba(194,24,91,0.1)] transition peer-focus-visible:ring-4 peer-focus-visible:ring-accent-soft/70 peer-checked:border-accent peer-checked:bg-accent">
@@ -712,7 +762,12 @@ function PostponeUsedCard({
           onChange={(event) => {
             const next = event.target.value;
             setDateValue(next);
-            if (used) onChange(true, next);
+            if (used) {
+              setError(null);
+              void onChange(true, next).then((ok) => {
+                if (!ok) setError("Erteleme hakkı güncellenemedi. Tekrar dene.");
+              });
+            }
           }}
           className="w-full rounded-2xl border border-border bg-white px-3 py-2 text-sm"
         />
@@ -740,9 +795,15 @@ function PostponeUsedCard({
             disabled={savingNote || !noteDirty}
             onClick={() => {
               if (savingNote || !noteDirty) return;
+              setError(null);
               setSavingNote(true);
               void onSaveNote(noteDraft)
-                .catch(() => undefined)
+                .then((ok) => {
+                  if (!ok) setError("Not kaydedilemedi. Tekrar dene.");
+                })
+                .catch(() => {
+                  setError("Not kaydedilemedi. Tekrar dene.");
+                })
                 .finally(() => setSavingNote(false));
             }}
           >
@@ -750,6 +811,7 @@ function PostponeUsedCard({
           </Button>
         </div>
       ) : null}
+      {error ? <p className="text-sm text-red-700">{error}</p> : null}
       {usedAt ? (
         <p className="text-sm text-amber-800">
           Erteleme hakkı {formatLongDate(usedAt)} tarihinde kullanıldı.
