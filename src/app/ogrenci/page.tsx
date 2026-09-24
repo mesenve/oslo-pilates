@@ -39,6 +39,7 @@ export default function StudentHomePage() {
   } = useStudio();
   const today = todayISO();
   const [selectedDate, setSelectedDate] = useState(today);
+  const [postponing, setPostponing] = useState(false);
 
   if (!student) return null;
 
@@ -196,9 +197,16 @@ export default function StudentHomePage() {
                     ) : selectedDate > today && canPostponeSelected ? (
                       <Button
                         variant="secondary"
-                        onClick={() => requestPostpone(selectedSession.id, "")}
+                        disabled={postponing}
+                        onClick={() => {
+                          if (postponing) return;
+                          setPostponing(true);
+                          void requestPostpone(selectedSession.id, "")
+                            .catch(() => undefined)
+                            .finally(() => setPostponing(false));
+                        }}
                       >
-                        Ertele
+                        {postponing ? "Gönderiliyor…" : "Ertele"}
                       </Button>
                     ) : null}
                   </div>

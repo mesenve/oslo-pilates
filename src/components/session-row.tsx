@@ -30,11 +30,12 @@ export function SessionRow({
   postponeHint: string;
   postponeNote?: string;
   onAttend: () => void;
-  onPostpone: (reason: string) => void;
+  onPostpone: (reason: string) => void | Promise<boolean | void>;
   onWithdrawPostpone?: () => void;
 }) {
   const [open, setOpen] = useState(false);
   const [reason, setReason] = useState("");
+  const [submitting, setSubmitting] = useState(false);
   const displayStatus = hasPendingPostpone ? "postpone_pending" : session.status;
   const locked = displayStatus !== "upcoming" || isBefore(session.date, todayISO());
 
@@ -98,17 +99,30 @@ export function SessionRow({
           className="mt-4 border-t border-border pt-4"
           onSubmit={(event) => {
             event.preventDefault();
-            onPostpone(reason);
-            setReason("");
-            setOpen(false);
+            if (submitting) return;
+            setSubmitting(true);
+            void Promise.resolve(onPostpone(reason))
+              .then((ok) => {
+                if (ok === false) return;
+                setReason("");
+                setOpen(false);
+              })
+              .catch(() => undefined)
+              .finally(() => setSubmitting(false));
           }}
         >
           <p className="text-sm text-muted">
             {postponeHint} Hoca onaylayınca bu ders ertelenir.
           </p>
           <div className="mt-3 flex gap-2">
-            <Button type="submit">Erteleme talebi gönder</Button>
-            <Button variant="ghost" onClick={() => setOpen(false)}>
+            <Button type="submit" disabled={submitting}>
+              {submitting ? "Gönderiliyor…" : "Erteleme talebi gönder"}
+            </Button>
+            <Button
+              variant="ghost"
+              disabled={submitting}
+              onClick={() => setOpen(false)}
+            >
               Vazgeç
             </Button>
           </div>

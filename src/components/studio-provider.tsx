@@ -99,7 +99,7 @@ type StudioContextValue = {
   markAttended: (sessionId: string) => void;
   approveAttendance: (sessionIds: string[]) => void;
   rejectAttendance: (sessionIds: string[]) => void;
-  requestPostpone: (sessionId: string, reason: string) => void;
+  requestPostpone: (sessionId: string, reason: string) => Promise<boolean>;
   withdrawPostpone: (sessionId: string) => Promise<void>;
   requestRenewal: (requestedStartDate?: string) => Promise<{ error: string | null }>;
   reviewRenewal: (studentId: string, status: "approved" | "rejected") => Promise<{ error: string | null }>;
@@ -683,13 +683,13 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ sessionId, status: "postpone_pending", reason }),
     });
-    if (!response.ok) return;
+    if (!response.ok) return false;
     const data = (await response.json().catch(() => null)) as {
       request?: StudioState["postponeRequests"][number];
       revision?: string;
     } | null;
     const request = data?.request;
-    if (!request) return;
+    if (!request) return false;
     setStudioSnapshotRevision(data?.revision);
     setStudioState((current) => ({
       ...current,
@@ -698,6 +698,7 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
       ),
       postponeRequests: [request, ...current.postponeRequests.filter((item) => item.id !== request.id)],
     }), { persist: false });
+    return true;
   }, []);
 
   const withdrawPostpone = useCallback(async (sessionId: string) => {
