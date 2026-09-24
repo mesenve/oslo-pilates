@@ -1,5 +1,5 @@
 import { getClassGroupById } from "@/data/groups";
-import { monthKey, todayISO, weekdayFromISO } from "@/lib/dates";
+import { todayISO, weekdayFromISO } from "@/lib/dates";
 import { DAY_LABELS } from "@/lib/labels";
 import type {
   PostponeRequest,
@@ -116,25 +116,69 @@ export function pendingAttendanceBatches(
     .sort((a, b) => a.date.localeCompare(b.date) || a.time.localeCompare(b.time));
 }
 
-export function postponeUsedThisMonth(
-  studentId: string,
-  requests: PostponeRequest[],
-  month = monthKey(todayISO()),
+/** Date the postpone right was spent on (prefer session date). */
+export function postponeRequestDate(
+  request: PostponeRequest,
+  sessions: Session[],
 ) {
-  return requests.filter(
-    (request) =>
-      request.studentId === studentId &&
-      request.status !== "rejected" &&
-      monthKey(request.createdAt) === month,
-  ).length;
+  return sessions.find((item) => item.id === request.sessionId)?.date ?? null;
+}
+
+function isDateInPackage(student: Student, date: string) {
+  const startDate = student.package?.startDate;
+  const endDate = student.package?.endDate;
+  if (!startDate || !endDate || startDate > endDate) return true;
+  return date >= startDate && date <= endDate;
+}
+
+/** Distinct postponed sessions inside the active package period. */
+export function postponeUsedInPackage(
+  student: Student,
+  requests: PostponeRequest[],
+  sessions: Session[] = [],
+) {
+  const sessionIds = new Set<string>();
+  for (const request of requests) {
+    if (request.studentId !== student.id) continue;
+    if (request.status === "rejected") continue;
+    const date = postponeRequestDate(request, sessions);
+    if (!date || !isDateInPackage(student, date)) continue;
+    sessionIds.add(request.sessionId);
+  }
+  return sessionIds.size;
+}
+
+/** Most recent postpone-used date in the active package, if any. */
+export function postponeUsedDateInPackage(
+  student: Student,
+  requests: PostponeRequest[],
+  sessions: Session[] = [],
+): string | null {
+  const dates: string[] = [];
+  for (const request of requests) {
+    if (request.studentId !== student.id) continue;
+    if (request.status === "rejected") continue;
+    const date = postponeRequestDate(request, sessions);
+    if (!date || !isDateInPackage(student, date)) continue;
+    dates.push(date);
+  }
+  dates.sort((a, b) => b.localeCompare(a));
+  if (dates[0]) return dates[0];
+  if (!student.postponeLessonUsed) return null;
+  const flagged = student.postponeLessonUsedAt?.slice(0, 10);
+  if (flagged && !isDateInPackage(student, flagged)) return null;
+  return flagged ?? null;
 }
 
 export function remainingPostponeRights(
   student: Student,
   requests: PostponeRequest[],
+  sessions: Session[] = [],
 ) {
   const limit = Math.max(0, student.monthlyPostponeLimit ?? 1);
-  return Math.max(0, limit - postponeUsedThisMonth(student.id, requests));
+  const usedFromRequests = postponeUsedInPackage(student, requests, sessions);
+  const usedFromFlag = student.postponeLessonUsed ? 1 : 0;
+  return Math.max(0, limit - Math.max(usedFromRequests, usedFromFlag));
 }
 
 export function sessionCounts(

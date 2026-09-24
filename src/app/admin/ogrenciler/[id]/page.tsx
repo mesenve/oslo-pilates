@@ -12,6 +12,7 @@ import { Button, Card, ConfirmDialog, EmptyState, PaymentBadge, RequestBadge, Se
 import { useStudio } from "@/components/studio-provider";
 import {
   effectiveSessionStatus,
+  postponeUsedDateInPackage,
   remainingPostponeRights,
   sessionCounts,
   sessionsForStudent,
@@ -47,6 +48,8 @@ export default function StudentDetailPage() {
     approveRequest,
     markSessionByInstructor,
     setPostponeLessonUsed,
+    setPostponeLessonNote,
+    setPostponeRequestReason,
     archiveStudent,
     resendStudentInvite,
     isSuperAdmin,
@@ -174,8 +177,17 @@ export default function StudentDetailPage() {
         <p className="text-sm text-muted">
           {postponeRightAdminLabel(
             student.monthlyPostponeLimit -
-              remainingPostponeRights(student, visiblePostponeRequests),
+              remainingPostponeRights(
+                student,
+                visiblePostponeRequests,
+                visibleSessions,
+              ),
             student.monthlyPostponeLimit,
+            postponeUsedDateInPackage(
+              student,
+              visiblePostponeRequests,
+              visibleSessions,
+            ),
           )}
         </p>
         <p className="text-xs text-muted">
@@ -230,6 +242,53 @@ export default function StudentDetailPage() {
         </Card>
       ) : null}
 
+      {student.accountStatus === "active" ? (
+        <Card className="space-y-3 p-4">
+          <p className="text-sm font-medium">Hesap aktif</p>
+          <p className="text-sm text-muted">
+            Giriş sorunu varsa şifre sıfırlama maili gönder. Öğrencinin kayıtlı
+            e-postası: {student.email}
+          </p>
+          <Button
+            type="button"
+            variant="secondary"
+            disabled={resendStatus === "sending"}
+            onClick={async () => {
+              setResendStatus("sending");
+              setResendError(null);
+              try {
+                const response = await fetch("/api/auth/student/forgot", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ email: student.email }),
+                });
+                if (!response.ok) {
+                  throw new Error("Şifre sıfırlama maili gönderilemedi.");
+                }
+                setResendStatus("sent");
+                window.setTimeout(() => setResendStatus("idle"), 3000);
+              } catch (error) {
+                setResendStatus("error");
+                setResendError(
+                  error instanceof Error
+                    ? error.message
+                    : "Şifre sıfırlama maili gönderilemedi.",
+                );
+              }
+            }}
+          >
+            {resendStatus === "sending"
+              ? "Mail gönderiliyor…"
+              : resendStatus === "sent"
+                ? "Sıfırlama maili gönderildi"
+                : "Şifre sıfırlama maili gönder"}
+          </Button>
+          {resendStatus === "error" && resendError ? (
+            <p className="text-sm text-red-700">{resendError}</p>
+          ) : null}
+        </Card>
+      ) : null}
+
       {student.accountStatus === "invited" || inviteAccount?.activated === false || inviteAccount?.exists === false ? (
         <Card className="space-y-3 p-4">
           <p className="text-sm font-medium text-amber-800">Davet bekliyor</p>
@@ -277,6 +336,24 @@ export default function StudentDetailPage() {
                 setResendStatus("sending");
                 setResendError(null);
                 const result = resendStudentInvite(student.id);
+                if (result.passwordResetOnly) {
+                  try {
+                    const response = await fetch("/api/auth/student/forgot", {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ email: student.email }),
+                    });
+                    if (!response.ok) throw new Error("Mail gönderilemedi.");
+                    setResendStatus("sent");
+                    window.setTimeout(() => setResendStatus("idle"), 3000);
+                  } catch (error) {
+                    setResendStatus("error");
+                    setResendError(
+                      error instanceof Error ? error.message : "Mail gönderilemedi.",
+                    );
+                  }
+                  return;
+                }
                 if (result.error || !result.inviteUrl) {
                   setResendStatus("error");
                   setResendError(result.error ?? "Davet linki oluşturulamadı.");
@@ -343,6 +420,9 @@ export default function StudentDetailPage() {
               </div>
               {lessonTime ? <p className="text-sm text-muted">{lessonTime}</p> : null}
               {request?.reason ? <p className="text-sm">Erteleme notu: {request.reason}</p> : null}
+              {!request?.reason && student.postponeLessonNote?.trim() ? (
+                <p className="text-sm">Erteleme notu: {student.postponeLessonNote}</p>
+              ) : null}
               {status === "missed" ? (
                 <p className="text-sm text-rose-700">Bu ders yanmış.</p>
               ) : null}
@@ -379,10 +459,28 @@ export default function StudentDetailPage() {
                   </p>
                   <RequestBadge status={request.status} />
                 </div>
-                {lessonTime ? <p className="text-sm text-muted">{lessonTime}</p> : null}
-                {request.reason?.trim() ? (
-                  <p className="text-sm">{request.reason}</p>
+                {session ? (
+                  <p className="text-sm text-muted">
+                    Erteleme kullanıldığı tarih: {formatLongDate(session.date)}
+                  </p>
                 ) : null}
+                {lessonTime ? <p className="text-sm text-muted">{lessonTime}</p> : null}
+                <label className="block space-y-1">
+                  <span className="text-xs uppercase tracking-[0.16em] text-muted">
+                    Erteleme notu
+                  </span>
+                  <textarea
+                    defaultValue={request.reason}
+                    rows={2}
+                    placeholder="Öğrencinin göreceği erteleme notu…"
+                    className="w-full rounded-2xl border border-border bg-white px-3 py-2 text-sm"
+                    onBlur={(event) => {
+                      if (event.target.value.trim() !== (request.reason ?? "").trim()) {
+                        void setPostponeRequestReason(request.id, event.target.value);
+                      }
+                    }}
+                  />
+                </label>
                 {request.status === "pending" ? (
                   <Button onClick={() => approveRequest(request.id)}>Onayla</Button>
                 ) : null}
@@ -393,22 +491,21 @@ export default function StudentDetailPage() {
         )}
       </section>
 
-      <Card className="p-4">
-        <label className="flex cursor-pointer items-center gap-3">
-          <input
-            type="checkbox"
-            checked={student.postponeLessonUsed ?? false}
-            onChange={(event) =>
-              setPostponeLessonUsed(student.id, event.target.checked)
-            }
-            className="peer sr-only"
-          />
-          <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg border border-accent/35 bg-accent-soft/30 text-white shadow-[0_3px_10px_rgba(194,24,91,0.1)] transition peer-focus-visible:ring-4 peer-focus-visible:ring-accent-soft/70 peer-checked:border-accent peer-checked:bg-accent">
-            <CheckIcon className="h-4 w-4 opacity-0 transition peer-checked:opacity-100" />
-          </span>
-          <span className="text-sm font-medium">Öğrenci erteleme dersini kullandı.</span>
-        </label>
-      </Card>
+      <PostponeUsedCard
+        used={student.postponeLessonUsed ?? false}
+        usedAt={
+          postponeUsedDateInPackage(
+            student,
+            visiblePostponeRequests,
+            visibleSessions,
+          ) ?? student.postponeLessonUsedAt ?? ""
+        }
+        note={student.postponeLessonNote ?? ""}
+        onChange={(used, usedAt) =>
+          void setPostponeLessonUsed(student.id, used, usedAt)
+        }
+        onNoteChange={(note) => void setPostponeLessonNote(student.id, note)}
+      />
 
       <section className="space-y-3">
         <h2 className="font-serif text-xl">Tüm dersler</h2>
@@ -537,6 +634,85 @@ function AttendanceStatusPicker({
         </div>
       ) : null}
     </div>
+  );
+}
+
+function PostponeUsedCard({
+  used,
+  usedAt,
+  note,
+  onChange,
+  onNoteChange,
+}: {
+  used: boolean;
+  usedAt: string;
+  note: string;
+  onChange: (used: boolean, usedAt?: string) => void;
+  onNoteChange: (note: string) => void;
+}) {
+  const [dateValue, setDateValue] = useState(usedAt || todayISO());
+  const [noteValue, setNoteValue] = useState(note);
+
+  useEffect(() => {
+    if (usedAt) setDateValue(usedAt);
+  }, [usedAt]);
+
+  useEffect(() => {
+    setNoteValue(note);
+  }, [note]);
+
+  return (
+    <Card className="space-y-3 p-4">
+      <label className="flex cursor-pointer items-center gap-3">
+        <input
+          type="checkbox"
+          checked={used}
+          onChange={(event) =>
+            onChange(event.target.checked, dateValue || todayISO())
+          }
+          className="peer sr-only"
+        />
+        <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg border border-accent/35 bg-accent-soft/30 text-white shadow-[0_3px_10px_rgba(194,24,91,0.1)] transition peer-focus-visible:ring-4 peer-focus-visible:ring-accent-soft/70 peer-checked:border-accent peer-checked:bg-accent">
+          <CheckIcon className="h-4 w-4 opacity-0 transition peer-checked:opacity-100" />
+        </span>
+        <span className="text-sm font-medium">Öğrenci erteleme dersini kullandı.</span>
+      </label>
+      <div className="space-y-1">
+        <label className="text-xs uppercase tracking-[0.16em] text-muted">
+          Kullanıldığı tarih
+        </label>
+        <input
+          type="date"
+          value={dateValue}
+          onChange={(event) => {
+            const next = event.target.value;
+            setDateValue(next);
+            if (used) onChange(true, next);
+          }}
+          className="w-full rounded-2xl border border-border bg-white px-3 py-2 text-sm"
+        />
+      </div>
+      <div className="space-y-1">
+        <label className="text-xs uppercase tracking-[0.16em] text-muted">
+          Erteleme notu
+        </label>
+        <textarea
+          value={noteValue}
+          rows={3}
+          placeholder="Öğrencinin göreceği not (geçen aydan taşıma vb.)"
+          className="w-full rounded-2xl border border-border bg-white px-3 py-2 text-sm"
+          onChange={(event) => setNoteValue(event.target.value)}
+          onBlur={() => {
+            if (noteValue.trim() !== note.trim()) onNoteChange(noteValue);
+          }}
+        />
+      </div>
+      {usedAt ? (
+        <p className="text-sm text-amber-800">
+          Öğrenci ertelemesini {formatLongDate(usedAt)} tarihinde kullandı.
+        </p>
+      ) : null}
+    </Card>
   );
 }
 

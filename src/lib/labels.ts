@@ -66,14 +66,37 @@ export function remainingLabel(count: number) {
   return count === 1 ? "1 ders kaldı" : `${count} ders kaldı`;
 }
 
-export function postponeRightLabel(remaining: number, limit: number) {
+export function postponeRightLabel(
+  remaining: number,
+  limit: number,
+  usedDate?: string | null,
+) {
   if (limit <= 0) return "Erteleme hakkı yok.";
-  if (remaining <= 0) return "Bu ay erteleme hakkını kullandın.";
+  if (remaining <= 0) {
+    return usedDate
+      ? `Bu pakette erteleme hakkını ${formatShortDate(usedDate)} tarihinde kullandın.`
+      : "Bu pakette erteleme hakkını kullandın.";
+  }
   return remaining === 1
-    ? "Bu ay 1 erteleme hakkın var."
-    : `Bu ay ${remaining} erteleme hakkın var.`;
+    ? "Bu pakette 1 erteleme hakkın var."
+    : `Bu pakette ${remaining} erteleme hakkın var.`;
 }
 
-export function postponeRightAdminLabel(used: number, limit: number) {
-  return `Bu ay ${used}/${limit} erteleme hakkı`;
+export function postponeRightAdminLabel(
+  used: number,
+  limit: number,
+  usedDate?: string | null,
+) {
+  const base = `Bu pakette ${used}/${limit} erteleme hakkı`;
+  return usedDate ? `${base} · ${formatShortDate(usedDate)}` : base;
+}
+
+function formatShortDate(iso: string) {
+  const [year, month, day] = iso.slice(0, 10).split("-").map(Number);
+  if (!year || !month || !day) return iso.slice(0, 10);
+  return new Date(year, month - 1, day, 12).toLocaleDateString("tr-TR", {
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  });
 }

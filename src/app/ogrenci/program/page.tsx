@@ -4,7 +4,7 @@ import { ClassCalendar } from "@/components/class-calendar";
 import { SessionRow } from "@/components/session-row";
 import { useCurrentStudent, useStudio } from "@/components/studio-provider";
 import { EmptyState } from "@/components/ui";
-import { sessionsForStudent } from "@/data/accessors";
+import { postponeUsedDateInPackage, sessionsForStudent } from "@/data/accessors";
 import { getClassGroupById } from "@/data/groups";
 import { isAtLeast24HoursAway, todayISO, weekdayFromISO } from "@/lib/dates";
 import { postponeRightLabel } from "@/lib/labels";
@@ -58,8 +58,15 @@ export default function ProgramPage() {
   const selected = mine.filter((session) => session.date === selectedDate);
   const group = student ? getClassGroupById(student.groupId) : undefined;
   const postponeRemaining = student ? remainingPostponeFor(student.id) : 0;
+  const postponeUsedDate = student
+    ? postponeUsedDateInPackage(student, postponeRequests, sessions)
+    : null;
   const postponeHint = student
-    ? postponeRightLabel(postponeRemaining, student.monthlyPostponeLimit > 0 ? 1 : 0)
+    ? postponeRightLabel(
+        postponeRemaining,
+        student.monthlyPostponeLimit > 0 ? student.monthlyPostponeLimit : 0,
+        postponeUsedDate,
+      )
     : "";
 
   if (!student) return null;
@@ -99,6 +106,10 @@ export default function ProgramPage() {
             canPostpone={postponeRemaining > 0 && session.date > today}
             canAttend={session.date === today}
             postponeHint={postponeHint}
+            postponeNote={
+              postponeRequests.find((request) => request.sessionId === session.id)?.reason?.trim() ||
+              student.postponeLessonNote
+            }
             onAttend={() => markAttended(session.id)}
             onPostpone={(reason) => requestPostpone(session.id, reason)}
             onWithdrawPostpone={() => void withdrawPostpone(session.id)}

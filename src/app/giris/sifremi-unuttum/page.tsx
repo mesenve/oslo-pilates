@@ -8,11 +8,33 @@ import { useState } from "react";
 export default function SifremiUnuttumPage() {
   const [email, setEmail] = useState("");
   const [sent, setSent] = useState(false);
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  function handleSubmit(event: React.FormEvent) {
+  async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
-    if (!email.trim()) return;
-    setSent(true);
+    if (!email.trim() || pending) return;
+    setPending(true);
+    setError(null);
+    try {
+      const response = await fetch("/api/auth/student/forgot", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: email.trim() }),
+      });
+      const data = (await response.json().catch(() => null)) as {
+        error?: string;
+      } | null;
+      if (!response.ok) {
+        setError(data?.error ?? "İstek gönderilemedi.");
+        return;
+      }
+      setSent(true);
+    } catch {
+      setError("İstek gönderilemedi. Biraz sonra tekrar dene.");
+    } finally {
+      setPending(false);
+    }
   }
 
   return (
@@ -28,18 +50,12 @@ export default function SifremiUnuttumPage() {
               <h1 className="font-serif text-2xl">Mail gönderildi</h1>
               <p className="text-sm text-muted">
                 <span className="font-medium text-foreground">{email.trim()}</span>{" "}
-                adresine şifre yenileme bağlantısı gönderilmiş gibi gösteriyoruz.
-                Gerçek mail gitmez.
+                adresine kayıtlı bir hesap varsa şifre sıfırlama bağlantısı
+                gönderildi. Gelen kutunu ve spam klasörünü kontrol et.
               </p>
               <Link
-                href={`/giris/sifre-yenile?email=${encodeURIComponent(email.trim())}`}
-                className="inline-flex w-full items-center justify-center gap-2 rounded-full bg-gradient-to-r from-[#ec407a] to-accent px-4 py-2.5 text-sm font-medium text-white shadow-[0_8px_20px_rgba(194,24,91,0.28)]"
-              >
-                Demo: şifreyi yenile
-              </Link>
-              <Link
                 href="/giris"
-                className="block text-center text-sm text-muted hover:text-foreground"
+                className="block text-center text-sm font-medium text-accent"
               >
                 Girişe dön
               </Link>
@@ -49,8 +65,7 @@ export default function SifremiUnuttumPage() {
               <div>
                 <h1 className="font-serif text-2xl">Şifremi unuttum</h1>
                 <p className="mt-2 text-sm text-muted">
-                  E-posta adresini yaz; e-posta adresine sıfırlama bağlantısı
-                  gelecektir.
+                  E-posta adresini yaz; sıfırlama bağlantısı mailine gelecek.
                 </p>
               </div>
               <div>
@@ -67,8 +82,9 @@ export default function SifremiUnuttumPage() {
                   autoComplete="username"
                 />
               </div>
-              <Button type="submit" className="w-full">
-                Sıfırlama bağlantısı gönder
+              {error ? <p className="text-sm text-red-700">{error}</p> : null}
+              <Button type="submit" className="w-full" disabled={pending}>
+                {pending ? "Gönderiliyor…" : "Sıfırlama bağlantısı gönder"}
               </Button>
               <Link
                 href="/giris"

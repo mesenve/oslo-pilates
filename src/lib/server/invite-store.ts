@@ -196,15 +196,17 @@ async function findActivatedInviteByEmailInFile(email: string) {
 export async function saveInvite(invite: StoredInvite) {
   if (isSupabaseConfigured()) {
     const existing = (await listSupabaseInvites()).find((row) => row.student_id === invite.student.id);
+    // Keep the existing password/activation when re-saving an invite token.
+    // Wiping them on resend locked activated students out of login.
     await saveSupabaseInvite({
       token: invite.token,
       student_id: invite.student.id,
       student: invite.student,
       sessions: invite.sessions,
       expires_at: invite.expiresAt,
-      password: invite.password ?? null,
-      activated_at: invite.activatedAt ?? null,
-      created_at: new Date().toISOString(),
+      password: invite.password ?? existing?.password ?? null,
+      activated_at: invite.activatedAt ?? existing?.activated_at ?? null,
+      created_at: existing?.created_at ?? new Date().toISOString(),
       updated_at: new Date().toISOString(),
     });
     if (existing && existing.token !== invite.token) {
@@ -337,6 +339,40 @@ function fromSupabaseRow(row: SupabaseInviteRow): StoredInvite {
   };
 }
 
+export async function setInvitePassword(studentId: string, password: string) {
+  const invite = await getInviteByStudentId(studentId);
+  if (!invite) return null;
+  const hashed = await hashPassword(password);
+  const next: StoredInvite = {
+    ...invite,
+    password: hashed,
+    activatedAt: invite.activatedAt ?? new Date().toISOString(),
+    student: {
+      ...invite.student,
+      accountStatus: "active",
+      inviteToken: undefined,
+      inviteExpiresAt: undefined,
+    },
+  };
+  if (isSupabaseConfigured()) {
+    await activateSupabaseStudent(studentId);
+    await saveSupabaseInvite({
+      token: next.token,
+      student_id: next.student.id,
+      student: next.student,
+      sessions: next.sessions,
+      expires_at: next.expiresAt,
+      password: next.password ?? null,
+      activated_at: next.activatedAt ?? null,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    });
+    return next;
+  }
+  await saveInvite(next);
+  return next;
+}
+
 export function inviteTokenFromUrl(link: string) {
   try {
     return new URL(link).searchParams.get("token")?.trim() ?? "";
@@ -344,3 +380,4 @@ export function inviteTokenFromUrl(link: string) {
     return "";
   }
 }
+

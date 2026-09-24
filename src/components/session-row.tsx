@@ -17,6 +17,7 @@ export function SessionRow({
   canPostpone,
   canAttend,
   postponeHint,
+  postponeNote,
   onAttend,
   onPostpone,
   onWithdrawPostpone,
@@ -27,6 +28,7 @@ export function SessionRow({
   canPostpone: boolean;
   canAttend: boolean;
   postponeHint: string;
+  postponeNote?: string;
   onAttend: () => void;
   onPostpone: (reason: string) => void;
   onWithdrawPostpone?: () => void;
@@ -81,6 +83,14 @@ export function SessionRow({
 
       {!locked && !canPostpone ? (
         <p className="mt-3 text-sm text-muted">{postponeHint}</p>
+      ) : null}
+
+      {postponeNote?.trim() &&
+      (displayStatus === "postponed" || displayStatus === "postpone_pending") ? (
+        <p className="mt-3 text-sm">
+          <span className="text-muted">Erteleme notu: </span>
+          {postponeNote}
+        </p>
       ) : null}
 
       {open ? (

@@ -333,13 +333,13 @@ export function StudentForm({
         <div className="grid grid-cols-2 gap-4">
           <div>
             <InputField
-              label="Aylık erteleme hakkı"
+              label="Paket başına erteleme hakkı"
               value={form.monthlyPostponeLimit}
               onChange={(value) => update("monthlyPostponeLimit", value)}
               type="number"
             />
             <p className="mt-1 text-xs text-muted">
-              Bir takvim ayında kaç ders erteleyebilir. Varsayılan 1.
+              Aktif pakette kaç ders erteleyebilir. Varsayılan 1.
             </p>
           </div>
           <SelectField

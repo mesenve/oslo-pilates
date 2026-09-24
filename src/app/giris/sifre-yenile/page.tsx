@@ -23,15 +23,20 @@ export default function SifreYenilePage() {
 function SifreYenileForm() {
   const searchParams = useSearchParams();
   const router = useRouter();
-  const email = searchParams.get("email")?.trim() || "";
+  const token = searchParams.get("token")?.trim() || "";
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [pending, setPending] = useState(false);
   const [done, setDone] = useState(false);
 
-  function handleSubmit(event: React.FormEvent) {
+  async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
     setError(null);
+    if (!token) {
+      setError("Geçersiz sıfırlama linki. Şifremi unuttum sayfasından yeni link iste.");
+      return;
+    }
     if (password.length < 6) {
       setError("Şifre en az 6 karakter olmalı.");
       return;
@@ -40,7 +45,30 @@ function SifreYenileForm() {
       setError("Şifreler eşleşmiyor.");
       return;
     }
-    setDone(true);
+    setPending(true);
+    try {
+      const response = await fetch("/api/auth/student/reset", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          token,
+          password,
+          confirmPassword: confirm,
+        }),
+      });
+      const data = (await response.json().catch(() => null)) as {
+        error?: string;
+      } | null;
+      if (!response.ok) {
+        setError(data?.error ?? "Şifre kaydedilemedi.");
+        return;
+      }
+      setDone(true);
+    } catch {
+      setError("Şifre kaydedilemedi. Biraz sonra tekrar dene.");
+    } finally {
+      setPending(false);
+    }
   }
 
   if (done) {
@@ -49,12 +77,11 @@ function SifreYenileForm() {
         <Card className="p-6">
           <h1 className="font-serif text-2xl">Şifre güncellendi</h1>
           <p className="mt-2 text-sm text-muted">
-            Demo akış tamamlandı. Gerçekte şifre kaydedilmez; girişe
-            dönebilirsin.
+            Yeni şifren kaydedildi. Şimdi giriş yapabilirsin.
           </p>
           <Button
             className="mt-5 w-full"
-            onClick={() => router.replace("/giris")}
+            onClick={() => router.replace("/giris?rol=ogrenci")}
           >
             Girişe git
           </Button>
@@ -70,9 +97,9 @@ function SifreYenileForm() {
           <div>
             <h1 className="font-serif text-2xl">Yeni şifre belirle</h1>
             <p className="mt-2 text-sm text-muted">
-              {email
-                ? `${email} için yeni şifreni yaz.`
-                : "Yeni şifreni yaz (demo)."}
+              {token
+                ? "Maildeki linkle geldin. Yeni şifreni yaz."
+                : "Geçerli bir sıfırlama linki gerekli."}
             </p>
           </div>
           <div>
@@ -85,6 +112,7 @@ function SifreYenileForm() {
               value={password}
               onChange={(event) => setPassword(event.target.value)}
               required
+              disabled={!token}
               className="mt-1 w-full rounded-xl border border-border bg-white px-3 py-2.5 text-sm outline-none focus:border-accent"
               autoComplete="new-password"
             />
@@ -99,19 +127,20 @@ function SifreYenileForm() {
               value={confirm}
               onChange={(event) => setConfirm(event.target.value)}
               required
+              disabled={!token}
               className="mt-1 w-full rounded-xl border border-border bg-white px-3 py-2.5 text-sm outline-none focus:border-accent"
               autoComplete="new-password"
             />
           </div>
           {error ? <p className="text-sm text-red-700">{error}</p> : null}
-          <Button type="submit" className="w-full">
-            Şifreyi kaydet
+          <Button type="submit" className="w-full" disabled={pending || !token}>
+            {pending ? "Kaydediliyor…" : "Şifreyi kaydet"}
           </Button>
           <Link
-            href="/giris"
+            href="/giris/sifremi-unuttum"
             className="block text-center text-sm text-muted hover:text-foreground"
           >
-            Girişe dön
+            Yeni sıfırlama linki iste
           </Link>
         </form>
       </Card>

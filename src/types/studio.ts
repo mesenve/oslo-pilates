@@ -102,8 +102,13 @@ export type Student = {
   packageHistory?: PackageHistoryEntry[];
   renewalRequest?: RenewalRequest;
   changeLog?: StudentChangeLogEntry[];
+  /** Per active package (not calendar month). Kept name for schema compat. */
   monthlyPostponeLimit: number;
   postponeLessonUsed?: boolean;
+  /** ISO date when admin marked postpone used, or derived display fallback. */
+  postponeLessonUsedAt?: string;
+  /** Instructor note for the postpone used in the active package. Visible to student. */
+  postponeLessonNote?: string;
   accountStatus: StudentAccountStatus;
   inviteToken?: string;
   inviteExpiresAt?: string;

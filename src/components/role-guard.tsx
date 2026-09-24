@@ -4,7 +4,9 @@ import { useStudio } from "@/components/studio-provider";
 import { adminHomeFor, isStaffRole } from "@/lib/access";
 import type { Role } from "@/types/studio";
 import { useRouter } from "next/navigation";
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
+
+const SESSION_GRACE_MS = 2000;
 
 export function RoleGuard({
   role,
@@ -15,16 +17,25 @@ export function RoleGuard({
 }) {
   const { ready, user } = useStudio();
   const router = useRouter();
+  const hadUser = useRef(false);
 
   useEffect(() => {
     if (!ready) return;
-    if (!user) {
+    if (user) {
+      hadUser.current = true;
+      if (user.role !== role) {
+        router.replace(adminHomeFor(user));
+      }
+      return;
+    }
+    if (!hadUser.current) {
       router.replace(role === "student" ? "/giris?rol=ogrenci" : "/giris?rol=admin");
       return;
     }
-    if (user.role !== role) {
-      router.replace(adminHomeFor(user));
-    }
+    const timer = window.setTimeout(() => {
+      router.replace(role === "student" ? "/giris?rol=ogrenci" : "/giris?rol=admin");
+    }, SESSION_GRACE_MS);
+    return () => window.clearTimeout(timer);
   }, [ready, role, router, user]);
 
   if (!ready || !user || user.role !== role) {
@@ -41,16 +52,25 @@ export function RoleGuard({
 export function AdminGuard({ children }: { children: React.ReactNode }) {
   const { ready, user } = useStudio();
   const router = useRouter();
+  const hadUser = useRef(false);
 
   useEffect(() => {
     if (!ready) return;
-    if (!user) {
+    if (user) {
+      hadUser.current = true;
+      if (!isStaffRole(user.role)) {
+        router.replace("/ogrenci");
+      }
+      return;
+    }
+    if (!hadUser.current) {
       router.replace("/giris?rol=admin");
       return;
     }
-    if (!isStaffRole(user.role)) {
-      router.replace("/ogrenci");
-    }
+    const timer = window.setTimeout(() => {
+      router.replace("/giris?rol=admin");
+    }, SESSION_GRACE_MS);
+    return () => window.clearTimeout(timer);
   }, [ready, router, user]);
 
   if (!ready || !user || !isStaffRole(user.role)) {

@@ -2,18 +2,24 @@
 
 import { useCurrentStudent, useStudio } from "@/components/studio-provider";
 import { Card, PaymentBadge } from "@/components/ui";
+import { postponeUsedDateInPackage } from "@/data/accessors";
 import { getClassGroupById } from "@/data/groups";
 import { formatLongDate } from "@/lib/dates";
 import { postponeRightLabel, remainingLabel } from "@/lib/labels";
 
 export default function ProfilePage() {
   const student = useCurrentStudent();
-  const { remainingFor, remainingPostponeFor } = useStudio();
+  const { remainingFor, remainingPostponeFor, postponeRequests, sessions } = useStudio();
   if (!student) return null;
 
   const group = getClassGroupById(student.groupId);
   const remaining = remainingFor(student.id);
   const m = student.measurements;
+  const postponeUsedDate = postponeUsedDateInPackage(
+    student,
+    postponeRequests,
+    sessions,
+  );
 
   return (
     <div className="space-y-5">
@@ -39,13 +45,19 @@ export default function ProfilePage() {
           label="Erteleme hakkı"
           value={postponeRightLabel(
             remainingPostponeFor(student.id),
-            student.monthlyPostponeLimit > 0 ? 1 : 0,
+            student.monthlyPostponeLimit > 0 ? student.monthlyPostponeLimit : 0,
+            postponeUsedDate,
           )}
         />
         <Field
           label="Bitiş"
           value={formatLongDate(student.package.endDate)}
         />
+        {student.postponeLessonNote?.trim() ? (
+          <div className="sm:col-span-2">
+            <Field label="Erteleme notu" value={student.postponeLessonNote} />
+          </div>
+        ) : null}
         {student.note?.trim() ? (
           <div className="sm:col-span-2">
             <Field label="Not" value={student.note} />

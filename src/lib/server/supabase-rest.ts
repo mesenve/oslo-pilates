@@ -131,6 +131,9 @@ function toStudent(row: SupabaseRow): Student {
     history?: Student["packageHistory"];
     renewalRequest?: Student["renewalRequest"];
     changeLog?: Student["changeLog"];
+    postponeLessonUsed?: boolean;
+    postponeLessonUsedAt?: string;
+    postponeLessonNote?: string;
   };
   return {
     id: String(row.id),
@@ -147,6 +150,11 @@ function toStudent(row: SupabaseRow): Student {
     renewalRequest: packageValue.renewalRequest,
     changeLog: packageValue.changeLog,
     monthlyPostponeLimit: Number(row.monthly_postpone_limit ?? 1),
+    postponeLessonUsed: packageValue.postponeLessonUsed ?? false,
+    postponeLessonUsedAt: packageValue.postponeLessonUsedAt,
+    postponeLessonNote: packageValue.postponeLessonNote
+      ? String(packageValue.postponeLessonNote)
+      : undefined,
     accountStatus: row.account_status as Student["accountStatus"],
     inviteToken: row.invite_token ? String(row.invite_token) : undefined,
     inviteExpiresAt: row.invite_expires_at ? String(row.invite_expires_at) : undefined,
@@ -218,6 +226,9 @@ function studentRow(student: Student, archived: boolean) {
       history: student.packageHistory ?? [],
       renewalRequest: student.renewalRequest ?? null,
       changeLog: student.changeLog ?? [],
+      postponeLessonUsed: student.postponeLessonUsed ?? false,
+      postponeLessonUsedAt: student.postponeLessonUsedAt ?? null,
+      postponeLessonNote: student.postponeLessonNote ?? null,
     },
     monthly_postpone_limit: student.monthlyPostponeLimit,
     account_status: student.accountStatus,

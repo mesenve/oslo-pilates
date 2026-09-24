@@ -19,7 +19,14 @@ export async function POST(request: Request) {
   }
   const state = await readStudioSnapshot();
   const snapshot = state.snapshot as {
-    students?: Array<{ id: string; instructorId: string; monthlyPostponeLimit?: number }>;
+    students?: Array<{
+      id: string;
+      instructorId: string;
+      monthlyPostponeLimit?: number;
+      postponeLessonUsed?: boolean;
+      postponeLessonUsedAt?: string;
+      package?: { startDate?: string; endDate?: string };
+    }>;
     sessions?: Array<{ id: string; studentId: string; groupId: string; date: string; status: string }>;
     postponeRequests?: Array<{ id: string; studentId: string; sessionId: string; reason: string; status: string; createdAt: string }>;
     customGroups?: Array<{ id: string; time: string; timeByDay?: Record<string, string> }>;
@@ -65,8 +72,9 @@ export async function POST(request: Request) {
     const day = weekdayFromISO(session.date);
     const time = (day && group?.timeByDay?.[day]) ?? group?.time ?? "";
     const hasRight = remainingPostponeRights(
-      { ...(student as Student), monthlyPostponeLimit: 1 },
+      student as Student,
       (snapshot.postponeRequests ?? []) as StudioState["postponeRequests"],
+      (snapshot.sessions ?? []) as StudioState["sessions"],
     ) > 0;
     if (!hasRight || !isAtLeast24HoursAway(session.date, time)) {
       return NextResponse.json({ error: "Erteleme koşulları sağlanmıyor." }, { status: 409 });

@@ -5,7 +5,7 @@ import { LastWeekCta } from "@/components/last-week-cta";
 import { PilatesIcon } from "@/components/icons";
 import { useCurrentStudent, useStudio } from "@/components/studio-provider";
 import { Button, Card, SessionBadge } from "@/components/ui";
-import { effectiveSessionStatus, sessionsForStudent } from "@/data/accessors";
+import { effectiveSessionStatus, postponeUsedDateInPackage, sessionsForStudent } from "@/data/accessors";
 import { getClassGroupById } from "@/data/groups";
 import {
   addDays,
@@ -65,6 +65,12 @@ export default function StudentHomePage() {
       remainingPostponeFor(student.id) > 0 &&
       isAtLeast24HoursAway(selectedSession.date, selectedTime),
   );
+  const postponeUsedDate = postponeUsedDateInPackage(
+    student,
+    postponeRequests,
+    sessions,
+  );
+  const postponeLimit = student.monthlyPostponeLimit > 0 ? student.monthlyPostponeLimit : 0;
 
   return (
     <div className="space-y-4">
@@ -166,7 +172,8 @@ export default function StudentHomePage() {
                 <p className="text-sm text-muted">
                   {postponeRightLabel(
                     remainingPostponeFor(student.id),
-                    student.monthlyPostponeLimit > 0 ? 1 : 0,
+                    postponeLimit,
+                    postponeUsedDate,
                   )}
                 </p>
                 {selectedStatus === "upcoming" ? (
@@ -200,10 +207,23 @@ export default function StudentHomePage() {
                 !canPostponeSelected ? (
                   <p className="mt-3 text-sm text-muted">
                     {remainingPostponeFor(student.id) <= 0
-                      ? "Bu ay erteleme hakkın kalmadı."
+                      ? "Bu pakette erteleme hakkın kalmadı."
                       : "Ders başlangıcına 24 saatten az kaldığı için ertelenemez."}
                   </p>
                 ) : null}
+              </div>
+            ) : null}
+            {(selectedStatus === "postponed" || selectedStatus === "postpone_pending") &&
+            (postponeRequests.find((r) => r.sessionId === selectedSession.id)?.reason?.trim() ||
+              student.postponeLessonNote?.trim()) ? (
+              <div className="border-t border-border/60 px-4 py-3">
+                <p className="text-xs uppercase tracking-[0.16em] text-muted">
+                  Erteleme notu
+                </p>
+                <p className="mt-1 text-sm">
+                  {postponeRequests.find((r) => r.sessionId === selectedSession.id)?.reason?.trim() ||
+                    student.postponeLessonNote}
+                </p>
               </div>
             ) : null}
             <div className="border-t border-border/60 px-4 py-3">

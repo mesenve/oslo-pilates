@@ -3,7 +3,7 @@
 import { OpeningsBoard } from "@/components/openings-board";
 import { Button, Card, EmptyState, RequestBadge } from "@/components/ui";
 import { useStudio } from "@/components/studio-provider";
-import { remainingPostponeRights, studentName } from "@/data/accessors";
+import { remainingPostponeRights, postponeUsedDateInPackage, studentName } from "@/data/accessors";
 import { getClassGroupById } from "@/data/groups";
 import { formatLongDate } from "@/lib/dates";
 import { postponeRightAdminLabel } from "@/lib/labels";
@@ -18,7 +18,7 @@ export default function RequestsPage() {
       <header>
         <h1 className="font-serif text-3xl">Talepler</h1>
         <p className="mt-1 text-sm text-muted">
-          Öğrenci aylık hakkıyla talep gönderir; sen onaylarsın.
+          Öğrenci paket başına hakkıyla talep gönderir; sen onaylarsın.
         </p>
       </header>
 
@@ -36,8 +36,19 @@ export default function RequestsPage() {
             const pending = request.status === "pending";
             const used = student
               ? student.monthlyPostponeLimit -
-                remainingPostponeRights(student, visiblePostponeRequests)
+                remainingPostponeRights(
+                  student,
+                  visiblePostponeRequests,
+                  visibleSessions,
+                )
               : 0;
+            const usedDate = student
+              ? postponeUsedDateInPackage(
+                  student,
+                  visiblePostponeRequests,
+                  visibleSessions,
+                )
+              : null;
 
             return (
               <Card key={request.id} className="p-5">
@@ -57,10 +68,22 @@ export default function RequestsPage() {
                         {postponeRightAdminLabel(
                           used,
                           student.monthlyPostponeLimit,
+                          usedDate,
                         )}
                       </p>
                     ) : null}
-                    {request.reason ? <p className="mt-3 text-sm">{request.reason}</p> : null}
+                    {request.reason?.trim() ? (
+                      <p className="mt-3 text-sm">
+                        <span className="text-muted">Erteleme notu: </span>
+                        {request.reason}
+                      </p>
+                    ) : null}
+                    {student?.postponeLessonNote?.trim() && !request.reason?.trim() ? (
+                      <p className="mt-3 text-sm">
+                        <span className="text-muted">Erteleme notu: </span>
+                        {student.postponeLessonNote}
+                      </p>
+                    ) : null}
                     <p className="mt-2 text-xs text-muted">{student?.email}</p>
                   </div>
                   <RequestBadge status={request.status} />

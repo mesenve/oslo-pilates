@@ -59,6 +59,7 @@ type StudentActionResult = {
   inviteToken?: string;
   inviteExpiresAt?: string;
   invitedAt?: string;
+  passwordResetOnly?: boolean;
 };
 
 type StudioContextValue = {
@@ -106,7 +107,13 @@ type StudioContextValue = {
     sessionId: string,
     outcome: "attended" | "postponed" | "missed" | "upcoming",
   ) => void;
-  setPostponeLessonUsed: (studentId: string, used: boolean) => Promise<void>;
+  setPostponeLessonUsed: (
+    studentId: string,
+    used: boolean,
+    usedAt?: string,
+  ) => Promise<void>;
+  setPostponeLessonNote: (studentId: string, note: string) => Promise<void>;
+  setPostponeRequestReason: (requestId: string, reason: string) => Promise<void>;
   addStudent: (input: NewStudentInput) => Promise<StudentActionResult>;
   archiveStudent: (studentId: string) => void;
   restoreStudent: (
@@ -163,10 +170,17 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
     void fetch("/api/auth/session")
       .then((response) => response.ok ? response.json() : { user: null })
       .then((data: { user?: StudioState["user"] }) => {
-        if (!cancelled) setStudioState((current) => ({ ...current, user: data.user ?? null }));
+        if (cancelled) return;
+        // Never wipe a hydrated session on a flaky/empty session response —
+        // that kicked staff back to login/home mid-edit.
+        setStudioState((current) => {
+          if (data.user) return { ...current, user: data.user };
+          if (current.user) return current;
+          return { ...current, user: null };
+        });
       })
       .catch(() => {
-        if (!cancelled) setStudioState((current) => ({ ...current, user: null }));
+        // Keep existing user on network blips.
       });
     return () => { cancelled = true; };
   }, [ready]);
@@ -443,6 +457,7 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
     let nextInviteToken: string | undefined;
     let nextInviteExpiresAt: string | undefined;
     let nextInvitedAt: string | undefined;
+    let passwordResetOnly = false;
 
     setStudioState((current) => {
       const student = current.students.find((item) => item.id === studentId);
@@ -450,6 +465,15 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
         !student ||
         !canManageStudent(current.user, studentId, current.students)
       ) {
+        return current;
+      }
+
+      // Active students already have a password. Resending a fresh invite used
+      // to demote them and wipe login — send a reset instead (caller emails it).
+      if (student.accountStatus === "active") {
+        error = null;
+        id = student.id;
+        passwordResetOnly = true;
         return current;
       }
 
@@ -486,6 +510,7 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
       inviteToken: nextInviteToken,
       inviteExpiresAt: nextInviteExpiresAt,
       invitedAt: nextInvitedAt,
+      passwordResetOnly,
     };
   }, []);
 
@@ -850,17 +875,76 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
   );
 
   const setPostponeLessonUsed = useCallback(
-    async (studentId: string, used: boolean) => {
+    async (studentId: string, used: boolean, usedAt?: string) => {
       setStudioState((current) => {
         const student = current.students.find((item) => item.id === studentId);
         if (!student || !canManageStudent(current.user, studentId, current.students)) return current;
         return {
           ...current,
           students: current.students.map((item) =>
-            item.id === studentId ? { ...item, postponeLessonUsed: used } : item,
+            item.id === studentId
+              ? {
+                  ...item,
+                  postponeLessonUsed: used,
+                  postponeLessonUsedAt: used
+                    ? (usedAt?.trim() || item.postponeLessonUsedAt || todayISO())
+                    : undefined,
+                  postponeLessonNote: used ? item.postponeLessonNote : undefined,
+                }
+              : item,
           ),
         };
         });
+      await flushStudioSnapshotPersistence();
+    },
+    [],
+  );
+
+  const setPostponeLessonNote = useCallback(
+    async (studentId: string, note: string) => {
+      setStudioState((current) => {
+        const student = current.students.find((item) => item.id === studentId);
+        if (!student || !canManageStudent(current.user, studentId, current.students)) return current;
+        const trimmed = note.trim();
+        return {
+          ...current,
+          students: current.students.map((item) =>
+            item.id === studentId
+              ? {
+                  ...item,
+                  postponeLessonNote: trimmed || undefined,
+                  postponeLessonUsed: trimmed ? true : item.postponeLessonUsed,
+                  postponeLessonUsedAt:
+                    trimmed && !item.postponeLessonUsedAt
+                      ? todayISO()
+                      : item.postponeLessonUsedAt,
+                }
+              : item,
+          ),
+        };
+      });
+      await flushStudioSnapshotPersistence();
+    },
+    [],
+  );
+
+  const setPostponeRequestReason = useCallback(
+    async (requestId: string, reason: string) => {
+      setStudioState((current) => {
+        const request = current.postponeRequests.find((item) => item.id === requestId);
+        if (
+          !request ||
+          !canManageStudent(current.user, request.studentId, current.students)
+        ) {
+          return current;
+        }
+        return {
+          ...current,
+          postponeRequests: current.postponeRequests.map((item) =>
+            item.id === requestId ? { ...item, reason: reason.trim() } : item,
+          ),
+        };
+      });
       await flushStudioSnapshotPersistence();
     },
     [],
@@ -1200,11 +1284,12 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
       if (!student) return 0;
       if (student.monthlyPostponeLimit <= 0) return 0;
       return remainingPostponeRights(
-        { ...student, monthlyPostponeLimit: 1 },
+        student,
         state.postponeRequests,
+        state.sessions,
       );
     },
-    [state.postponeRequests, state.students],
+    [state.postponeRequests, state.sessions, state.students],
   );
 
   const visibleStudents = useMemo(
@@ -1256,6 +1341,8 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
       approveRequest,
       markSessionByInstructor,
       setPostponeLessonUsed,
+      setPostponeLessonNote,
+      setPostponeRequestReason,
       addStudent,
       archiveStudent,
       restoreStudent,
@@ -1280,6 +1367,8 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
       rejectAttendance,
       markSessionByInstructor,
       setPostponeLessonUsed,
+      setPostponeLessonNote,
+      setPostponeRequestReason,
       permanentlyDeleteStudent,
       ready,
       remainingFor,
@@ -1452,7 +1541,15 @@ function studentFromInput(
     monthlyPostponeLimit: Number.isFinite(input.monthlyPostponeLimit)
       ? Math.max(0, Math.round(input.monthlyPostponeLimit))
       : 1,
-    postponeLessonUsed: previous?.postponeLessonUsed ?? false,
+    postponeLessonUsed: packagePeriodChanged
+      ? false
+      : previous?.postponeLessonUsed ?? false,
+    postponeLessonUsedAt: packagePeriodChanged
+      ? undefined
+      : previous?.postponeLessonUsedAt,
+    postponeLessonNote: packagePeriodChanged
+      ? undefined
+      : previous?.postponeLessonNote,
     accountStatus: previous?.accountStatus ?? "active",
     inviteToken: previous?.inviteToken,
     inviteExpiresAt: previous?.inviteExpiresAt,

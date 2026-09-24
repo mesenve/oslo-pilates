@@ -3,7 +3,7 @@ import { cookies } from "next/headers";
 import type { AuthUser, Role } from "@/types/studio";
 
 const COOKIE_NAME = "oslo_session";
-const MAX_AGE_SECONDS = 60 * 60 * 12;
+const MAX_AGE_SECONDS = 60 * 60 * 24 * 14; // 14 days — editing mid-session must not kick staff to home
 
 type SessionPayload = AuthUser & { exp: number };
 
