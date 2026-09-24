@@ -64,6 +64,7 @@ type StudentActionResult = {
 
 type StudioContextValue = {
   ready: boolean;
+  sessionChecked: boolean;
   studioDataStatus: "idle" | "loading" | "ready" | "error";
   retryStudioData: () => Promise<void>;
   user: StudioState["user"];
@@ -140,6 +141,7 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
     getStudioSnapshot,
     getServerStudioSnapshot,
   );
+  const [sessionChecked, setSessionChecked] = useState(false);
   const [studioLoad, setStudioLoad] = useState<{
     userId: string;
     status: "loading" | "ready" | "error";
@@ -181,6 +183,9 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
       })
       .catch(() => {
         // Keep existing user on network blips.
+      })
+      .finally(() => {
+        if (!cancelled) setSessionChecked(true);
       });
     return () => { cancelled = true; };
   }, [ready]);
@@ -1322,6 +1327,7 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
   const value = useMemo<StudioContextValue>(
     () => ({
       ready,
+      sessionChecked,
       studioDataStatus,
       retryStudioData,
       user: state.user,
@@ -1381,6 +1387,7 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
       setPostponeRequestReason,
       permanentlyDeleteStudent,
       ready,
+      sessionChecked,
       remainingFor,
       remainingPostponeFor,
       retryStudioData,

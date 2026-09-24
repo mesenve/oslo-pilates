@@ -33,6 +33,22 @@ function remainingPostponeRights(student, requests, sessions = []) {
   return Math.max(0, limit - Math.max(usedFromRequests, usedFromFlag));
 }
 
+function postponeUsedDateInPackage(student, requests, sessions = []) {
+  return requests
+    .filter((request) => request.studentId === student.id && request.status === "approved")
+    .map((request) => postponeRequestDate(request, sessions))
+    .filter((date) => date && isDateInPackage(student, date))
+    .sort((a, b) => b.localeCompare(a))[0] ?? null;
+}
+
+function postponePendingDateInPackage(student, requests, sessions = []) {
+  return requests
+    .filter((request) => request.studentId === student.id && request.status === "pending")
+    .map((request) => postponeRequestDate(request, sessions))
+    .filter((date) => date && isDateInPackage(student, date))
+    .sort((a, b) => b.localeCompare(a))[0] ?? null;
+}
+
 const student = {
   id: "s1",
   monthlyPostponeLimit: 1,
@@ -107,6 +123,23 @@ if (duplicateSameSession !== 0) {
   throw new Error(
     `Expected duplicates of same session to count once (0 remaining), got ${duplicateSameSession}`,
   );
+}
+
+const pendingRequest = {
+  id: "r3",
+  studentId: "s1",
+  sessionId: "new-session",
+  status: "pending",
+  createdAt: "2026-09-20T10:00:00",
+};
+if (remainingPostponeRights(student, [pendingRequest], sessions) !== 0) {
+  throw new Error("Expected pending request to reserve the package right");
+}
+if (postponeUsedDateInPackage(student, [pendingRequest], sessions) !== null) {
+  throw new Error("Pending request must not be labelled as an already-used right");
+}
+if (postponePendingDateInPackage(student, [pendingRequest], sessions) !== "2026-09-20") {
+  throw new Error("Expected pending request date to be reported separately");
 }
 
 console.log("check-postpone-package: ok");

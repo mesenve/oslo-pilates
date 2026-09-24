@@ -5,7 +5,12 @@ import { LastWeekCta } from "@/components/last-week-cta";
 import { PilatesIcon } from "@/components/icons";
 import { useCurrentStudent, useStudio } from "@/components/studio-provider";
 import { Button, Card, SessionBadge } from "@/components/ui";
-import { effectiveSessionStatus, postponeUsedDateInPackage, sessionsForStudent } from "@/data/accessors";
+import {
+  effectiveSessionStatus,
+  postponePendingDateInPackage,
+  postponeUsedDateInPackage,
+  sessionsForStudent,
+} from "@/data/accessors";
 import { getClassGroupById } from "@/data/groups";
 import {
   addDays,
@@ -66,6 +71,11 @@ export default function StudentHomePage() {
       isAtLeast24HoursAway(selectedSession.date, selectedTime),
   );
   const postponeUsedDate = postponeUsedDateInPackage(
+    student,
+    postponeRequests,
+    sessions,
+  );
+  const postponePendingDate = postponePendingDateInPackage(
     student,
     postponeRequests,
     sessions,
@@ -174,6 +184,7 @@ export default function StudentHomePage() {
                     remainingPostponeFor(student.id),
                     postponeLimit,
                     postponeUsedDate,
+                    postponePendingDate,
                   )}
                 </p>
                 {selectedStatus === "upcoming" ? (

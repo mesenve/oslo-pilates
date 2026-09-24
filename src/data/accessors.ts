@@ -148,7 +148,7 @@ export function postponeUsedInPackage(
   return sessionIds.size;
 }
 
-/** Most recent postpone-used date in the active package, if any. */
+/** Most recent approved postpone date in the active package, if any. */
 export function postponeUsedDateInPackage(
   student: Student,
   requests: PostponeRequest[],
@@ -157,7 +157,7 @@ export function postponeUsedDateInPackage(
   const dates: string[] = [];
   for (const request of requests) {
     if (request.studentId !== student.id) continue;
-    if (request.status === "rejected") continue;
+    if (request.status !== "approved") continue;
     const date = postponeRequestDate(request, sessions);
     if (!date || !isDateInPackage(student, date)) continue;
     dates.push(date);
@@ -168,6 +168,23 @@ export function postponeUsedDateInPackage(
   const flagged = student.postponeLessonUsedAt?.slice(0, 10);
   if (flagged && !isDateInPackage(student, flagged)) return null;
   return flagged ?? null;
+}
+
+/** Most recent pending postpone date in the active package, if any. */
+export function postponePendingDateInPackage(
+  student: Student,
+  requests: PostponeRequest[],
+  sessions: Session[] = [],
+): string | null {
+  const dates: string[] = [];
+  for (const request of requests) {
+    if (request.studentId !== student.id || request.status !== "pending") continue;
+    const date = postponeRequestDate(request, sessions);
+    if (!date || !isDateInPackage(student, date)) continue;
+    dates.push(date);
+  }
+  dates.sort((a, b) => b.localeCompare(a));
+  return dates[0] ?? null;
 }
 
 export function remainingPostponeRights(

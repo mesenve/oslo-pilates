@@ -4,7 +4,11 @@ import { ClassCalendar } from "@/components/class-calendar";
 import { SessionRow } from "@/components/session-row";
 import { useCurrentStudent, useStudio } from "@/components/studio-provider";
 import { EmptyState } from "@/components/ui";
-import { postponeUsedDateInPackage, sessionsForStudent } from "@/data/accessors";
+import {
+  postponePendingDateInPackage,
+  postponeUsedDateInPackage,
+  sessionsForStudent,
+} from "@/data/accessors";
 import { getClassGroupById } from "@/data/groups";
 import { isAtLeast24HoursAway, todayISO, weekdayFromISO } from "@/lib/dates";
 import { postponeRightLabel } from "@/lib/labels";
@@ -61,11 +65,15 @@ export default function ProgramPage() {
   const postponeUsedDate = student
     ? postponeUsedDateInPackage(student, postponeRequests, sessions)
     : null;
+  const postponePendingDate = student
+    ? postponePendingDateInPackage(student, postponeRequests, sessions)
+    : null;
   const postponeHint = student
     ? postponeRightLabel(
         postponeRemaining,
         student.monthlyPostponeLimit > 0 ? student.monthlyPostponeLimit : 0,
         postponeUsedDate,
+        postponePendingDate,
       )
     : "";
 

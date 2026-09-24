@@ -70,8 +70,12 @@ export function postponeRightLabel(
   remaining: number,
   limit: number,
   usedDate?: string | null,
+  pendingDate?: string | null,
 ) {
   if (limit <= 0) return "Erteleme hakkı yok.";
+  if (pendingDate) {
+    return `${formatShortDate(pendingDate)} tarihli erteleme talebin onay bekliyor.`;
+  }
   if (remaining <= 0) {
     return usedDate
       ? `Bu pakette erteleme hakkını ${formatShortDate(usedDate)} tarihinde kullandın.`
@@ -86,7 +90,11 @@ export function postponeRightAdminLabel(
   used: number,
   limit: number,
   usedDate?: string | null,
+  pendingDate?: string | null,
 ) {
+  if (pendingDate) {
+    return `Erteleme talebi onay bekliyor · ${formatShortDate(pendingDate)}`;
+  }
   const base = `Bu pakette ${used}/${limit} erteleme hakkı`;
   return usedDate ? `${base} · ${formatShortDate(usedDate)}` : base;
 }

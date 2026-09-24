@@ -69,6 +69,7 @@ export default function RequestsPage() {
                           used,
                           student.monthlyPostponeLimit,
                           usedDate,
+                          pending ? session?.date : null,
                         )}
                       </p>
                     ) : null}

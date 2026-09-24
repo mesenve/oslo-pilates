@@ -15,12 +15,12 @@ export function RoleGuard({
   role: Role;
   children: React.ReactNode;
 }) {
-  const { ready, user } = useStudio();
+  const { ready, sessionChecked, user } = useStudio();
   const router = useRouter();
   const hadUser = useRef(false);
 
   useEffect(() => {
-    if (!ready) return;
+    if (!ready || !sessionChecked) return;
     if (user) {
       hadUser.current = true;
       if (user.role !== role) {
@@ -36,9 +36,9 @@ export function RoleGuard({
       router.replace(role === "student" ? "/giris?rol=ogrenci" : "/giris?rol=admin");
     }, SESSION_GRACE_MS);
     return () => window.clearTimeout(timer);
-  }, [ready, role, router, user]);
+  }, [ready, role, router, sessionChecked, user]);
 
-  if (!ready || !user || user.role !== role) {
+  if (!ready || !sessionChecked || !user || user.role !== role) {
     return (
       <div className="flex min-h-screen items-center justify-center text-sm text-muted">
         Yükleniyor…
@@ -50,12 +50,12 @@ export function RoleGuard({
 }
 
 export function AdminGuard({ children }: { children: React.ReactNode }) {
-  const { ready, user } = useStudio();
+  const { ready, sessionChecked, user } = useStudio();
   const router = useRouter();
   const hadUser = useRef(false);
 
   useEffect(() => {
-    if (!ready) return;
+    if (!ready || !sessionChecked) return;
     if (user) {
       hadUser.current = true;
       if (!isStaffRole(user.role)) {
@@ -71,9 +71,9 @@ export function AdminGuard({ children }: { children: React.ReactNode }) {
       router.replace("/giris?rol=admin");
     }, SESSION_GRACE_MS);
     return () => window.clearTimeout(timer);
-  }, [ready, router, user]);
+  }, [ready, router, sessionChecked, user]);
 
-  if (!ready || !user || !isStaffRole(user.role)) {
+  if (!ready || !sessionChecked || !user || !isStaffRole(user.role)) {
     return (
       <div className="flex min-h-screen items-center justify-center text-sm text-muted">
         Yükleniyor…

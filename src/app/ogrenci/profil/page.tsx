@@ -2,7 +2,10 @@
 
 import { useCurrentStudent, useStudio } from "@/components/studio-provider";
 import { Card, PaymentBadge } from "@/components/ui";
-import { postponeUsedDateInPackage } from "@/data/accessors";
+import {
+  postponePendingDateInPackage,
+  postponeUsedDateInPackage,
+} from "@/data/accessors";
 import { getClassGroupById } from "@/data/groups";
 import { formatLongDate } from "@/lib/dates";
 import { postponeRightLabel, remainingLabel } from "@/lib/labels";
@@ -16,6 +19,11 @@ export default function ProfilePage() {
   const remaining = remainingFor(student.id);
   const m = student.measurements;
   const postponeUsedDate = postponeUsedDateInPackage(
+    student,
+    postponeRequests,
+    sessions,
+  );
+  const postponePendingDate = postponePendingDateInPackage(
     student,
     postponeRequests,
     sessions,
@@ -47,6 +55,7 @@ export default function ProfilePage() {
             remainingPostponeFor(student.id),
             student.monthlyPostponeLimit > 0 ? student.monthlyPostponeLimit : 0,
             postponeUsedDate,
+            postponePendingDate,
           )}
         />
         <Field

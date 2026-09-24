@@ -12,6 +12,7 @@ import { Button, Card, ConfirmDialog, EmptyState, PaymentBadge, RequestBadge, Se
 import { useStudio } from "@/components/studio-provider";
 import {
   effectiveSessionStatus,
+  postponePendingDateInPackage,
   postponeUsedDateInPackage,
   remainingPostponeRights,
   sessionCounts,
@@ -184,6 +185,11 @@ export default function StudentDetailPage() {
               ),
             student.monthlyPostponeLimit,
             postponeUsedDateInPackage(
+              student,
+              visiblePostponeRequests,
+              visibleSessions,
+            ),
+            postponePendingDateInPackage(
               student,
               visiblePostponeRequests,
               visibleSessions,
