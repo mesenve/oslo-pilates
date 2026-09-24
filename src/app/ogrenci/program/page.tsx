@@ -120,7 +120,7 @@ export default function ProgramPage() {
             }
             onAttend={() => markAttended(session.id)}
             onPostpone={(reason) => requestPostpone(session.id, reason)}
-            onWithdrawPostpone={() => void withdrawPostpone(session.id)}
+            onWithdrawPostpone={() => withdrawPostpone(session.id)}
           />
         ))
       )}
