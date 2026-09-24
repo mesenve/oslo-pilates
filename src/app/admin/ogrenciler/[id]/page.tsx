@@ -272,8 +272,13 @@ export default function StudentDetailPage() {
                   headers: { "Content-Type": "application/json" },
                   body: JSON.stringify({ email: student.email }),
                 });
+                const data = (await response.json().catch(() => null)) as {
+                  error?: string;
+                } | null;
                 if (!response.ok) {
-                  throw new Error("Şifre sıfırlama maili gönderilemedi.");
+                  throw new Error(
+                    data?.error ?? "Şifre sıfırlama maili gönderilemedi.",
+                  );
                 }
                 setResendStatus("sent");
                 window.setTimeout(() => setResendStatus("idle"), 3000);
@@ -353,7 +358,12 @@ export default function StudentDetailPage() {
                       headers: { "Content-Type": "application/json" },
                       body: JSON.stringify({ email: student.email }),
                     });
-                    if (!response.ok) throw new Error("Mail gönderilemedi.");
+                    const data = (await response.json().catch(() => null)) as {
+                      error?: string;
+                    } | null;
+                    if (!response.ok) {
+                      throw new Error(data?.error ?? "Mail gönderilemedi.");
+                    }
                     setResendStatus("sent");
                     window.setTimeout(() => setResendStatus("idle"), 3000);
                   } catch (error) {

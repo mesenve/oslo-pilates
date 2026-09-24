@@ -425,3 +425,41 @@ export async function patchSupabasePostponeReason(
     },
   );
 }
+
+export type SupabasePasswordResetRow = {
+  token: string;
+  kind: "student" | "staff";
+  account_id: string;
+  email: string;
+  expires_at: string;
+  used_at?: string | null;
+  created_at?: string;
+};
+
+export async function insertSupabasePasswordResetToken(
+  row: Omit<SupabasePasswordResetRow, "used_at" | "created_at">,
+) {
+  await request<unknown>("password_reset_tokens", {
+    method: "POST",
+    headers: { Prefer: "return=minimal" },
+    body: JSON.stringify([row]),
+  });
+}
+
+export async function getSupabasePasswordResetToken(token: string) {
+  const rows = await request<SupabasePasswordResetRow[]>(
+    `password_reset_tokens?token=eq.${encodeURIComponent(token)}&select=*&limit=1`,
+  );
+  return rows[0] ?? null;
+}
+
+export async function consumeSupabasePasswordResetToken(token: string) {
+  await request<unknown>(
+    `password_reset_tokens?token=eq.${encodeURIComponent(token)}`,
+    {
+      method: "PATCH",
+      headers: { Prefer: "return=minimal" },
+      body: JSON.stringify({ used_at: new Date().toISOString() }),
+    },
+  );
+}

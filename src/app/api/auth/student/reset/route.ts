@@ -4,7 +4,10 @@ import {
   setStaffPasswordHash,
 } from "@/lib/server/staff-password-store";
 import { hashPassword, verifyPassword } from "@/lib/server/staff-credentials";
-import { verifyPasswordResetToken } from "@/lib/server/password-reset";
+import {
+  consumePasswordResetToken,
+  verifyPasswordResetToken,
+} from "@/lib/server/password-reset";
 import { validateStudentPassword } from "@/lib/student-auth";
 import { NextResponse } from "next/server";
 
@@ -24,7 +27,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: validationError }, { status: 400 });
   }
 
-  const payload = verifyPasswordResetToken(token);
+  const payload = await verifyPasswordResetToken(token);
   if (!payload) {
     return NextResponse.json(
       { error: "Sıfırlama linki geçersiz veya süresi dolmuş. Yeni link iste." },
@@ -41,6 +44,7 @@ export async function POST(request: Request) {
       );
     }
     await setStaffPasswordHash(payload.accountId, await hashPassword(password));
+    await consumePasswordResetToken(token);
     return NextResponse.json({ ok: true });
   }
 
@@ -52,5 +56,6 @@ export async function POST(request: Request) {
     );
   }
 
+  await consumePasswordResetToken(token);
   return NextResponse.json({ ok: true });
 }
