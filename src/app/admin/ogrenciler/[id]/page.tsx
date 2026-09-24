@@ -109,6 +109,10 @@ export default function StudentDetailPage() {
   const requests = visiblePostponeRequests.filter(
     (request) => request.studentId === student?.id,
   );
+  const noteRequest =
+    requests.find((request) => request.status === "approved") ??
+    requests.find((request) => request.status === "pending") ??
+    requests[0];
 
   if (!student) {
     return (
@@ -462,28 +466,7 @@ export default function StudentDetailPage() {
                   </p>
                   <RequestBadge status={request.status} />
                 </div>
-                {session ? (
-                  <p className="text-sm text-muted">
-                    Erteleme kullanıldığı tarih: {formatLongDate(session.date)}
-                  </p>
-                ) : null}
                 {lessonTime ? <p className="text-sm text-muted">{lessonTime}</p> : null}
-                <label className="block space-y-1">
-                  <span className="text-xs uppercase tracking-[0.16em] text-muted">
-                    Erteleme notu
-                  </span>
-                  <textarea
-                    defaultValue={request.reason}
-                    rows={2}
-                    placeholder="Öğrencinin göreceği erteleme notu…"
-                    className="w-full rounded-2xl border border-border bg-white px-3 py-2 text-sm"
-                    onBlur={(event) => {
-                      if (event.target.value.trim() !== (request.reason ?? "").trim()) {
-                        void setPostponeRequestReason(request.id, event.target.value);
-                      }
-                    }}
-                  />
-                </label>
                 {request.status === "pending" ? (
                   <Button
                     disabled={approvingId === request.id}
@@ -506,13 +489,13 @@ export default function StudentDetailPage() {
       </section>
 
       <PostponeUsedCard
-        key={
+        key={`${
           postponeUsedDateInPackage(
             student,
             visiblePostponeRequests,
             visibleSessions,
           ) ?? student.postponeLessonUsedAt ?? "unused"
-        }
+        }:${noteRequest?.id ?? "none"}:${noteRequest?.reason ?? ""}`}
         used={student.postponeLessonUsed ?? false}
         usedAt={
           postponeUsedDateInPackage(
@@ -521,8 +504,18 @@ export default function StudentDetailPage() {
             visibleSessions,
           ) ?? student.postponeLessonUsedAt ?? ""
         }
+        note={noteRequest?.reason ?? ""}
         onChange={(used, usedAt) =>
           void setPostponeLessonUsed(student.id, used, usedAt)
+        }
+        onNoteBlur={
+          noteRequest
+            ? (reason) => {
+                if (reason.trim() !== (noteRequest.reason ?? "").trim()) {
+                  void setPostponeRequestReason(noteRequest.id, reason);
+                }
+              }
+            : undefined
         }
       />
 
@@ -660,11 +653,15 @@ function AttendanceStatusPicker({
 function PostponeUsedCard({
   used,
   usedAt,
+  note,
   onChange,
+  onNoteBlur,
 }: {
   used: boolean;
   usedAt: string;
+  note: string;
   onChange: (used: boolean, usedAt?: string) => void;
+  onNoteBlur?: (reason: string) => void;
 }) {
   const [dateValue, setDateValue] = useState(usedAt || todayISO());
 
@@ -682,7 +679,7 @@ function PostponeUsedCard({
         <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg border border-accent/35 bg-accent-soft/30 text-white shadow-[0_3px_10px_rgba(194,24,91,0.1)] transition peer-focus-visible:ring-4 peer-focus-visible:ring-accent-soft/70 peer-checked:border-accent peer-checked:bg-accent">
           <CheckIcon className="h-4 w-4 opacity-0 transition peer-checked:opacity-100" />
         </span>
-        <span className="text-sm font-medium">Öğrenci erteleme dersini kullandı.</span>
+        <span className="text-sm font-medium">Erteleme hakkı kullanıldı</span>
       </label>
       <div className="space-y-1">
         <label className="text-xs uppercase tracking-[0.16em] text-muted">
@@ -699,9 +696,23 @@ function PostponeUsedCard({
           className="w-full rounded-2xl border border-border bg-white px-3 py-2 text-sm"
         />
       </div>
+      {onNoteBlur ? (
+        <label className="block space-y-1">
+          <span className="text-xs uppercase tracking-[0.16em] text-muted">
+            Erteleme notu
+          </span>
+          <textarea
+            defaultValue={note}
+            rows={2}
+            placeholder="Öğrencinin göreceği erteleme notu…"
+            className="w-full rounded-2xl border border-border bg-white px-3 py-2 text-sm"
+            onBlur={(event) => onNoteBlur(event.target.value)}
+          />
+        </label>
+      ) : null}
       {usedAt ? (
         <p className="text-sm text-amber-800">
-          Öğrenci ertelemesini {formatLongDate(usedAt)} tarihinde kullandı.
+          Erteleme hakkı {formatLongDate(usedAt)} tarihinde kullanıldı.
         </p>
       ) : null}
     </Card>
