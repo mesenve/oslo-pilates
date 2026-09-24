@@ -31,11 +31,12 @@ export function SessionRow({
   postponeNote?: string;
   onAttend: () => void;
   onPostpone: (reason: string) => void | Promise<boolean | void>;
-  onWithdrawPostpone?: () => void;
+  onWithdrawPostpone?: () => void | Promise<void>;
 }) {
   const [open, setOpen] = useState(false);
   const [reason, setReason] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [withdrawing, setWithdrawing] = useState(false);
   const displayStatus = hasPendingPostpone ? "postpone_pending" : session.status;
   const locked = displayStatus !== "upcoming" || isBefore(session.date, todayISO());
 
@@ -65,8 +66,18 @@ export function SessionRow({
             <p className="text-xs text-muted">Hocanın onayı bekleniyor.</p>
           ) : null}
           {hasPendingPostpone && onWithdrawPostpone ? (
-            <Button variant="ghost" onClick={onWithdrawPostpone}>
-              Erteleme talebini geri al
+            <Button
+              variant="ghost"
+              disabled={withdrawing}
+              onClick={() => {
+                if (withdrawing) return;
+                setWithdrawing(true);
+                void Promise.resolve(onWithdrawPostpone())
+                  .catch(() => undefined)
+                  .finally(() => setWithdrawing(false));
+              }}
+            >
+              {withdrawing ? "Gönderiliyor…" : "Erteleme talebini geri al"}
             </Button>
           ) : null}
           {!locked ? (

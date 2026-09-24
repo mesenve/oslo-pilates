@@ -40,6 +40,7 @@ export default function StudentHomePage() {
   const today = todayISO();
   const [selectedDate, setSelectedDate] = useState(today);
   const [postponing, setPostponing] = useState(false);
+  const [withdrawing, setWithdrawing] = useState(false);
 
   if (!student) return null;
 
@@ -215,9 +216,16 @@ export default function StudentHomePage() {
                   <div className="mt-3 flex flex-wrap gap-2">
                     <Button
                       variant="secondary"
-                      onClick={() => void withdrawPostpone(selectedSession.id)}
+                      disabled={withdrawing}
+                      onClick={() => {
+                        if (withdrawing) return;
+                        setWithdrawing(true);
+                        void withdrawPostpone(selectedSession.id)
+                          .catch(() => undefined)
+                          .finally(() => setWithdrawing(false));
+                      }}
                     >
-                      Erteleme talebini geri al
+                      {withdrawing ? "Gönderiliyor…" : "Erteleme talebini geri al"}
                     </Button>
                   </div>
                 ) : null}
