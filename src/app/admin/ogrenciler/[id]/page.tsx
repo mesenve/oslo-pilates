@@ -652,6 +652,7 @@ function PostponeUsedCard({
 }) {
   const [dateValue, setDateValue] = useState(usedAt || todayISO());
   const [noteValue, setNoteValue] = useState(note);
+  const [noteSaved, setNoteSaved] = useState(false);
 
   useEffect(() => {
     if (usedAt) setDateValue(usedAt);
@@ -660,6 +661,12 @@ function PostponeUsedCard({
   useEffect(() => {
     setNoteValue(note);
   }, [note]);
+
+  function saveNote() {
+    onNoteChange(noteValue);
+    setNoteSaved(true);
+    window.setTimeout(() => setNoteSaved(false), 2000);
+  }
 
   return (
     <Card className="space-y-3 p-4">
@@ -702,10 +709,10 @@ function PostponeUsedCard({
           placeholder="Öğrencinin göreceği not (geçen aydan taşıma vb.)"
           className="w-full rounded-2xl border border-border bg-white px-3 py-2 text-sm"
           onChange={(event) => setNoteValue(event.target.value)}
-          onBlur={() => {
-            if (noteValue.trim() !== note.trim()) onNoteChange(noteValue);
-          }}
         />
+        <Button type="button" variant="secondary" onClick={saveNote}>
+          {noteSaved ? "Not kaydedildi" : "Notu kaydet"}
+        </Button>
       </div>
       {usedAt ? (
         <p className="text-sm text-amber-800">
