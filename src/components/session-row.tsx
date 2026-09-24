@@ -77,7 +77,7 @@ export function SessionRow({
                   .finally(() => setWithdrawing(false));
               }}
             >
-              {withdrawing ? "Gönderiliyor…" : "Erteleme talebini geri al"}
+              {withdrawing ? "Geri alınıyor…" : "Erteleme talebini geri al"}
             </Button>
           ) : null}
           {!locked ? (
