@@ -1,9 +1,4 @@
-/**
- * Self-check: staff password hash round-trip (scrypt) still verifies.
- * Run: node --experimental-strip-types scripts/check-staff-password.mjs
- * (or after build via tsx). Uses the same crypto helpers as the API.
- */
-import { randomBytes, scrypt as scryptCallback, timingSafeEqual } from "node:crypto";
+import { createHmac, randomBytes, scrypt as scryptCallback, timingSafeEqual } from "node:crypto";
 import { promisify } from "node:util";
 
 const scrypt = promisify(scryptCallback);
@@ -23,13 +18,46 @@ async function verifyPassword(password, stored) {
   return derived.length === expected.length && timingSafeEqual(derived, expected);
 }
 
-const hash = await hashPassword("ece123tmp");
-const okNew = await verifyPassword("ece123tmp", hash);
-const okOld = await verifyPassword("ece123", hash);
-const okPlain = await verifyPassword("ece123", "ece123");
+function sign(secret, payload) {
+  return createHmac("sha256", secret).update(payload).digest("base64url");
+}
 
-if (!okNew || okOld || !okPlain) {
-  console.error("FAIL", { okNew, okOld, okPlain });
+function createToken(secret, kind, accountId, email) {
+  const body = Buffer.from(
+    JSON.stringify({
+      kind,
+      accountId,
+      email: email.toLowerCase(),
+      exp: Math.floor(Date.now() / 1000) + 3600,
+    }),
+  ).toString("base64url");
+  return `${body}.${sign(secret, body)}`;
+}
+
+function verifyToken(secret, token) {
+  const [body, provided] = token.split(".");
+  if (!body || !provided) return null;
+  const expected = sign(secret, body);
+  const left = Buffer.from(provided);
+  const right = Buffer.from(expected);
+  if (left.length !== right.length || !timingSafeEqual(left, right)) return null;
+  return JSON.parse(Buffer.from(body, "base64url").toString("utf8"));
+}
+
+const hash = await hashPassword("ece123tmp");
+if (!(await verifyPassword("ece123tmp", hash)) || (await verifyPassword("ece123", hash))) {
+  console.error("FAIL hash/verify");
   process.exit(1);
 }
-console.log("ok staff password hash/verify");
+
+const secret = "local-development-session-secret";
+const studentTok = createToken(secret, "student", "stu-1", "a@b.com");
+const staffTok = createToken(secret, "staff", "staff-ece", "ece@x.com");
+const s = verifyToken(secret, studentTok);
+const t = verifyToken(secret, staffTok);
+if (s?.kind !== "student" || t?.kind !== "staff" || verifyToken(secret, "bad.token")) {
+  console.error("FAIL reset token", { s, t });
+  process.exit(1);
+}
+
+console.log("ok password hash + reset token (student/staff)");

@@ -92,6 +92,39 @@ export async function listSupabaseInvites() {
   return request<SupabaseInviteRow[]>("invites?select=*&order=created_at.desc");
 }
 
+export type SupabaseStaffCredentialRow = {
+  staff_id: string;
+  password_hash: string;
+  updated_at?: string;
+};
+
+export async function getSupabaseStaffPasswordHash(staffId: string) {
+  const rows = await request<SupabaseStaffCredentialRow[]>(
+    `staff_credentials?staff_id=eq.${encodeURIComponent(staffId)}&select=password_hash&limit=1`,
+  );
+  return rows[0]?.password_hash ?? null;
+}
+
+export async function setSupabaseStaffPasswordHash(
+  staffId: string,
+  passwordHash: string,
+) {
+  await request<SupabaseStaffCredentialRow[]>(
+    "staff_credentials?on_conflict=staff_id",
+    {
+      method: "POST",
+      headers: { Prefer: "resolution=merge-duplicates,return=minimal" },
+      body: JSON.stringify([
+        {
+          staff_id: staffId,
+          password_hash: passwordHash,
+          updated_at: new Date().toISOString(),
+        },
+      ]),
+    },
+  );
+}
+
 export async function activateSupabaseStudent(studentId: string) {
   await request<SupabaseRow[]>(`students?id=eq.${encodeURIComponent(studentId)}`, {
     method: "PATCH",

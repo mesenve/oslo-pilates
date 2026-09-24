@@ -65,7 +65,8 @@ export default function SifremiUnuttumPage() {
               <div>
                 <h1 className="font-serif text-2xl">Şifremi unuttum</h1>
                 <p className="mt-2 text-sm text-muted">
-                  E-posta adresini yaz; sıfırlama bağlantısı mailine gelecek.
+                  Öğrenci veya eğitmen e-postanı yaz; sıfırlama bağlantısı
+                  mailine gelecek.
                 </p>
               </div>
               <div>

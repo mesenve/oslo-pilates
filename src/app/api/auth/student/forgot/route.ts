@@ -1,4 +1,5 @@
 import { sendPasswordResetEmail } from "@/lib/email";
+import { getStaffByEmail } from "@/data/staff";
 import { findActivatedInviteByEmail } from "@/lib/server/invite-store";
 import {
   createPasswordResetToken,
@@ -20,18 +21,35 @@ export async function POST(request: Request) {
   if (!email) return ok;
 
   try {
-    const invite = await findActivatedInviteByEmail(email);
-    if (!invite?.password) return ok;
-
     const origin = new URL(request.url).origin;
-    const token = createPasswordResetToken(invite.student.id, invite.student.email);
-    const resetUrl = passwordResetUrl(token, process.env.NEXT_PUBLIC_APP_URL || origin);
-    await sendPasswordResetEmail(
-      { name: invite.student.name, email: invite.student.email },
-      resetUrl,
-    );
+    const appOrigin = process.env.NEXT_PUBLIC_APP_URL || origin;
+
+    const invite = await findActivatedInviteByEmail(email);
+    if (invite?.password) {
+      const token = createPasswordResetToken(
+        "student",
+        invite.student.id,
+        invite.student.email,
+      );
+      const resetUrl = passwordResetUrl(token, appOrigin);
+      await sendPasswordResetEmail(
+        { name: invite.student.name, email: invite.student.email },
+        resetUrl,
+      );
+      return ok;
+    }
+
+    const staff = getStaffByEmail(email);
+    if (staff) {
+      const token = createPasswordResetToken("staff", staff.id, staff.email);
+      const resetUrl = passwordResetUrl(token, appOrigin);
+      await sendPasswordResetEmail(
+        { name: staff.name, email: staff.email },
+        resetUrl,
+      );
+    }
   } catch (error) {
-    console.error("Student password reset request failed:", error);
+    console.error("Password reset request failed:", error);
   }
 
   return ok;
