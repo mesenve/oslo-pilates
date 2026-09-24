@@ -7,11 +7,13 @@ import { remainingPostponeRights, postponeUsedDateInPackage, studentName } from 
 import { getClassGroupById } from "@/data/groups";
 import { formatLongDate } from "@/lib/dates";
 import { postponeRightAdminLabel } from "@/lib/labels";
+import { useState } from "react";
 
 export default function RequestsPage() {
   const { visiblePostponeRequests, visibleSessions, visibleStudents, approveRequest } =
     useStudio();
   const visibleRequests = visiblePostponeRequests;
+  const [approvingId, setApprovingId] = useState<string | null>(null);
 
   return (
     <div className="space-y-8">
@@ -79,20 +81,23 @@ export default function RequestsPage() {
                         {request.reason}
                       </p>
                     ) : null}
-                    {student?.postponeLessonNote?.trim() && !request.reason?.trim() ? (
-                      <p className="mt-3 text-sm">
-                        <span className="text-muted">Erteleme notu: </span>
-                        {student.postponeLessonNote}
-                      </p>
-                    ) : null}
                     <p className="mt-2 text-xs text-muted">{student?.email}</p>
                   </div>
                   <RequestBadge status={request.status} />
                 </div>
                 {pending ? (
                   <div className="mt-4">
-                    <Button onClick={() => approveRequest(request.id)}>
-                      Onayla
+                    <Button
+                      disabled={approvingId === request.id}
+                      onClick={() => {
+                        if (approvingId) return;
+                        setApprovingId(request.id);
+                        void approveRequest(request.id)
+                          .catch(() => undefined)
+                          .finally(() => setApprovingId(null));
+                      }}
+                    >
+                      {approvingId === request.id ? "Onaylanıyor…" : "Onayla"}
                     </Button>
                   </div>
                 ) : null}

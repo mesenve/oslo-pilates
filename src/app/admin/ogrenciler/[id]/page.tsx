@@ -49,7 +49,6 @@ export default function StudentDetailPage() {
     approveRequest,
     markSessionByInstructor,
     setPostponeLessonUsed,
-    setPostponeLessonNote,
     setPostponeRequestReason,
     archiveStudent,
     resendStudentInvite,
@@ -59,6 +58,7 @@ export default function StudentDetailPage() {
   const router = useRouter();
   const student = visibleStudents.find((item) => item.id === params.id);
   const [copiedInvite, setCopiedInvite] = useState(false);
+  const [approvingId, setApprovingId] = useState<string | null>(null);
   const [resendStatus, setResendStatus] = useState<"idle" | "sending" | "sent" | "error">(
     "idle",
   );
@@ -426,9 +426,6 @@ export default function StudentDetailPage() {
               </div>
               {lessonTime ? <p className="text-sm text-muted">{lessonTime}</p> : null}
               {request?.reason ? <p className="text-sm">Erteleme notu: {request.reason}</p> : null}
-              {!request?.reason && student.postponeLessonNote?.trim() ? (
-                <p className="text-sm">Erteleme notu: {student.postponeLessonNote}</p>
-              ) : null}
               {status === "missed" ? (
                 <p className="text-sm text-rose-700">Bu ders yanmış.</p>
               ) : null}
@@ -488,7 +485,18 @@ export default function StudentDetailPage() {
                   />
                 </label>
                 {request.status === "pending" ? (
-                  <Button onClick={() => approveRequest(request.id)}>Onayla</Button>
+                  <Button
+                    disabled={approvingId === request.id}
+                    onClick={() => {
+                      if (approvingId) return;
+                      setApprovingId(request.id);
+                      void approveRequest(request.id)
+                        .catch(() => undefined)
+                        .finally(() => setApprovingId(null));
+                    }}
+                  >
+                    {approvingId === request.id ? "Onaylanıyor…" : "Onayla"}
+                  </Button>
                 ) : null}
                 {request.actedAt ? <p className="text-xs text-muted">İşlemi yapan: {getStaffById(request.actedBy ?? "")?.name ?? request.actedBy ?? "—"}</p> : null}
               </Card>
@@ -506,11 +514,9 @@ export default function StudentDetailPage() {
             visibleSessions,
           ) ?? student.postponeLessonUsedAt ?? ""
         }
-        note={student.postponeLessonNote ?? ""}
         onChange={(used, usedAt) =>
           void setPostponeLessonUsed(student.id, used, usedAt)
         }
-        onNoteChange={(note) => void setPostponeLessonNote(student.id, note)}
       />
 
       <section className="space-y-3">
@@ -646,33 +652,17 @@ function AttendanceStatusPicker({
 function PostponeUsedCard({
   used,
   usedAt,
-  note,
   onChange,
-  onNoteChange,
 }: {
   used: boolean;
   usedAt: string;
-  note: string;
   onChange: (used: boolean, usedAt?: string) => void;
-  onNoteChange: (note: string) => void;
 }) {
   const [dateValue, setDateValue] = useState(usedAt || todayISO());
-  const [noteValue, setNoteValue] = useState(note);
-  const [noteSaved, setNoteSaved] = useState(false);
 
   useEffect(() => {
     if (usedAt) setDateValue(usedAt);
   }, [usedAt]);
-
-  useEffect(() => {
-    setNoteValue(note);
-  }, [note]);
-
-  function saveNote() {
-    onNoteChange(noteValue);
-    setNoteSaved(true);
-    window.setTimeout(() => setNoteSaved(false), 2000);
-  }
 
   return (
     <Card className="space-y-3 p-4">
@@ -704,21 +694,6 @@ function PostponeUsedCard({
           }}
           className="w-full rounded-2xl border border-border bg-white px-3 py-2 text-sm"
         />
-      </div>
-      <div className="space-y-1">
-        <label className="text-xs uppercase tracking-[0.16em] text-muted">
-          Erteleme notu
-        </label>
-        <textarea
-          value={noteValue}
-          rows={3}
-          placeholder="Öğrencinin göreceği not (geçen aydan taşıma vb.)"
-          className="w-full rounded-2xl border border-border bg-white px-3 py-2 text-sm"
-          onChange={(event) => setNoteValue(event.target.value)}
-        />
-        <Button type="button" variant="secondary" onClick={saveNote}>
-          {noteSaved ? "Not kaydedildi" : "Notu kaydet"}
-        </Button>
       </div>
       {usedAt ? (
         <p className="text-sm text-amber-800">

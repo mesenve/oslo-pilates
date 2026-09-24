@@ -107,7 +107,7 @@ export type Student = {
   postponeLessonUsed?: boolean;
   /** ISO date when admin marked postpone used, or derived display fallback. */
   postponeLessonUsedAt?: string;
-  /** Instructor note for the postpone used in the active package. Visible to student. */
+  /** @deprecated Legacy package note; UI uses postponeRequests.reason only. */
   postponeLessonNote?: string;
   accountStatus: StudentAccountStatus;
   inviteToken?: string;

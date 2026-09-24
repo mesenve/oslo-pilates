@@ -103,7 +103,7 @@ type StudioContextValue = {
   withdrawPostpone: (sessionId: string) => Promise<void>;
   requestRenewal: (requestedStartDate?: string) => Promise<{ error: string | null }>;
   reviewRenewal: (studentId: string, status: "approved" | "rejected") => Promise<{ error: string | null }>;
-  approveRequest: (requestId: string) => void;
+  approveRequest: (requestId: string) => Promise<boolean>;
   markSessionByInstructor: (
     sessionId: string,
     outcome: "attended" | "postponed" | "missed" | "upcoming",
@@ -113,7 +113,6 @@ type StudioContextValue = {
     used: boolean,
     usedAt?: string,
   ) => Promise<void>;
-  setPostponeLessonNote: (studentId: string, note: string) => Promise<void>;
   setPostponeRequestReason: (requestId: string, reason: string) => Promise<void>;
   addStudent: (input: NewStudentInput) => Promise<StudentActionResult>;
   archiveStudent: (studentId: string) => void;
@@ -755,29 +754,30 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
     return { error: null };
   }, []);
 
-  const approveRequest = useCallback((requestId: string) => {
-    void (async () => {
-      const current = getStudioSnapshot();
-      const request = current.postponeRequests.find((item) => item.id === requestId);
-      if (!request || request.status !== "pending" || !canManageStudent(current.user, request.studentId, current.students)) return;
-      const response = await fetch("/api/sessions/status", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ sessionId: request.sessionId, status: "postponed" }),
-      });
-      if (!response.ok) return;
-      const data = (await response.json().catch(() => null)) as { revision?: string } | null;
-      setStudioSnapshotRevision(data?.revision);
-      setStudioState((state) => ({
-        ...state,
-        postponeRequests: state.postponeRequests.map((item) =>
-          item.id === requestId ? { ...item, status: "approved", actedAt: new Date().toISOString(), actedBy: current.user?.id } : item,
-        ),
-        sessions: state.sessions.map((session) =>
-          session.id === request.sessionId ? { ...session, status: "postponed" } : session,
-        ),
-      }), { persist: false });
-    })();
+  const approveRequest = useCallback(async (requestId: string) => {
+    const current = getStudioSnapshot();
+    const request = current.postponeRequests.find((item) => item.id === requestId);
+    if (!request || request.status !== "pending" || !canManageStudent(current.user, request.studentId, current.students)) {
+      return false;
+    }
+    const response = await fetch("/api/sessions/status", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ sessionId: request.sessionId, status: "postponed" }),
+    });
+    if (!response.ok) return false;
+    const data = (await response.json().catch(() => null)) as { revision?: string } | null;
+    setStudioSnapshotRevision(data?.revision);
+    setStudioState((state) => ({
+      ...state,
+      postponeRequests: state.postponeRequests.map((item) =>
+        item.id === requestId ? { ...item, status: "approved", actedAt: new Date().toISOString(), actedBy: current.user?.id } : item,
+      ),
+      sessions: state.sessions.map((session) =>
+        session.id === request.sessionId ? { ...session, status: "postponed" } : session,
+      ),
+    }), { persist: false });
+    return true;
   }, []);
 
   const markSessionByInstructor = useCallback(
@@ -911,34 +911,6 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
           ),
         };
         });
-      await flushStudioSnapshotPersistence();
-    },
-    [],
-  );
-
-  const setPostponeLessonNote = useCallback(
-    async (studentId: string, note: string) => {
-      setStudioState((current) => {
-        const student = current.students.find((item) => item.id === studentId);
-        if (!student || !canManageStudent(current.user, studentId, current.students)) return current;
-        const trimmed = note.trim();
-        return {
-          ...current,
-          students: current.students.map((item) =>
-            item.id === studentId
-              ? {
-                  ...item,
-                  postponeLessonNote: trimmed || undefined,
-                  postponeLessonUsed: trimmed ? true : item.postponeLessonUsed,
-                  postponeLessonUsedAt:
-                    trimmed && !item.postponeLessonUsedAt
-                      ? todayISO()
-                      : item.postponeLessonUsedAt,
-                }
-              : item,
-          ),
-        };
-      });
       await flushStudioSnapshotPersistence();
     },
     [],
@@ -1358,7 +1330,6 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
       approveRequest,
       markSessionByInstructor,
       setPostponeLessonUsed,
-      setPostponeLessonNote,
       setPostponeRequestReason,
       addStudent,
       archiveStudent,
@@ -1384,7 +1355,6 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
       rejectAttendance,
       markSessionByInstructor,
       setPostponeLessonUsed,
-      setPostponeLessonNote,
       setPostponeRequestReason,
       permanentlyDeleteStudent,
       ready,

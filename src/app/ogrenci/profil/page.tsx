@@ -28,6 +28,12 @@ export default function ProfilePage() {
     postponeRequests,
     sessions,
   );
+  const postponeNote = postponeRequests.find(
+    (request) =>
+      request.studentId === student.id &&
+      request.reason?.trim() &&
+      (request.status === "pending" || request.status === "approved"),
+  )?.reason;
 
   return (
     <div className="space-y-5">
@@ -62,9 +68,9 @@ export default function ProfilePage() {
           label="Bitiş"
           value={formatLongDate(student.package.endDate)}
         />
-        {student.postponeLessonNote?.trim() ? (
+        {postponeNote ? (
           <div className="sm:col-span-2">
-            <Field label="Erteleme notu" value={student.postponeLessonNote} />
+            <Field label="Erteleme notu" value={postponeNote} />
           </div>
         ) : null}
         {student.note?.trim() ? (

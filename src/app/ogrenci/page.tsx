@@ -241,15 +241,13 @@ export default function StudentHomePage() {
               </div>
             ) : null}
             {(selectedStatus === "postponed" || selectedStatus === "postpone_pending") &&
-            (postponeRequests.find((r) => r.sessionId === selectedSession.id)?.reason?.trim() ||
-              student.postponeLessonNote?.trim()) ? (
+            postponeRequests.find((r) => r.sessionId === selectedSession.id)?.reason?.trim() ? (
               <div className="border-t border-border/60 px-4 py-3">
                 <p className="text-xs uppercase tracking-[0.16em] text-muted">
                   Erteleme notu
                 </p>
                 <p className="mt-1 text-sm">
-                  {postponeRequests.find((r) => r.sessionId === selectedSession.id)?.reason?.trim() ||
-                    student.postponeLessonNote}
+                  {postponeRequests.find((r) => r.sessionId === selectedSession.id)?.reason}
                 </p>
               </div>
             ) : null}
