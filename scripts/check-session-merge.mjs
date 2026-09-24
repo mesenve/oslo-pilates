@@ -5,40 +5,22 @@
  * Run: node scripts/check-session-merge.mjs
  */
 
-function mergeSessionsKeepServerStatus(current = [], incoming = [], incomingStudentIds) {
+function mergeSessionsServerLocked(current = [], incoming = []) {
   const currentById = new Map(current.map((session) => [session.id, session]));
-  const nextForStudents = incoming.map((session) => {
-    const existing = currentById.get(session.id);
-    if (!existing) return session;
-    return { ...session, status: existing.status };
-  });
-  return [
-    ...current.filter((session) => !incomingStudentIds.has(session.studentId)),
-    ...nextForStudents,
-  ];
+  const newOnes = incoming.filter((session) => !currentById.has(session.id));
+  return [...current, ...newOnes];
 }
 
-function mergePostponePreferServer(current = [], incoming = [], incomingStudentIds) {
-  const kept = current.filter((request) => !incomingStudentIds.has(request.studentId));
-  const serverForStudents = current.filter((request) =>
-    incomingStudentIds.has(request.studentId),
-  );
-  const serverById = new Map(serverForStudents.map((request) => [request.id, request]));
+function mergePostponeServerLocked(current = [], incoming = []) {
   const incomingById = new Map(incoming.map((request) => [request.id, request]));
-  const ids = new Set([...serverById.keys(), ...incomingById.keys()]);
-  const merged = [...ids].map((id) => {
-    const server = serverById.get(id);
-    const client = incomingById.get(id);
-    if (server && client) {
-      return { ...server, reason: client.reason ?? server.reason };
-    }
-    return server ?? client;
+  return current.map((request) => {
+    const client = incomingById.get(request.id);
+    if (!client) return request;
+    return { ...request, reason: client.reason ?? request.reason };
   });
-  return [...kept, ...merged];
 }
 
 const studentId = "stu-1";
-const ids = new Set([studentId]);
 
 const serverSessions = [
   { id: "stu-1-2026-09-28", studentId, date: "2026-09-28", status: "postpone_pending" },
@@ -47,16 +29,16 @@ const serverSessions = [
 const staleClientSessions = [
   { id: "stu-1-2026-09-28", studentId, date: "2026-09-28", status: "upcoming" },
   { id: "stu-1-2026-09-30", studentId, date: "2026-09-30", status: "upcoming" },
+  { id: "stu-1-2026-10-02", studentId, date: "2026-10-02", status: "upcoming" },
 ];
 
-const mergedSessions = mergeSessionsKeepServerStatus(
-  serverSessions,
-  staleClientSessions,
-  ids,
-);
+const mergedSessions = mergeSessionsServerLocked(serverSessions, staleClientSessions);
 const sept28 = mergedSessions.find((item) => item.id === "stu-1-2026-09-28");
 if (sept28?.status !== "postpone_pending") {
   throw new Error(`Expected postpone_pending preserved, got ${sept28?.status}`);
+}
+if (!mergedSessions.some((item) => item.id === "stu-1-2026-10-02")) {
+  throw new Error("Expected brand-new session row to be inserted");
 }
 
 const serverRequests = [
@@ -68,20 +50,26 @@ const serverRequests = [
     reason: "",
   },
 ];
-const staleClientRequests = [];
-const mergedRequests = mergePostponePreferServer(
-  serverRequests,
-  staleClientRequests,
-  ids,
-);
+const staleClientRequests = [
+  {
+    id: "req-client-only",
+    studentId,
+    sessionId: "stu-1-2026-09-30",
+    status: "pending",
+    reason: "should not appear",
+  },
+];
+const mergedRequests = mergePostponeServerLocked(serverRequests, staleClientRequests);
 if (!mergedRequests.some((item) => item.id === "req-new" && item.status === "pending")) {
   throw new Error("Expected server-only pending request to be kept");
 }
+if (mergedRequests.some((item) => item.id === "req-client-only")) {
+  throw new Error("Client-only postpone request must not be inserted via studio POST");
+}
 
-const reasonUpdate = mergePostponePreferServer(
+const reasonUpdate = mergePostponeServerLocked(
   serverRequests,
-  [{ ...serverRequests[0], reason: "Hoca notu" }],
-  ids,
+  [{ ...serverRequests[0], reason: "Hoca notu", status: "approved" }],
 );
 if (reasonUpdate[0]?.reason !== "Hoca notu" || reasonUpdate[0]?.status !== "pending") {
   throw new Error("Expected client reason update with server status kept");

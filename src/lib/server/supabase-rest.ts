@@ -101,6 +101,60 @@ export async function upsertSupabaseSessionStatus(sessionId: string, status: str
   });
 }
 
+/** Atomically create pending postpone request + set session postpone_pending. */
+export async function applyStudentPostponeRpc(input: {
+  sessionId: string;
+  requestId: string;
+  studentId: string;
+  reason?: string;
+  createdAt?: string;
+}) {
+  await request<unknown>("rpc/apply_student_postpone", {
+    method: "POST",
+    body: JSON.stringify({
+      p_session_id: input.sessionId,
+      p_request_id: input.requestId,
+      p_student_id: input.studentId,
+      p_reason: input.reason ?? "",
+      p_created_at: input.createdAt ?? new Date().toISOString(),
+    }),
+  });
+}
+
+/** Atomically delete postpone request + set session upcoming. */
+export async function withdrawStudentPostponeRpc(input: {
+  sessionId: string;
+  requestId: string;
+  studentId: string;
+}) {
+  await request<unknown>("rpc/withdraw_student_postpone", {
+    method: "POST",
+    body: JSON.stringify({
+      p_session_id: input.sessionId,
+      p_request_id: input.requestId,
+      p_student_id: input.studentId,
+    }),
+  });
+}
+
+/** Atomically review pending postpone + set session status. */
+export async function reviewStudentPostponeRpc(input: {
+  sessionId: string;
+  studentId: string;
+  requestStatus: "approved" | "rejected";
+  sessionStatus: string;
+}) {
+  await request<unknown>("rpc/review_student_postpone", {
+    method: "POST",
+    body: JSON.stringify({
+      p_session_id: input.sessionId,
+      p_student_id: input.studentId,
+      p_status: input.requestStatus,
+      p_session_status: input.sessionStatus,
+    }),
+  });
+}
+
 /** Permanently remove one student and all dependent records. */
 export async function deleteSupabaseStudent(studentId: string) {
   const filter = encodeURIComponent(studentId);
@@ -305,26 +359,20 @@ function studentRow(student: Student, archived: boolean) {
   };
 }
 
-export async function writeSupabaseSnapshot(snapshot: Pick<StudioState, "students" | "archivedStudents" | "sessions" | "postponeRequests" | "customGroups">) {
+export async function writeSupabaseSnapshot(
+  snapshot: Pick<StudioState, "students" | "archivedStudents" | "sessions" | "postponeRequests" | "customGroups">,
+  options?: {
+    /** full = upsert all (server-owned normalize). studioPost = students/groups + new sessions + reason patches only. */
+    mode?: "full" | "studioPost";
+    previousSessionIds?: Set<string>;
+    previousPostponeById?: Map<string, { reason: string }>;
+  },
+) {
+  const mode = options?.mode ?? "full";
   const students = [
     ...snapshot.students.map((student) => studentRow(student, false)),
     ...snapshot.archivedStudents.map((student) => studentRow(student, true)),
   ];
-  const sessions = snapshot.sessions.map((session) => ({
-    id: session.id,
-    student_id: session.studentId,
-    group_id: session.groupId,
-    session_date: session.date,
-    status: session.status,
-  }));
-  const postponeRequests = snapshot.postponeRequests.map((request) => ({
-    id: request.id,
-    student_id: request.studentId,
-    session_id: request.sessionId,
-    reason: request.reason,
-    status: request.status,
-    created_at: request.createdAt,
-  }));
   const customGroups = snapshot.customGroups.map((group) => ({
     id: group.id,
     days: group.days,
@@ -337,6 +385,7 @@ export async function writeSupabaseSnapshot(snapshot: Pick<StudioState, "student
   // sessions; sending them as one request can be rejected by the proxy and
   // leaves the preceding student upsert committed while sessions are lost.
   const upsert = async (table: string, rows: SupabaseRow[], conflict: string) => {
+    if (rows.length === 0) return;
     const chunkSize = 100;
     for (let offset = 0; offset < rows.length; offset += chunkSize) {
       await request<SupabaseRow[]>(`${table}?on_conflict=${conflict}`, {
@@ -348,7 +397,50 @@ export async function writeSupabaseSnapshot(snapshot: Pick<StudioState, "student
   };
 
   await upsert("students", students, "id");
+  await upsert("custom_groups", customGroups, "id");
+
+  if (mode === "studioPost") {
+    const previousIds = options?.previousSessionIds ?? new Set<string>();
+    const newSessions = snapshot.sessions
+      .filter((session) => !previousIds.has(session.id))
+      .map((session) => ({
+        id: session.id,
+        student_id: session.studentId,
+        group_id: session.groupId,
+        session_date: session.date,
+        status: session.status,
+      }));
+    await upsert("sessions", newSessions, "id");
+
+    const previousPostpone = options?.previousPostponeById ?? new Map();
+    for (const requestRow of snapshot.postponeRequests) {
+      const previous = previousPostpone.get(requestRow.id);
+      if (!previous) continue;
+      if ((previous.reason ?? "") === (requestRow.reason ?? "")) continue;
+      await request<unknown>(`postpone_requests?id=eq.${encodeURIComponent(requestRow.id)}`, {
+        method: "PATCH",
+        headers: { Prefer: "return=minimal" },
+        body: JSON.stringify({ reason: requestRow.reason ?? "" }),
+      });
+    }
+    return;
+  }
+
+  const sessions = snapshot.sessions.map((session) => ({
+    id: session.id,
+    student_id: session.studentId,
+    group_id: session.groupId,
+    session_date: session.date,
+    status: session.status,
+  }));
+  const postponeRequests = snapshot.postponeRequests.map((requestRow) => ({
+    id: requestRow.id,
+    student_id: requestRow.studentId,
+    session_id: requestRow.sessionId,
+    reason: requestRow.reason,
+    status: requestRow.status,
+    created_at: requestRow.createdAt,
+  }));
   await upsert("sessions", sessions, "id");
   await upsert("postpone_requests", postponeRequests, "id");
-  await upsert("custom_groups", customGroups, "id");
 }

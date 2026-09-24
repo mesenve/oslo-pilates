@@ -66,48 +66,43 @@ function mergeById<T extends { id: string }>(current: T[] = [], incoming: T[] = 
 }
 
 /**
- * Timetable rebuilds may add/remove session rows from the client, but attendance
- * and postpone outcomes live on the server (/api/sessions/status). Never let a
- * stale admin tab clobber those statuses.
+ * Session create/delete/status for attendance+postpone are owned by
+ * /api/sessions/status (atomic RPCs). Studio POST may only insert brand-new
+ * session rows (new student schedules) and must never change existing status.
  */
-function mergeSessionsKeepServerStatus<
+function mergeSessionsServerLocked<
   T extends { id: string; studentId: string; status?: string },
->(current: T[] = [], incoming: T[] = [], incomingStudentIds: Set<string>) {
+>(current: T[] = [], incoming: T[] = []) {
   const currentById = new Map(current.map((session) => [session.id, session]));
-  const nextForStudents = incoming.map((session) => {
-    const existing = currentById.get(session.id);
-    if (!existing) return session;
-    return { ...session, status: existing.status };
-  });
-  return [
-    ...current.filter((session) => !incomingStudentIds.has(session.studentId)),
-    ...nextForStudents,
-  ];
+  const newOnes = incoming.filter((session) => !currentById.has(session.id));
+  return [...current, ...newOnes];
 }
 
 /**
- * Keep server-only postpone rows the client never saw. Prefer server status;
- * allow client to update reason on the same id (admin note edits).
+ * Postpone create/delete/status are owned by /api/sessions/status.
+ * Studio POST may only update reason text on rows that already exist server-side.
  */
+function mergePostponeServerLocked<
+  T extends { id: string; studentId: string; reason?: string; status?: string },
+>(current: T[] = [], incoming: T[] = []) {
+  const incomingById = new Map(incoming.map((request) => [request.id, request]));
+  return current.map((request) => {
+    const client = incomingById.get(request.id);
+    if (!client) return request;
+    return { ...request, reason: client.reason ?? request.reason };
+  });
+}
+
+function mergeSessionsKeepServerStatus<
+  T extends { id: string; studentId: string; status?: string },
+>(current: T[] = [], incoming: T[] = [], _incomingStudentIds?: Set<string>) {
+  return mergeSessionsServerLocked(current, incoming);
+}
+
 function mergePostponePreferServer<
   T extends { id: string; studentId: string; reason?: string; status?: string },
->(current: T[] = [], incoming: T[] = [], incomingStudentIds: Set<string>) {
-  const kept = current.filter((request) => !incomingStudentIds.has(request.studentId));
-  const serverForStudents = current.filter((request) =>
-    incomingStudentIds.has(request.studentId),
-  );
-  const serverById = new Map(serverForStudents.map((request) => [request.id, request]));
-  const incomingById = new Map(incoming.map((request) => [request.id, request]));
-  const ids = new Set([...serverById.keys(), ...incomingById.keys()]);
-  const merged = [...ids].map((id) => {
-    const server = serverById.get(id);
-    const client = incomingById.get(id);
-    if (server && client) {
-      return { ...server, reason: client.reason ?? server.reason };
-    }
-    return (server ?? client)!;
-  });
-  return [...kept, ...merged];
+>(current: T[] = [], incoming: T[] = [], _incomingStudentIds?: Set<string>) {
+  return mergePostponeServerLocked(current, incoming);
 }
 
 function normalizeFutureAttendanceStatuses(snapshot: Record<string, unknown>) {
@@ -190,7 +185,14 @@ export async function readStudioSnapshot(): Promise<StudioSnapshotResponse> {
   return { configured: true, snapshot };
 }
 
-export async function writeStudioSnapshot(snapshot: StudioSnapshotResponse) {
+export async function writeStudioSnapshot(
+  snapshot: StudioSnapshotResponse,
+  options?: {
+    mode?: "full" | "studioPost";
+    previousSessionIds?: Set<string>;
+    previousPostponeById?: Map<string, { reason: string }>;
+  },
+) {
   if (!isSupabaseConfigured()) {
     throw new Error("Supabase yapılandırılmadı.");
   }
@@ -202,13 +204,16 @@ export async function writeStudioSnapshot(snapshot: StudioSnapshotResponse) {
       postponeRequests?: Parameters<typeof writeSupabaseSnapshot>[0]["postponeRequests"];
       customGroups?: Parameters<typeof writeSupabaseSnapshot>[0]["customGroups"];
     };
-    await writeSupabaseSnapshot({
-      students: value.students ?? [],
-      archivedStudents: value.archivedStudents ?? [],
-      sessions: value.sessions ?? [],
-      postponeRequests: value.postponeRequests ?? [],
-      customGroups: value.customGroups ?? [],
-    });
+    await writeSupabaseSnapshot(
+      {
+        students: value.students ?? [],
+        archivedStudents: value.archivedStudents ?? [],
+        sessions: value.sessions ?? [],
+        postponeRequests: value.postponeRequests ?? [],
+        customGroups: value.customGroups ?? [],
+      },
+      options,
+    );
     return;
   }
 }
@@ -347,10 +352,22 @@ export async function POST(request: Request) {
         ),
         customGroups: [...(current.customGroups ?? []), ...groupsCreatedForOwnedStudents],
       };
-      await writeStudioSnapshot({
-        configured: true,
-        snapshot: savedSnapshot,
-      });
+      await writeStudioSnapshot(
+        {
+          configured: true,
+          snapshot: savedSnapshot,
+        },
+        {
+          mode: "studioPost",
+          previousSessionIds: new Set((current.sessions ?? []).map((session) => session.id)),
+          previousPostponeById: new Map(
+            (current.postponeRequests ?? []).map((request) => [
+              request.id,
+              { reason: request.reason ?? "" },
+            ]),
+          ),
+        },
+      );
       return NextResponse.json({ ok: true, revision: snapshotRevision(savedSnapshot) });
     }
 
@@ -413,7 +430,16 @@ export async function POST(request: Request) {
       snapshot: savedSnapshot,
     };
 
-    await writeStudioSnapshot(next);
+    await writeStudioSnapshot(next, {
+      mode: "studioPost",
+      previousSessionIds: new Set((currentValue.sessions ?? []).map((session) => session.id)),
+      previousPostponeById: new Map(
+        (currentValue.postponeRequests ?? []).map((request) => [
+          request.id,
+          { reason: request.reason ?? "" },
+        ]),
+      ),
+    });
     return NextResponse.json({ ok: true, revision: snapshotRevision(savedSnapshot) });
   } catch {
     return NextResponse.json(
