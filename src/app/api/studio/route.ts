@@ -65,15 +65,49 @@ function mergeById<T extends { id: string }>(current: T[] = [], incoming: T[] = 
   ];
 }
 
-function mergeStudentRows<T extends { studentId: string }>(
-  current: T[] = [],
-  incoming: T[] = [],
-  incomingStudentIds: Set<string>,
-) {
+/**
+ * Timetable rebuilds may add/remove session rows from the client, but attendance
+ * and postpone outcomes live on the server (/api/sessions/status). Never let a
+ * stale admin tab clobber those statuses.
+ */
+function mergeSessionsKeepServerStatus<
+  T extends { id: string; studentId: string; status?: string },
+>(current: T[] = [], incoming: T[] = [], incomingStudentIds: Set<string>) {
+  const currentById = new Map(current.map((session) => [session.id, session]));
+  const nextForStudents = incoming.map((session) => {
+    const existing = currentById.get(session.id);
+    if (!existing) return session;
+    return { ...session, status: existing.status };
+  });
   return [
-    ...current.filter((item) => !incomingStudentIds.has(item.studentId)),
-    ...incoming,
+    ...current.filter((session) => !incomingStudentIds.has(session.studentId)),
+    ...nextForStudents,
   ];
+}
+
+/**
+ * Keep server-only postpone rows the client never saw. Prefer server status;
+ * allow client to update reason on the same id (admin note edits).
+ */
+function mergePostponePreferServer<
+  T extends { id: string; studentId: string; reason?: string; status?: string },
+>(current: T[] = [], incoming: T[] = [], incomingStudentIds: Set<string>) {
+  const kept = current.filter((request) => !incomingStudentIds.has(request.studentId));
+  const serverForStudents = current.filter((request) =>
+    incomingStudentIds.has(request.studentId),
+  );
+  const serverById = new Map(serverForStudents.map((request) => [request.id, request]));
+  const incomingById = new Map(incoming.map((request) => [request.id, request]));
+  const ids = new Set([...serverById.keys(), ...incomingById.keys()]);
+  const merged = [...ids].map((id) => {
+    const server = serverById.get(id);
+    const client = incomingById.get(id);
+    if (server && client) {
+      return { ...server, reason: client.reason ?? server.reason };
+    }
+    return (server ?? client)!;
+  });
+  return [...kept, ...merged];
 }
 
 function normalizeFutureAttendanceStatuses(snapshot: Record<string, unknown>) {
@@ -251,12 +285,24 @@ export async function POST(request: Request) {
       existing.snapshot && typeof existing.snapshot === "object"
         ? existing.snapshot
         : {};
+    const currentRevision = snapshotRevision(currentSnapshot);
+    // Stale admin tabs must not overwrite fresher DB state (e.g. a postpone
+    // that landed via /api/sessions/status while this tab was idle).
+    if (body.revision && body.revision !== currentRevision) {
+      return NextResponse.json(
+        {
+          error: "Veri başka bir yerden güncellendi. Güncel veri yükleniyor.",
+          revision: currentRevision,
+        },
+        { status: 409 },
+      );
+    }
     if (user.role === "instructor") {
       const current = currentSnapshot as {
         students?: Array<{ id: string; instructorId: string; groupId?: string }>;
         archivedStudents?: Array<{ id: string; instructorId: string }>;
-        sessions?: Array<{ studentId: string }>;
-        postponeRequests?: Array<{ studentId: string }>;
+        sessions?: Array<{ id: string; studentId: string; status?: string }>;
+        postponeRequests?: Array<{ id: string; studentId: string; reason?: string; status?: string }>;
         customGroups?: Array<{ id: string }>;
       };
       const incoming = body.snapshot as typeof current;
@@ -289,8 +335,16 @@ export async function POST(request: Request) {
         ...current,
         students: mergedStudents,
         archivedStudents: current.archivedStudents,
-        sessions: mergeStudentRows(current.sessions, incoming.sessions, incomingOwnedIds),
-        postponeRequests: mergeStudentRows(current.postponeRequests, incoming.postponeRequests, incomingOwnedIds),
+        sessions: mergeSessionsKeepServerStatus(
+          current.sessions,
+          incoming.sessions,
+          incomingOwnedIds,
+        ),
+        postponeRequests: mergePostponePreferServer(
+          current.postponeRequests,
+          incoming.postponeRequests,
+          incomingOwnedIds,
+        ),
         customGroups: [...(current.customGroups ?? []), ...groupsCreatedForOwnedStudents],
       };
       await writeStudioSnapshot({
@@ -328,34 +382,39 @@ export async function POST(request: Request) {
       ...incomingArchived.map((student) => student.id),
     ]);
     const currentValue = currentSnapshot as {
-      sessions?: Array<{ id: string; studentId: string }>;
-      postponeRequests?: Array<{ id: string; studentId: string }>;
+      sessions?: Array<{ id: string; studentId: string; status?: string }>;
+      postponeRequests?: Array<{ id: string; studentId: string; reason?: string; status?: string }>;
       customGroups?: Array<{ id: string }>;
     };
     const incomingValue = body.snapshot as {
-      sessions?: Array<{ id: string; studentId: string }>;
-      postponeRequests?: Array<{ id: string; studentId: string }>;
+      sessions?: Array<{ id: string; studentId: string; status?: string }>;
+      postponeRequests?: Array<{ id: string; studentId: string; reason?: string; status?: string }>;
       customGroups?: Array<{ id: string }>;
+    };
+    const savedSnapshot = {
+      ...currentSnapshot,
+      ...body.snapshot,
+      students: mergedStudents,
+      archivedStudents: mergedArchivedStudents,
+      sessions: mergeSessionsKeepServerStatus(
+        currentValue.sessions,
+        incomingValue.sessions,
+        incomingStudentIds,
+      ),
+      postponeRequests: mergePostponePreferServer(
+        currentValue.postponeRequests,
+        incomingValue.postponeRequests,
+        incomingStudentIds,
+      ),
+      customGroups: mergeById(currentValue.customGroups, incomingValue.customGroups),
     };
     const next = {
       configured: true,
-      snapshot: {
-        ...currentSnapshot,
-        ...body.snapshot,
-        students: mergedStudents,
-        archivedStudents: mergedArchivedStudents,
-        sessions: mergeStudentRows(currentValue.sessions, incomingValue.sessions, incomingStudentIds),
-        postponeRequests: mergeStudentRows(
-          currentValue.postponeRequests,
-          incomingValue.postponeRequests,
-          incomingStudentIds,
-        ),
-        customGroups: mergeById(currentValue.customGroups, incomingValue.customGroups),
-      },
+      snapshot: savedSnapshot,
     };
 
     await writeStudioSnapshot(next);
-    return NextResponse.json({ ok: true });
+    return NextResponse.json({ ok: true, revision: snapshotRevision(savedSnapshot) });
   } catch {
     return NextResponse.json(
       { error: "Stüdyo verisi kaydedilemedi." },

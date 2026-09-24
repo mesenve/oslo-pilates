@@ -269,14 +269,24 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
     const onVisible = () => {
       if (document.visibilityState === "visible") syncRemoteState();
     };
+    const onConflict = () => {
+      window.dispatchEvent(
+        new CustomEvent("studio:persistence-error", {
+          detail: "Veri başka bir yerden güncellendi. Güncel veri yükleniyor.",
+        }),
+      );
+      syncRemoteState();
+    };
     window.addEventListener("focus", syncRemoteState);
     document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("studio:persistence-conflict", onConflict);
 
     return () => {
       cancelled = true;
       window.clearInterval(interval);
       window.removeEventListener("focus", syncRemoteState);
       document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("studio:persistence-conflict", onConflict);
     };
   }, [ready, state.user, refreshRemoteState]);
 
@@ -559,7 +569,7 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
               ? { ...item, status: "attend_pending" }
               : item,
           ),
-        }));
+        }), { persist: false });
       } catch {
         // Sunucu kaydı olmadan yerel durum güncellenmez.
       }
@@ -607,7 +617,7 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
               ? { ...session, status: "attended" }
               : session,
           ),
-        }));
+        }), { persist: false });
       } catch {
         // Onay sunucuya yazılamazsa yerel durum değişmez.
       }
@@ -655,7 +665,7 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
               ? { ...session, status: "upcoming" }
               : session,
           ),
-        }));
+        }), { persist: false });
       } catch {
         // Geri alma sunucuya yazılamazsa yerel durum değişmez.
       }
@@ -682,7 +692,7 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
         item.id === sessionId ? { ...item, status: "postpone_pending" } : item,
       ),
       postponeRequests: [request, ...current.postponeRequests.filter((item) => item.id !== request.id)],
-    }));
+    }), { persist: false });
   }, []);
 
   const withdrawPostpone = useCallback(async (sessionId: string) => {
@@ -702,7 +712,7 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
       postponeRequests: current.postponeRequests.filter(
         (item) => !(item.sessionId === sessionId && item.status === "pending"),
       ),
-    }));
+    }), { persist: false });
   }, []);
 
   const requestRenewal = useCallback(async (requestedStartDate?: string) => {
@@ -719,7 +729,7 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
       students: current.students.map((student) =>
         student.id === current.user?.id ? { ...student, renewalRequest: data.request } : student,
       ),
-    }));
+    }), { persist: false });
     return { error: null };
   }, []);
 
@@ -735,7 +745,7 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
     setStudioState((current) => ({
       ...current,
       students: current.students.map((student) => student.id === studentId ? { ...student, renewalRequest: data.request } : student),
-    }));
+    }), { persist: false });
     return { error: null };
   }, []);
 
@@ -760,7 +770,7 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
         sessions: state.sessions.map((session) =>
           session.id === request.sessionId ? { ...session, status: "postponed" } : session,
         ),
-      }));
+      }), { persist: false });
     })();
   }, []);
 
@@ -868,7 +878,7 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
             ...current.postponeRequests,
           ],
         };
-        });
+        }, { persist: false });
       })();
     },
     [],

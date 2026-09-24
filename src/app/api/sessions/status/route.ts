@@ -107,10 +107,14 @@ export async function POST(request: Request) {
   const pendingPostpone = snapshot.postponeRequests?.find(
     (item) => item.sessionId === session.id && item.status === "pending",
   );
-  const approvingPostpone = body.status === "postponed" &&
-    session.status === "postpone_pending" &&
-    Boolean(pendingPostpone);
-  if (session.date > todayISO() && body.status !== "upcoming" && !approvingPostpone) {
+  // Pending request is source of truth: session can still be "upcoming" if a
+  // later snapshot write raced and dropped postpone_pending.
+  const approvingPostpone = body.status === "postponed" && Boolean(pendingPostpone);
+  if (
+    session.date > todayISO() &&
+    body.status !== "upcoming" &&
+    !approvingPostpone
+  ) {
     return NextResponse.json(
       { error: "Gelecekteki dersler bekleniyor olarak kalır." },
       { status: 400 },

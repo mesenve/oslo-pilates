@@ -54,19 +54,28 @@ export function setStudioState(
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ snapshot, revision: studioSnapshotRevision }),
         });
-        const data = (await response.json().catch(() => null)) as { revision?: string } | null;
+        const data = (await response.json().catch(() => null)) as {
+          revision?: string;
+          error?: string;
+        } | null;
         if (response.ok) {
           persistenceHealthy = true;
           if (data?.revision) studioSnapshotRevision = data.revision;
+          return;
         }
+        persistenceHealthy = false;
         if (response.status === 409) {
+          // Pause writes until the provider refetches fresher server state.
           studioSnapshotPersistenceEnabled = false;
-          persistenceHealthy = false;
+          if (data?.revision) studioSnapshotRevision = data.revision;
+          window.dispatchEvent(
+            new CustomEvent("studio:persistence-conflict", {
+              detail: data?.error ?? "Veri başka bir yerden güncellendi.",
+            }),
+          );
+          return;
         }
-        if (!response.ok && typeof window !== "undefined") {
-          persistenceHealthy = false;
-          window.dispatchEvent(new CustomEvent("studio:persistence-error"));
-        }
+        window.dispatchEvent(new CustomEvent("studio:persistence-error"));
       }).catch(() => {
         persistenceHealthy = false;
         if (typeof window !== "undefined") {
