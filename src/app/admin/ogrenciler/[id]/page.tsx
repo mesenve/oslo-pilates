@@ -341,7 +341,7 @@ export default function StudentDetailPage() {
               onClick={async () => {
                 setResendStatus("sending");
                 setResendError(null);
-                const result = resendStudentInvite(student.id);
+                const result = await resendStudentInvite(student.id);
                 if (result.passwordResetOnly) {
                   try {
                     const response = await fetch("/api/auth/student/forgot", {
@@ -506,6 +506,13 @@ export default function StudentDetailPage() {
       </section>
 
       <PostponeUsedCard
+        key={
+          postponeUsedDateInPackage(
+            student,
+            visiblePostponeRequests,
+            visibleSessions,
+          ) ?? student.postponeLessonUsedAt ?? "unused"
+        }
         used={student.postponeLessonUsed ?? false}
         usedAt={
           postponeUsedDateInPackage(
@@ -563,9 +570,10 @@ export default function StudentDetailPage() {
           body="Bu öğrenciyi silmek istediğine emin misin?"
           confirmLabel="Sil"
           onCancel={() => setConfirmDelete(false)}
-          onConfirm={() => {
-            archiveStudent(student.id);
-            router.replace("/admin/arsiv");
+          onConfirm={async () => {
+            if (await archiveStudent(student.id)) {
+              router.replace("/admin/arsiv");
+            }
           }}
         />
       ) : null}
@@ -659,10 +667,6 @@ function PostponeUsedCard({
   onChange: (used: boolean, usedAt?: string) => void;
 }) {
   const [dateValue, setDateValue] = useState(usedAt || todayISO());
-
-  useEffect(() => {
-    if (usedAt) setDateValue(usedAt);
-  }, [usedAt]);
 
   return (
     <Card className="space-y-3 p-4">

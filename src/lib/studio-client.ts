@@ -1,18 +1,13 @@
 import type { StudioState } from "@/types/studio";
 
-export type RemoteStudioSnapshot = Pick<
+export type RemoteStudioData = Pick<
   StudioState,
   "students" | "archivedStudents" | "sessions" | "postponeRequests" | "customGroups"
 > & {
   blockedEmails?: string[];
 };
 
-export type RemoteStudioResult = {
-  snapshot: RemoteStudioSnapshot;
-  revision?: string;
-};
-
-export async function fetchStudioSnapshot(input?: {
+export async function fetchStudioData(input?: {
   studentId?: string;
   includeBlockedEmails?: boolean;
 }) {
@@ -25,10 +20,9 @@ export async function fetchStudioSnapshot(input?: {
   const response = await fetch(`/api/studio${query ? `?${query}` : ""}`);
   const data = (await response.json()) as {
     configured?: boolean;
-    snapshot?: RemoteStudioSnapshot | null;
-    revision?: string;
+    data?: RemoteStudioData | null;
   };
 
-  if (!response.ok || !data.configured || !data.snapshot) return null;
-  return { snapshot: data.snapshot, revision: data.revision };
+  if (!response.ok || !data.configured || !data.data) return null;
+  return data.data;
 }

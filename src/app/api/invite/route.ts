@@ -9,7 +9,7 @@ import { isInviteValid } from "@/lib/student-auth";
 import type { Session, Student } from "@/types/studio";
 import { NextResponse } from "next/server";
 import { getSessionUser } from "@/lib/server/session";
-import { readStudioSnapshot } from "@/app/api/studio/route";
+import { readSupabaseStudioData } from "@/lib/server/supabase-rest";
 import { canManageStudent } from "@/lib/access";
 
 type InviteRequestBody = {
@@ -26,15 +26,14 @@ async function findInviteOrRecoverFromStudio(token: string): Promise<StoredInvit
   const stored = await getInviteByToken(token);
   if (stored) return stored;
 
-  const state = await readStudioSnapshot();
-  const snapshot = state.snapshot as { students?: Student[]; sessions?: Session[] } | null;
-  const student = snapshot?.students?.find((item) => item.inviteToken === token);
+  const data = await readSupabaseStudioData() as { students?: Student[]; sessions?: Session[] } | null;
+  const student = data?.students?.find((item) => item.inviteToken === token);
   if (!student?.inviteExpiresAt) return null;
 
   const recovered = {
     token,
     student,
-    sessions: (snapshot?.sessions ?? []).filter((session) => session.studentId === student.id),
+    sessions: (data?.sessions ?? []).filter((session) => session.studentId === student.id),
     expiresAt: student.inviteExpiresAt,
   };
   await saveInvite(recovered);
@@ -110,8 +109,8 @@ export async function POST(request: Request) {
     );
   }
 
-  const current = await readStudioSnapshot();
-  const currentStudents = ((current.snapshot as { students?: Student[] } | null)?.students ?? []);
+  const current = await readSupabaseStudioData();
+  const currentStudents = current?.students ?? [];
   if (!canManageStudent(user, student.id, currentStudents)) {
     return NextResponse.json({ error: "Bu öğrenci için davet gönderme yetkin yok." }, { status: 403 });
   }

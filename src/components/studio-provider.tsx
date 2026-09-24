@@ -25,13 +25,10 @@ import {
   fetchActivatedInvites,
   loginStudentAccount,
 } from "@/lib/invite-client";
-import { fetchStudioSnapshot } from "@/lib/studio-client";
+import { fetchStudioData } from "@/lib/studio-client";
 import {
-  enableStudioSnapshotPersistence,
-  flushStudioSnapshotPersistence,
-  getServerStudioSnapshot,
-  getStudioSnapshot,
-  setStudioSnapshotRevision,
+  getServerStudioState,
+  getStudioState,
   setStudioState,
   subscribeStudio,
 } from "@/lib/store";
@@ -88,7 +85,7 @@ type StudioContextValue = {
     password: string,
     confirmPassword: string,
   ) => Promise<{ error: string | null }>;
-  resendStudentInvite: (studentId: string) => StudentActionResult;
+  resendStudentInvite: (studentId: string) => Promise<StudentActionResult>;
   changeStaffPassword: (
     staffId: string,
     currentPassword: string,
@@ -115,7 +112,7 @@ type StudioContextValue = {
   ) => Promise<void>;
   setPostponeRequestReason: (requestId: string, reason: string) => Promise<void>;
   addStudent: (input: NewStudentInput) => Promise<StudentActionResult>;
-  archiveStudent: (studentId: string) => void;
+  archiveStudent: (studentId: string) => Promise<boolean>;
   restoreStudent: (
     studentId: string,
     input: NewStudentInput,
@@ -133,12 +130,38 @@ const StudioContext = createContext<StudioContextValue | null>(null);
 
 const emptySubscribe = () => () => {};
 
+async function saveStudentBundle(
+  mode: "create" | "update" | "restore",
+  student: Student,
+  sessions: Session[],
+  customGroup?: StudioState["customGroups"][number],
+) {
+  const response = await fetch("/api/students", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      action: "save",
+      mode,
+      student,
+      sessions,
+      customGroup,
+    }),
+  });
+  const data = (await response.json().catch(() => null)) as {
+    error?: string;
+    student?: Student;
+  } | null;
+  return response.ok && data?.student
+    ? { error: null, student: data.student }
+    : { error: data?.error ?? "Kayıt sunucuya yazılamadı.", student: null };
+}
+
 export function StudioProvider({ children }: { children: React.ReactNode }) {
   const ready = useSyncExternalStore(emptySubscribe, () => true, () => false);
   const state = useSyncExternalStore(
     subscribeStudio,
-    getStudioSnapshot,
-    getServerStudioSnapshot,
+    getStudioState,
+    getServerStudioState,
   );
   const [sessionChecked, setSessionChecked] = useState(false);
   const [studioLoad, setStudioLoad] = useState<{
@@ -193,7 +216,7 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
     user: NonNullable<StudioState["user"]>,
     isCancelled: () => boolean = () => false,
   ) => {
-    const isStale = () => isCancelled() || getStudioSnapshot().user?.id !== user.id;
+    const isStale = () => isCancelled() || getStudioState().user?.id !== user.id;
     const markLoadError = () => setStudioLoad((current) =>
       current?.userId === user.id && current.status === "ready"
         ? current
@@ -215,29 +238,24 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
       ).catch(() => []);
       const studioPromise =
         user.role === "student"
-          ? fetchStudioSnapshot({ studentId: user.id, includeBlockedEmails: false })
+          ? fetchStudioData({ studentId: user.id, includeBlockedEmails: false })
           : isStaffRole(user.role)
-            ? fetchStudioSnapshot()
+            ? fetchStudioData()
             : Promise.resolve(null);
 
-      // The dashboard only needs the studio snapshot. Do not make its first
+      // The dashboard only needs studio data. Do not make its first
       // count wait for attendance-mark or invite-activation requests.
-      const remoteStudioResult = await studioPromise;
-      const remoteStudio = remoteStudioResult?.snapshot ?? null;
+      const remoteStudio = await studioPromise;
       if (isStale()) return;
 
-      if (remoteStudioResult && remoteStudio) {
-        setStudioSnapshotRevision(remoteStudioResult.revision);
-        // Remote hydration must never enqueue the fetched (possibly older)
-        // snapshot as a new write. User mutations are persisted separately.
+      if (remoteStudio) {
         setStudioState((current) => ({
           ...current,
           ...remoteStudio,
           user: current.user,
           staffPasswords: current.staffPasswords,
           studentPasswords: current.studentPasswords,
-        }), { persist: false });
-        enableStudioSnapshotPersistence();
+        }));
         setStudioLoad({ userId: user.id, status: "ready" });
       } else {
         markLoadError();
@@ -253,7 +271,7 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
           next = { ...next, sessions: mergeAttendanceMarks(next.sessions, marks) };
         }
         return next;
-      }, { persist: false });
+      });
     } catch {
       if (!isStale()) markLoadError();
     }
@@ -273,24 +291,14 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
     const onVisible = () => {
       if (document.visibilityState === "visible") syncRemoteState();
     };
-    const onConflict = () => {
-      window.dispatchEvent(
-        new CustomEvent("studio:persistence-error", {
-          detail: "Veri başka bir yerden güncellendi. Güncel veri yükleniyor.",
-        }),
-      );
-      syncRemoteState();
-    };
     window.addEventListener("focus", syncRemoteState);
     document.addEventListener("visibilitychange", onVisible);
-    window.addEventListener("studio:persistence-conflict", onConflict);
 
     return () => {
       cancelled = true;
       window.clearInterval(interval);
       window.removeEventListener("focus", syncRemoteState);
       document.removeEventListener("visibilitychange", onVisible);
-      window.removeEventListener("studio:persistence-conflict", onConflict);
     };
   }, [ready, state.user, refreshRemoteState]);
 
@@ -351,8 +359,8 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
 
   const loginStudent = useCallback(async (email: string, password: string) => {
     const normalizedEmail = email.trim().toLowerCase();
-    const snapshot = getStudioSnapshot();
-    const localStudent = snapshot.students.find(
+    const studio = getStudioState();
+    const localStudent = studio.students.find(
       (item) => item.email.toLowerCase() === normalizedEmail,
     );
 
@@ -364,7 +372,7 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
             "Hesabın henüz aktif değil. E-postadaki davet linkine tıklayarak şifreni oluştur.",
         };
       }
-      const stored = getStudentPassword(localStudent.id, snapshot.studentPasswords);
+      const stored = getStudentPassword(localStudent.id, studio.studentPasswords);
       if (stored && password === stored) {
         setStudioState((current) => ({
           ...current,
@@ -406,8 +414,8 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
         return { error: validationError };
       }
 
-      const snapshot = getStudioSnapshot();
-      const localStudent = snapshot.students.find(
+      const studio = getStudioState();
+      const localStudent = studio.students.find(
         (item) => item.inviteToken === token && item.accountStatus === "invited",
       );
 
@@ -464,67 +472,63 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
     [],
   );
 
-  const resendStudentInvite = useCallback((studentId: string) => {
-    let error: string | null = "Davet gönderilemedi.";
-    let id: string | null = null;
-    let nextInviteUrl: string | undefined;
-    let nextInviteToken: string | undefined;
-    let nextInviteExpiresAt: string | undefined;
-    let nextInvitedAt: string | undefined;
-    let passwordResetOnly = false;
-
-    setStudioState((current) => {
-      const student = current.students.find((item) => item.id === studentId);
-      if (
-        !student ||
-        !canManageStudent(current.user, studentId, current.students)
-      ) {
-        return current;
-      }
-
-      // Active students already have a password. Resending a fresh invite used
-      // to demote them and wipe login — send a reset instead (caller emails it).
-      if (student.accountStatus === "active") {
-        error = null;
-        id = student.id;
-        passwordResetOnly = true;
-        return current;
-      }
-
-      const token = createInviteToken();
-      const expiresAt = inviteExpiresAt();
-      const invitedAt = new Date().toISOString();
-      error = null;
-      id = student.id;
-      nextInviteUrl = inviteUrl(token);
-      nextInviteToken = token;
-      nextInviteExpiresAt = expiresAt;
-      nextInvitedAt = invitedAt;
-
+  const resendStudentInvite = useCallback(async (studentId: string) => {
+    const current = getStudioState();
+    const student = current.students.find((item) => item.id === studentId);
+    if (
+      !student ||
+      !canManageStudent(current.user, studentId, current.students)
+    ) {
+      return { error: "Davet gönderilemedi.", id: null };
+    }
+    // Active students already have a password. Resending a fresh invite used
+    // to demote them and wipe login — send a reset instead (caller emails it).
+    if (student.accountStatus === "active") {
       return {
-        ...current,
-        students: current.students.map((item) =>
-          item.id === studentId
-            ? {
-                ...item,
-                accountStatus: "invited",
-                inviteToken: token,
-                inviteExpiresAt: expiresAt,
-                invitedAt,
-              }
-            : item,
-        ),
+        error: null,
+        id: student.id,
+        passwordResetOnly: true,
       };
-    });
+    }
 
+    const token = createInviteToken();
+    const expiresAt = inviteExpiresAt();
+    const invitedAt = new Date().toISOString();
+    const response = await fetch("/api/students", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        action: "invite",
+        studentId,
+        inviteToken: token,
+        inviteExpiresAt: expiresAt,
+        invitedAt,
+      }),
+    });
+    if (!response.ok) return { error: "Davet kaydedilemedi.", id: null };
+
+    setStudioState((state) => ({
+      ...state,
+      students: state.students.map((item) =>
+        item.id === studentId
+          ? {
+              ...item,
+              accountStatus: "invited",
+              inviteToken: token,
+              inviteExpiresAt: expiresAt,
+              invitedAt,
+            }
+          : item,
+      ),
+    }));
     return {
-      error,
-      id,
-      inviteUrl: nextInviteUrl,
-      inviteToken: nextInviteToken,
-      inviteExpiresAt: nextInviteExpiresAt,
-      invitedAt: nextInvitedAt,
-      passwordResetOnly,
+      error: null,
+      id: student.id,
+      inviteUrl: inviteUrl(token),
+      inviteToken: token,
+      inviteExpiresAt: expiresAt,
+      invitedAt,
+      passwordResetOnly: false,
     };
   }, []);
 
@@ -534,7 +538,7 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
     newPassword: string,
     confirmPassword: string,
   ) => {
-    if (getStudioSnapshot().user?.id !== staffId) {
+    if (getStudioState().user?.id !== staffId) {
       return { error: "Bu işlem için yetkin yok.", success: false };
     }
     const response = await fetch("/api/auth/staff/password", {
@@ -554,7 +558,7 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const markAttended = useCallback((sessionId: string) => {
-    const session = getStudioSnapshot().sessions.find((item) => item.id === sessionId);
+    const session = getStudioState().sessions.find((item) => item.id === sessionId);
     if (!session || session.status !== "upcoming") return;
 
     void (async () => {
@@ -573,7 +577,7 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
               ? { ...item, status: "attend_pending" }
               : item,
           ),
-        }), { persist: false });
+        }));
       } catch {
         // Sunucu kaydı olmadan yerel durum güncellenmez.
       }
@@ -582,19 +586,19 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
 
   const approveAttendance = useCallback((sessionIds: string[]) => {
     void (async () => {
-      const snapshot = getStudioSnapshot();
+      const studio = getStudioState();
       const idSet = new Set(sessionIds);
       const allowed = sessionIds.every((sessionId) => {
-        const session = snapshot.sessions.find((item) => item.id === sessionId);
+        const session = studio.sessions.find((item) => item.id === sessionId);
         return (
           session &&
-          canManageStudent(snapshot.user, session.studentId, snapshot.students)
+          canManageStudent(studio.user, session.studentId, studio.students)
         );
       });
       if (!allowed) return;
 
       const targets = sessionIds
-        .map((sessionId) => snapshot.sessions.find((item) => item.id === sessionId))
+        .map((sessionId) => studio.sessions.find((item) => item.id === sessionId))
         .filter(
           (session): session is Session =>
             Boolean(session && session.status === "attend_pending"),
@@ -621,7 +625,7 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
               ? { ...session, status: "attended" }
               : session,
           ),
-        }), { persist: false });
+        }));
       } catch {
         // Onay sunucuya yazılamazsa yerel durum değişmez.
       }
@@ -630,19 +634,19 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
 
   const rejectAttendance = useCallback((sessionIds: string[]) => {
     void (async () => {
-      const snapshot = getStudioSnapshot();
+      const studio = getStudioState();
       const idSet = new Set(sessionIds);
       const allowed = sessionIds.every((sessionId) => {
-        const session = snapshot.sessions.find((item) => item.id === sessionId);
+        const session = studio.sessions.find((item) => item.id === sessionId);
         return (
           session &&
-          canManageStudent(snapshot.user, session.studentId, snapshot.students)
+          canManageStudent(studio.user, session.studentId, studio.students)
         );
       });
       if (!allowed) return;
 
       const targets = sessionIds
-        .map((sessionId) => snapshot.sessions.find((item) => item.id === sessionId))
+        .map((sessionId) => studio.sessions.find((item) => item.id === sessionId))
         .filter(
           (session): session is Session =>
             Boolean(session && session.status === "attend_pending"),
@@ -669,7 +673,7 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
               ? { ...session, status: "upcoming" }
               : session,
           ),
-        }), { persist: false });
+        }));
       } catch {
         // Geri alma sunucuya yazılamazsa yerel durum değişmez.
       }
@@ -685,18 +689,16 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
     if (!response.ok) return false;
     const data = (await response.json().catch(() => null)) as {
       request?: StudioState["postponeRequests"][number];
-      revision?: string;
     } | null;
     const request = data?.request;
     if (!request) return false;
-    setStudioSnapshotRevision(data?.revision);
     setStudioState((current) => ({
       ...current,
       sessions: current.sessions.map((item) =>
         item.id === sessionId ? { ...item, status: "postpone_pending" } : item,
       ),
       postponeRequests: [request, ...current.postponeRequests.filter((item) => item.id !== request.id)],
-    }), { persist: false });
+    }));
     return true;
   }, []);
 
@@ -707,8 +709,6 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
       body: JSON.stringify({ sessionId, status: "upcoming" }),
     });
     if (!response.ok) return;
-    const data = (await response.json().catch(() => null)) as { revision?: string } | null;
-    setStudioSnapshotRevision(data?.revision);
     setStudioState((current) => ({
       ...current,
       sessions: current.sessions.map((item) =>
@@ -717,7 +717,7 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
       postponeRequests: current.postponeRequests.filter(
         (item) => !(item.sessionId === sessionId && item.status === "pending"),
       ),
-    }), { persist: false });
+    }));
   }, []);
 
   const requestRenewal = useCallback(async (requestedStartDate?: string) => {
@@ -726,15 +726,14 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ requestedStartDate: requestedStartDate || undefined }),
     });
-    const data = (await response.json().catch(() => null)) as { error?: string; request?: Student["renewalRequest"]; revision?: string } | null;
+    const data = (await response.json().catch(() => null)) as { error?: string; request?: Student["renewalRequest"] } | null;
     if (!response.ok || !data?.request) return { error: data?.error ?? "Yenileme talebi gönderilemedi." };
-    setStudioSnapshotRevision(data.revision);
     setStudioState((current) => ({
       ...current,
       students: current.students.map((student) =>
         student.id === current.user?.id ? { ...student, renewalRequest: data.request } : student,
       ),
-    }), { persist: false });
+    }));
     return { error: null };
   }, []);
 
@@ -744,18 +743,17 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ studentId, status }),
     });
-    const data = (await response.json().catch(() => null)) as { error?: string; request?: Student["renewalRequest"]; revision?: string } | null;
+    const data = (await response.json().catch(() => null)) as { error?: string; request?: Student["renewalRequest"] } | null;
     if (!response.ok || !data?.request) return { error: data?.error ?? "Yenileme talebi güncellenemedi." };
-    setStudioSnapshotRevision(data.revision);
     setStudioState((current) => ({
       ...current,
       students: current.students.map((student) => student.id === studentId ? { ...student, renewalRequest: data.request } : student),
-    }), { persist: false });
+    }));
     return { error: null };
   }, []);
 
   const approveRequest = useCallback(async (requestId: string) => {
-    const current = getStudioSnapshot();
+    const current = getStudioState();
     const request = current.postponeRequests.find((item) => item.id === requestId);
     if (!request || request.status !== "pending" || !canManageStudent(current.user, request.studentId, current.students)) {
       return false;
@@ -766,8 +764,6 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
       body: JSON.stringify({ sessionId: request.sessionId, status: "postponed" }),
     });
     if (!response.ok) return false;
-    const data = (await response.json().catch(() => null)) as { revision?: string } | null;
-    setStudioSnapshotRevision(data?.revision);
     setStudioState((state) => ({
       ...state,
       postponeRequests: state.postponeRequests.map((item) =>
@@ -776,7 +772,7 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
       sessions: state.sessions.map((session) =>
         session.id === request.sessionId ? { ...session, status: "postponed" } : session,
       ),
-    }), { persist: false });
+    }));
     return true;
   }, []);
 
@@ -785,7 +781,7 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
       sessionId: string,
       outcome: "attended" | "postponed" | "missed" | "upcoming",
     ) => {
-      const current = getStudioSnapshot();
+      const current = getStudioState();
       const session = current.sessions.find((item) => item.id === sessionId);
       if (!session || !canManageStudent(current.user, session.studentId, current.students)) {
         return;
@@ -800,8 +796,6 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
         body: JSON.stringify({ sessionId, status: outcome }),
         });
         if (!response.ok) return;
-        const data = (await response.json().catch(() => null)) as { revision?: string } | null;
-        setStudioSnapshotRevision(data?.revision);
         setStudioState((current) => {
         const session = current.sessions.find((item) => item.id === sessionId);
         if (!session) return current;
@@ -884,7 +878,7 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
             ...current.postponeRequests,
           ],
         };
-        }, { persist: false });
+        });
       })();
     },
     [],
@@ -892,6 +886,17 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
 
   const setPostponeLessonUsed = useCallback(
     async (studentId: string, used: boolean, usedAt?: string) => {
+      const response = await fetch("/api/students", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "postpone-used",
+          studentId,
+          used,
+          usedAt,
+        }),
+      });
+      if (!response.ok) return;
       setStudioState((current) => {
         const student = current.students.find((item) => item.id === studentId);
         if (!student || !canManageStudent(current.user, studentId, current.students)) return current;
@@ -910,14 +915,19 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
               : item,
           ),
         };
-        });
-      await flushStudioSnapshotPersistence();
+      });
     },
     [],
   );
 
   const setPostponeRequestReason = useCallback(
     async (requestId: string, reason: string) => {
+      const response = await fetch("/api/postpone-requests", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ requestId, reason }),
+      });
+      if (!response.ok) return;
       setStudioState((current) => {
         const request = current.postponeRequests.find((item) => item.id === requestId);
         if (
@@ -933,7 +943,6 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
           ),
         };
       });
-      await flushStudioSnapshotPersistence();
     },
     [],
   );
@@ -946,54 +955,52 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
       return { error: "E-posta gerekli. Davet maili gönderilecek.", id: null };
     }
 
-    let error: string | null = null;
-    let id: string | null = null;
-    let nextInviteUrl: string | undefined;
-    setStudioState((current) => {
-      const normalized = normalizeStudentInput(input, current.user);
-      const email = normalized.email.trim().toLowerCase();
-      if (emailTaken(email, current)) {
-        error = "Bu e-posta ile kayıtlı öğrenci var.";
-        return current;
-      }
-
-      const token = createInviteToken();
-      const student = withInvite(
-        studentFromInput(`stu-${Date.now()}`, normalized, email),
-        token,
-      );
-      id = student.id;
-      nextInviteUrl = inviteUrl(token);
-
-      return {
-        ...current,
-        customGroups:
-          input.customGroup && !current.customGroups.some((group) => group.id === input.customGroup!.id)
-            ? [...current.customGroups, input.customGroup]
-            : current.customGroups,
-        students: [student, ...current.students],
-        sessions: [
-          ...current.sessions,
-          ...buildSessionsForStudent(student, {
-            fromPackageStart: true,
-            group: input.customGroup ?? current.customGroups.find((group) => group.id === student.groupId),
-          }),
-        ],
-      };
-    });
-    if (!error) {
-      const persisted = await flushStudioSnapshotPersistence();
-      if (!persisted) {
-        return {
-          error: "Kayıt sunucuya yazılamadı. Form bilgileri korunuyor; bağlantıyı kontrol edip tekrar deneyin.",
-          id: null,
-        };
-      }
+    const current = getStudioState();
+    const normalized = normalizeStudentInput(input, current.user);
+    const email = normalized.email.trim().toLowerCase();
+    if (emailTaken(email, current)) {
+      return { error: "Bu e-posta ile kayıtlı öğrenci var.", id: null };
     }
-    return { error, id, inviteUrl: nextInviteUrl };
+    const token = createInviteToken();
+    const student = withInvite(
+      studentFromInput(`stu-${Date.now()}`, normalized, email),
+      token,
+    );
+    const sessions = buildSessionsForStudent(student, {
+      fromPackageStart: true,
+      group:
+        input.customGroup ??
+        current.customGroups.find((group) => group.id === student.groupId),
+    });
+    const saved = await saveStudentBundle(
+      "create",
+      student,
+      sessions,
+      input.customGroup,
+    );
+    if (saved.error || !saved.student) return { error: saved.error, id: null };
+    const persistedStudent = saved.student;
+
+    setStudioState((state) => ({
+      ...state,
+      customGroups:
+        input.customGroup &&
+        !state.customGroups.some((group) => group.id === input.customGroup!.id)
+          ? [...state.customGroups, input.customGroup]
+          : state.customGroups,
+      students: [persistedStudent, ...state.students],
+      sessions: [...state.sessions, ...sessions],
+    }));
+    return { error: null, id: persistedStudent.id, inviteUrl: inviteUrl(token) };
   }, []);
 
-  const archiveStudent = useCallback((studentId: string) => {
+  const archiveStudent = useCallback(async (studentId: string) => {
+    const response = await fetch("/api/students", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "archive", studentId }),
+    });
+    if (!response.ok) return false;
     setStudioState((current) => {
       const student = current.students.find((item) => item.id === studentId);
       if (!student) return current;
@@ -1007,6 +1014,7 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
             : current.user,
       };
     });
+    return true;
   }, []);
 
   const restoreStudent = useCallback(
@@ -1015,64 +1023,57 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
       if (!name) return { error: "Ad soyad gerekli.", id: null };
       if (!input.groupId) return { error: "Grup seç.", id: null };
 
-      let error: string | null = null;
-      let id: string | null = null;
-      let nextInviteUrl: string | undefined;
-      setStudioState((current) => {
-        const normalized = normalizeStudentInput(input, current.user);
-        const archived = current.archivedStudents.find(
-          (item) => item.id === studentId,
-        );
-        if (!archived) {
-          error = "Arşiv kaydı bulunamadı.";
-          return current;
-        }
-        const email = normalized.email.trim().toLowerCase();
-        if (!email) {
-          error = "E-posta gerekli.";
-          return current;
-        }
-        if (emailTaken(email, current, studentId)) {
-          error = "Bu e-posta ile kayıtlı öğrenci var.";
-          return current;
-        }
-
-        const token = createInviteToken();
-        const student = withInvite(
-          studentFromInput(studentId, normalized, email),
-          token,
-        );
-        id = student.id;
-        nextInviteUrl = inviteUrl(token);
-
-        return {
-          ...current,
-          archivedStudents: current.archivedStudents.filter(
-            (item) => item.id !== studentId,
-          ),
-          students: [student, ...current.students],
-          postponeRequests: current.postponeRequests.filter(
-            (request) => request.studentId !== studentId,
-          ),
-          sessions: [
-            ...current.sessions.filter((session) => session.studentId !== studentId),
-            ...buildSessionsForStudent(student, {
-              fromPackageStart: true,
-              group: input.customGroup ?? current.customGroups.find((group) => group.id === student.groupId),
-            }),
-          ],
-        };
-      });
-      if (!error) {
-        const persisted = await flushStudioSnapshotPersistence();
-        if (!persisted) {
-          return {
-            error: "Kayıt sunucuya yazılamadı. Form bilgileri korunuyor; bağlantıyı kontrol edip tekrar deneyin.",
-            id: null,
-          };
-        }
+      const current = getStudioState();
+      const archived = current.archivedStudents.find(
+        (item) => item.id === studentId,
+      );
+      if (!archived) return { error: "Arşiv kaydı bulunamadı.", id: null };
+      const normalized = normalizeStudentInput(input, current.user);
+      const email = normalized.email.trim().toLowerCase();
+      if (!email) return { error: "E-posta gerekli.", id: null };
+      if (emailTaken(email, current, studentId)) {
+        return { error: "Bu e-posta ile kayıtlı öğrenci var.", id: null };
       }
-      return { error, id, inviteUrl: nextInviteUrl };
+      const token = createInviteToken();
+      const student = withInvite(
+        studentFromInput(studentId, normalized, email),
+        token,
+      );
+      const sessions = buildSessionsForStudent(student, {
+        fromPackageStart: true,
+        group:
+          input.customGroup ??
+          current.customGroups.find((group) => group.id === student.groupId),
+      });
+      const saved = await saveStudentBundle(
+        "restore",
+        student,
+        sessions,
+        input.customGroup,
+      );
+      if (saved.error || !saved.student) return { error: saved.error, id: null };
+      const persistedStudent = saved.student;
+
+      setStudioState((state) => ({
+        ...state,
+        customGroups:
+          input.customGroup &&
+          !state.customGroups.some((group) => group.id === input.customGroup!.id)
+            ? [...state.customGroups, input.customGroup]
+            : state.customGroups,
+        archivedStudents: state.archivedStudents.filter(
+          (item) => item.id !== studentId,
+        ),
+        students: [persistedStudent, ...state.students],
+        postponeRequests: state.postponeRequests.filter(
+          (request) => request.studentId !== studentId,
+        ),
+        sessions: [
+          ...state.sessions.filter((session) => session.studentId !== studentId),
+          ...sessions,
+        ],
+      }));
+      return { error: null, id: persistedStudent.id, inviteUrl: inviteUrl(token) };
     },
     [],
   );
@@ -1083,160 +1084,135 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
       if (!name) return { error: "Ad soyad gerekli.", id: null };
       if (!input.groupId) return { error: "Grup seç.", id: null };
 
-      let error: string | null = null;
-      let id: string | null = null;
-      // A form can be submitted before the first remote hydration completes.
-      // Enable persistence here so the explicit change is sent to Supabase.
-      enableStudioSnapshotPersistence();
-      setStudioState((current) => {
-        const previous = current.students.find((item) => item.id === studentId);
-        if (!previous) {
-          error = "Öğrenci bulunamadı.";
-          return current;
-        }
-        if (!canManageStudent(current.user, studentId, current.students)) {
-          error = "Bu öğrenci sana atanmamış.";
-          return current;
-        }
-        const normalizedBase = normalizeStudentInput(input, current.user);
-        const normalized =
-          current.user?.role === "instructor"
-            ? { ...normalizedBase, instructorId: previous.instructorId }
-            : normalizedBase;
-        const email = normalized.email.trim().toLowerCase();
-        if (!email) {
-          error = "E-posta gerekli.";
-          return current;
-        }
-        if (emailTaken(email, current, studentId)) {
-          error = "Bu e-posta ile kayıtlı öğrenci var.";
-          return current;
-        }
-
-        const attended =
-          previous.package.totalSessions - previous.package.remainingSessions;
-        let student = studentFromInput(studentId, normalized, email, previous);
-        const periodChanged =
-          student.packageHistory?.length !== (previous.packageHistory?.length ?? 0);
-        student.package.remainingSessions = periodChanged
-          ? normalized.totalSessions
-          : Math.max(
-              0,
-              Math.min(normalized.totalSessions, normalized.totalSessions - attended),
-            );
-
-        if (previous.package.paymentStatus !== student.package.paymentStatus) {
-          student.package.paymentUpdatedAt = new Date().toISOString();
-          student.package.paymentUpdatedBy = current.user?.id ?? "system";
-        } else {
-          student.package.paymentUpdatedAt = previous.package.paymentUpdatedAt;
-          student.package.paymentUpdatedBy = previous.package.paymentUpdatedBy;
-        }
-        const changes = collectStudentChanges(previous, student);
-        if (changes.length > 0) {
-          student.changeLog = [
-            ...changes.map((change) => ({
-              id: `change-${student.id}-${Date.now()}-${change.field}`,
-              actorId: current.user?.id ?? "system",
-              action: "update",
-              ...change,
-              createdAt: new Date().toISOString(),
-            })),
-            ...(previous.changeLog ?? []),
-          ].slice(0, 100);
-        }
-
-        if (previous.accountStatus === "invited") {
-          const emailChanged = email !== previous.email.toLowerCase();
-          if (emailChanged) {
-            const token = createInviteToken();
-            student = withInvite(student, token);
-          } else {
-            student = {
-              ...student,
-              accountStatus: "invited",
-              inviteToken: previous.inviteToken,
-              inviteExpiresAt: previous.inviteExpiresAt,
-              invitedAt: previous.invitedAt,
-            };
-          }
-        } else {
-          student = { ...student, accountStatus: previous.accountStatus ?? "active" };
-        }
-
-        id = student.id;
-
-        // A program change must also update the student's generated timetable.
-        // Retain the outcome already recorded for lessons that stay on the same date.
-        const previousSessions = current.sessions.filter(
-          (session) => session.studentId === studentId,
-        );
-        const statusByDate = new Map(
-          previousSessions.map((session) => [session.date, session.status]),
-        );
-        const updatedSessions = buildSessionsForStudent(student, {
-          fromPackageStart: true,
-          group: normalized.customGroup ?? current.customGroups.find((group) => group.id === student.groupId),
-        }).map((session) => ({
-          ...session,
-          status: statusByDate.get(session.date) ?? session.status,
-        }));
-        const updatedSessionIds = new Set(updatedSessions.map((session) => session.id));
-
-        return {
-          ...current,
-          customGroups:
-            normalized.customGroup &&
-            !current.customGroups.some((group) => group.id === normalized.customGroup!.id)
-              ? [...current.customGroups, normalized.customGroup]
-              : current.customGroups,
-          students: current.students.map((item) =>
-            item.id === studentId ? student : item,
-          ),
-          sessions: [
-            ...current.sessions.filter((session) => session.studentId !== studentId),
-            ...updatedSessions,
-          ],
-          postponeRequests: current.postponeRequests.filter(
-            (request) =>
-              request.studentId !== studentId || updatedSessionIds.has(request.sessionId),
-          ),
-          user:
-            current.user?.id === studentId && current.user.role === "student"
-              ? {
-                  ...current.user,
-                  name: student.name,
-                  email: student.email,
-                }
-              : current.user,
-        };
-      });
-      if (!error) {
-        const persisted = await flushStudioSnapshotPersistence();
-        if (!persisted) {
-          return {
-            error: "Kayıt sunucuya yazılamadı. Form bilgileri korunuyor; bağlantıyı kontrol edip tekrar deneyin.",
-            id: null,
-          };
-        }
+      const current = getStudioState();
+      const previous = current.students.find((item) => item.id === studentId);
+      if (!previous) return { error: "Öğrenci bulunamadı.", id: null };
+      if (!canManageStudent(current.user, studentId, current.students)) {
+        return { error: "Bu öğrenci sana atanmamış.", id: null };
       }
-      return { error, id };
+      const normalizedBase = normalizeStudentInput(input, current.user);
+      const normalized =
+        current.user?.role === "instructor"
+          ? { ...normalizedBase, instructorId: previous.instructorId }
+          : normalizedBase;
+      const email = normalized.email.trim().toLowerCase();
+      if (!email) return { error: "E-posta gerekli.", id: null };
+      if (emailTaken(email, current, studentId)) {
+        return { error: "Bu e-posta ile kayıtlı öğrenci var.", id: null };
+      }
+
+      const attended =
+        previous.package.totalSessions - previous.package.remainingSessions;
+      let student = studentFromInput(studentId, normalized, email, previous);
+      const periodChanged =
+        student.packageHistory?.length !== (previous.packageHistory?.length ?? 0);
+      student.package.remainingSessions = periodChanged
+        ? normalized.totalSessions
+        : Math.max(
+            0,
+            Math.min(normalized.totalSessions, normalized.totalSessions - attended),
+          );
+      if (previous.package.paymentStatus !== student.package.paymentStatus) {
+        student.package.paymentUpdatedAt = new Date().toISOString();
+        student.package.paymentUpdatedBy = current.user?.id ?? "system";
+      } else {
+        student.package.paymentUpdatedAt = previous.package.paymentUpdatedAt;
+        student.package.paymentUpdatedBy = previous.package.paymentUpdatedBy;
+      }
+      const changes = collectStudentChanges(previous, student);
+      if (changes.length > 0) {
+        student.changeLog = [
+          ...changes.map((change) => ({
+            id: `change-${student.id}-${Date.now()}-${change.field}`,
+            actorId: current.user?.id ?? "system",
+            action: "update",
+            ...change,
+            createdAt: new Date().toISOString(),
+          })),
+          ...(previous.changeLog ?? []),
+        ].slice(0, 100);
+      }
+      if (previous.accountStatus === "invited") {
+        student =
+          email !== previous.email.toLowerCase()
+            ? withInvite(student)
+            : {
+                ...student,
+                accountStatus: "invited",
+                inviteToken: previous.inviteToken,
+                inviteExpiresAt: previous.inviteExpiresAt,
+                invitedAt: previous.invitedAt,
+              };
+      } else {
+        student = { ...student, accountStatus: previous.accountStatus ?? "active" };
+      }
+
+      const previousSessions = current.sessions.filter(
+        (session) => session.studentId === studentId,
+      );
+      const statusByDate = new Map(
+        previousSessions.map((session) => [session.date, session.status]),
+      );
+      const updatedSessions = buildSessionsForStudent(student, {
+        fromPackageStart: true,
+        group:
+          normalized.customGroup ??
+          current.customGroups.find((group) => group.id === student.groupId),
+      }).map((session) => ({
+        ...session,
+        status: statusByDate.get(session.date) ?? session.status,
+      }));
+      const saved = await saveStudentBundle(
+        "update",
+        student,
+        updatedSessions,
+        normalized.customGroup,
+      );
+      if (saved.error || !saved.student) return { error: saved.error, id: null };
+      const persistedStudent = saved.student;
+
+      const updatedSessionIds = new Set(updatedSessions.map((session) => session.id));
+      setStudioState((state) => ({
+        ...state,
+        customGroups:
+          normalized.customGroup &&
+          !state.customGroups.some((group) => group.id === normalized.customGroup!.id)
+            ? [...state.customGroups, normalized.customGroup]
+            : state.customGroups,
+        students: state.students.map((item) =>
+          item.id === studentId ? persistedStudent : item,
+        ),
+        sessions: [
+          ...state.sessions.filter((session) => session.studentId !== studentId),
+          ...updatedSessions,
+        ],
+        postponeRequests: state.postponeRequests.filter(
+          (request) =>
+            request.studentId !== studentId || updatedSessionIds.has(request.sessionId),
+        ),
+        user:
+          state.user?.id === studentId && state.user.role === "student"
+            ? {
+                ...state.user,
+                name: persistedStudent.name,
+                email: persistedStudent.email,
+              }
+            : state.user,
+      }));
+      return { error: null, id: persistedStudent.id };
     },
     [],
   );
 
   const permanentlyDeleteStudent = useCallback((studentId: string) => {
     void (async () => {
-      // Finish any earlier full-snapshot writes first. Otherwise a queued stale
-      // snapshot can race the DELETE and recreate the student immediately.
-      await flushStudioSnapshotPersistence();
-      const response = await fetch("/api/studio", {
-      method: "DELETE",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ studentId }),
+      const response = await fetch("/api/students", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ studentId }),
       });
       if (!response.ok) {
-        window.dispatchEvent(new CustomEvent("studio:persistence-error", {
+        window.dispatchEvent(new CustomEvent("studio:write-error", {
           detail: "Öğrenci kalıcı olarak silinemedi. Sayfayı yenileyip tekrar deneyin.",
         }));
         return;
@@ -1251,7 +1227,7 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
         ),
       }));
     })().catch(() => {
-      window.dispatchEvent(new CustomEvent("studio:persistence-error", {
+      window.dispatchEvent(new CustomEvent("studio:write-error", {
         detail: "Öğrenci kalıcı olarak silinemedi. Bağlantınızı kontrol edin.",
       }));
     });

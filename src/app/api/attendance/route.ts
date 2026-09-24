@@ -3,7 +3,7 @@ import {
   listAttendanceMarks,
   saveAttendanceMark,
 } from "@/lib/server/attendance-store";
-import { readStudioSnapshot } from "@/app/api/studio/route";
+import { readSupabaseStudioData } from "@/lib/server/supabase-rest";
 import { todayISO } from "@/lib/dates";
 import { NextResponse } from "next/server";
 import { getSessionUser } from "@/lib/server/session";
@@ -73,13 +73,12 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Geçersiz durum." }, { status: 400 });
   }
 
-  const state = await readStudioSnapshot();
-  const snapshot = state.snapshot as {
+  const data = await readSupabaseStudioData() as {
     students?: Array<{ id: string; instructorId: string }>;
     sessions?: Array<{ id: string; studentId: string; date: string; groupId: string; status: string }>;
   } | null;
-  const session = snapshot?.sessions?.find((item) => item.id === sessionId);
-  const sessionStudent = snapshot?.students?.find((item) => item.id === session?.studentId);
+  const session = data?.sessions?.find((item) => item.id === sessionId);
+  const sessionStudent = data?.students?.find((item) => item.id === session?.studentId);
   const sharedPair = ["staff-delfin", "staff-elif"];
   const managed = Boolean(sessionStudent && (
     user.role === "super_admin" ||

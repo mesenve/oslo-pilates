@@ -1,482 +1,60 @@
-import { NextResponse } from "next/server";
+import {
+  isSupabaseConfigured,
+  readSupabaseStudioData,
+} from "@/lib/server/supabase-rest";
 import { getSessionUser } from "@/lib/server/session";
-import { groupIdForSchedule, groupLabelForSchedule } from "@/data/groups";
-import { todayISO } from "@/lib/dates";
-import type { ClassGroup, DayOfWeek } from "@/types/studio";
-import { deleteSupabaseStudent, isSupabaseConfigured, readSupabaseSnapshot, writeSupabaseSnapshot } from "@/lib/server/supabase-rest";
-import { createHash } from "node:crypto";
+import { NextResponse } from "next/server";
 
-type StudioSnapshotResponse = {
-  configured?: boolean;
-  snapshot?: unknown;
-};
-
-export function snapshotRevision(snapshot: unknown) {
-  const value = snapshot && typeof snapshot === "object" ? snapshot as Record<string, unknown> : {};
-  const sortById = (rows: unknown) => [...(Array.isArray(rows) ? rows : [])]
-    .sort((a, b) => String((a as { id?: string }).id).localeCompare(String((b as { id?: string }).id)));
-  const stable = {
-    students: sortById(value.students),
-    archivedStudents: sortById(value.archivedStudents),
-    sessions: sortById(value.sessions),
-    postponeRequests: sortById(value.postponeRequests),
-    customGroups: sortById(value.customGroups),
-  };
-  return createHash("sha256").update(JSON.stringify(stable)).digest("hex").slice(0, 24);
-}
-
-type SnapshotStudent = {
-  id: string;
-  groupId: string;
-  package?: {
-    customSchedule?: { days?: DayOfWeek[]; time?: string };
-  };
-};
-
-type SnapshotSession = {
-  studentId: string;
-  groupId: string;
-  date?: string;
-  status?: string;
-};
-
-type SnapshotStudentIdentity = {
-  id: string;
-  email?: string;
-};
-
-function hasDuplicateStudentEmail(students: SnapshotStudentIdentity[] = []) {
-  const seen = new Set<string>();
-  for (const student of students) {
-    const email = student.email?.trim().toLowerCase();
-    if (!email || email === "—") continue;
-    if (seen.has(email)) return true;
-    seen.add(email);
-  }
-  return false;
-}
-
-function mergeById<T extends { id: string }>(current: T[] = [], incoming: T[] = []) {
-  const incomingById = new Map(incoming.map((item) => [item.id, item]));
-  const currentIds = new Set(current.map((item) => item.id));
-  return [
-    ...current.map((item) => incomingById.get(item.id) ?? item),
-    ...incoming.filter((item) => !currentIds.has(item.id)),
-  ];
-}
-
-/**
- * Session create/delete/status for attendance+postpone are owned by
- * /api/sessions/status (atomic RPCs). Studio POST may only insert brand-new
- * session rows (new student schedules) and must never change existing status.
- */
-function mergeSessionsServerLocked<
-  T extends { id: string; studentId: string; status?: string },
->(current: T[] = [], incoming: T[] = []) {
-  const currentById = new Map(current.map((session) => [session.id, session]));
-  const newOnes = incoming.filter((session) => !currentById.has(session.id));
-  return [...current, ...newOnes];
-}
-
-/**
- * Postpone create/delete/status are owned by /api/sessions/status.
- * Studio POST may only update reason text on rows that already exist server-side.
- */
-function mergePostponeServerLocked<
-  T extends { id: string; studentId: string; reason?: string; status?: string },
->(current: T[] = [], incoming: T[] = []) {
-  const incomingById = new Map(incoming.map((request) => [request.id, request]));
-  return current.map((request) => {
-    const client = incomingById.get(request.id);
-    if (!client) return request;
-    return { ...request, reason: client.reason ?? request.reason };
-  });
-}
-
-function mergeSessionsKeepServerStatus<
-  T extends { id: string; studentId: string; status?: string },
->(current: T[] = [], incoming: T[] = [], _incomingStudentIds?: Set<string>) {
-  return mergeSessionsServerLocked(current, incoming);
-}
-
-function mergePostponePreferServer<
-  T extends { id: string; studentId: string; reason?: string; status?: string },
->(current: T[] = [], incoming: T[] = [], _incomingStudentIds?: Set<string>) {
-  return mergePostponeServerLocked(current, incoming);
-}
-
-function normalizeFutureAttendanceStatuses(snapshot: Record<string, unknown>) {
-  const sessions = (snapshot.sessions ?? []) as SnapshotSession[];
-  let changed = false;
-  const normalizedSessions = sessions.map((session) => {
-    if (
-      session.date &&
-      session.date > todayISO() &&
-      (session.status === "attended" || session.status === "missed")
-    ) {
-      changed = true;
-      return { ...session, status: "upcoming" };
-    }
-    return session;
-  });
-  return {
-    changed,
-    snapshot: changed ? { ...snapshot, sessions: normalizedSessions } : snapshot,
-  };
-}
-
-function normalizeCustomScheduleGroups(snapshot: Record<string, unknown>) {
-  const students = (snapshot.students ?? []) as SnapshotStudent[];
-  const customGroups = ((snapshot.customGroups ?? []) as ClassGroup[]).filter((group) => {
-    const time = group.time?.trim();
-    return group.days.length > 0 && Boolean(time) && time !== "Belirtilmedi" && time !== "—";
-  });
-  const originalCustomGroupCount = ((snapshot.customGroups ?? []) as ClassGroup[]).length;
-  const groups = new Map(customGroups.map((group) => [group.id, group]));
-  const replacementGroupIds = new Map<string, string>();
-
-  const normalizedStudents = students.map((student) => {
-    const schedule = student.package?.customSchedule;
-    const days = schedule?.days ?? [];
-    const time = schedule?.time?.trim() ?? "";
-    if (!days.length || !time) return student;
-
-    const groupId = groupIdForSchedule(days, time);
-    replacementGroupIds.set(student.id, groupId);
-    if (!groups.has(groupId)) {
-      groups.set(groupId, {
-        id: groupId,
-        days,
-        time,
-        capacity: 2,
-        label: groupLabelForSchedule(days, time),
-      });
-    }
-    return student.groupId === groupId ? student : { ...student, groupId };
-  });
-
-  const normalizedSessions = ((snapshot.sessions ?? []) as SnapshotSession[]).map(
-    (session) => {
-      const groupId = replacementGroupIds.get(session.studentId);
-      return groupId && session.groupId !== groupId ? { ...session, groupId } : session;
-    },
-  );
-  const changed =
-    normalizedStudents.some((student, index) => student !== students[index]) ||
-    normalizedSessions.some(
-      (session, index) => session !== ((snapshot.sessions ?? []) as SnapshotSession[])[index],
-    ) ||
-    groups.size !== originalCustomGroupCount;
-
-  return {
-    changed,
-    snapshot: changed
-      ? { ...snapshot, students: normalizedStudents, sessions: normalizedSessions, customGroups: [...groups.values()] }
-      : snapshot,
-  };
-}
-
-export async function readStudioSnapshot(): Promise<StudioSnapshotResponse> {
-  // Once Supabase is configured, it is the only authoritative source. Falling
-  // back to a stale Blob/file snapshot would make an outage look like a
-  // successful read and could overwrite newer database data on the next save.
-  if (!isSupabaseConfigured()) return { configured: false, snapshot: null };
-  const snapshot = await readSupabaseSnapshot();
-  return { configured: true, snapshot };
-}
-
-export async function writeStudioSnapshot(
-  snapshot: StudioSnapshotResponse,
-  options?: {
-    mode?: "full" | "studioPost";
-    previousSessionIds?: Set<string>;
-    previousPostponeById?: Map<string, { reason: string }>;
-  },
-) {
-  if (!isSupabaseConfigured()) {
-    throw new Error("Supabase yapılandırılmadı.");
-  }
-  if (snapshot.snapshot && typeof snapshot.snapshot === "object") {
-    const value = snapshot.snapshot as {
-      students?: Parameters<typeof writeSupabaseSnapshot>[0]["students"];
-      archivedStudents?: Parameters<typeof writeSupabaseSnapshot>[0]["archivedStudents"];
-      sessions?: Parameters<typeof writeSupabaseSnapshot>[0]["sessions"];
-      postponeRequests?: Parameters<typeof writeSupabaseSnapshot>[0]["postponeRequests"];
-      customGroups?: Parameters<typeof writeSupabaseSnapshot>[0]["customGroups"];
-    };
-    await writeSupabaseSnapshot(
-      {
-        students: value.students ?? [],
-        archivedStudents: value.archivedStudents ?? [],
-        sessions: value.sessions ?? [],
-        postponeRequests: value.postponeRequests ?? [],
-        customGroups: value.customGroups ?? [],
-      },
-      options,
-    );
-    return;
-  }
+export async function readStudioData() {
+  if (!isSupabaseConfigured()) return null;
+  return readSupabaseStudioData();
 }
 
 export async function GET() {
   const user = await getSessionUser();
-  if (!user) return NextResponse.json({ error: "Oturum gerekli." }, { status: 401 });
-  const response = await readStudioSnapshot();
-  if (response.configured && response.snapshot) {
-    const normalizedGroups = normalizeCustomScheduleGroups(
-      response.snapshot as Record<string, unknown>,
-    );
-    const normalized = normalizeFutureAttendanceStatuses(normalizedGroups.snapshot);
-    if (normalizedGroups.changed || normalized.changed) {
-      await writeStudioSnapshot({ ...response, snapshot: normalized.snapshot });
-    }
-    const snapshot = normalized.snapshot as {
-        students?: Array<{ id: string; instructorId: string; groupId?: string }>;
-        archivedStudents?: Array<{ id: string; instructorId: string }>;
-        sessions?: Array<{ studentId: string }>;
-        postponeRequests?: Array<{ studentId: string }>;
-        customGroups?: Array<{ id: string }>;
-        blockedEmails?: string[];
-        staffPasswords?: Record<string, string>;
-        studentPasswords?: Record<string, string>;
-      };
-    const publicSnapshot = { ...snapshot };
-    delete publicSnapshot.staffPasswords;
-    delete publicSnapshot.studentPasswords;
-    const visibleStudentIds = new Set(
-      user.role === "super_admin"
-        ? (snapshot.students ?? []).map((student) => student.id)
-        : user.role === "student"
-          ? [user.id]
-          : (snapshot.students ?? [])
-              .filter((student) => student.instructorId === user.id ||
-                (["staff-delfin", "staff-elif"].includes(student.instructorId) && ["staff-delfin", "staff-elif"].includes(user.id)))
-              .map((student) => student.id),
-    );
-
-    return NextResponse.json({
-      ...response,
-      revision: snapshotRevision(snapshot),
-      snapshot: {
-          ...publicSnapshot,
-        students: (snapshot.students ?? []).filter((student) => visibleStudentIds.has(student.id)),
-        archivedStudents: user.role === "super_admin"
-          ? snapshot.archivedStudents ?? []
-          : (snapshot.archivedStudents ?? []).filter((student) => visibleStudentIds.has(student.id)),
-        sessions: (snapshot.sessions ?? []).filter((session) => visibleStudentIds.has(session.studentId)),
-        postponeRequests: (snapshot.postponeRequests ?? []).filter((request) => visibleStudentIds.has(request.studentId)),
-        blockedEmails: user.role === "super_admin" ? snapshot.blockedEmails ?? [] : [],
-      },
-    });
+  if (!user) {
+    return NextResponse.json({ error: "Oturum gerekli." }, { status: 401 });
+  }
+  const data = await readStudioData();
+  if (!data) {
+    return NextResponse.json({ configured: false, data: null });
   }
 
-  return NextResponse.json({ configured: false, snapshot: null });
-}
+  const visibleStudentIds = new Set(
+    user.role === "super_admin"
+      ? data.students.map((student) => student.id)
+      : user.role === "student"
+        ? [user.id]
+        : data.students
+            .filter(
+              (student) =>
+                student.instructorId === user.id ||
+                (["staff-delfin", "staff-elif"].includes(student.instructorId) &&
+                  ["staff-delfin", "staff-elif"].includes(user.id)),
+            )
+            .map((student) => student.id),
+  );
 
-export async function POST(request: Request) {
-  const user = await getSessionUser();
-  if (user?.role !== "super_admin" && user?.role !== "instructor") {
-    return NextResponse.json({ error: "Bu işlem için yönetici oturumu gerekli." }, { status: 403 });
-  }
-  try {
-    const body = (await request.json()) as { snapshot?: unknown; revision?: string | null };
-    if (!body.snapshot || typeof body.snapshot !== "object") {
-      return NextResponse.json({ error: "Geçersiz stüdyo verisi." }, { status: 400 });
-    }
-
-    const existing = await readStudioSnapshot();
-
-    const currentSnapshot =
-      existing.snapshot && typeof existing.snapshot === "object"
-        ? existing.snapshot
-        : {};
-    const currentRevision = snapshotRevision(currentSnapshot);
-    // Stale admin tabs must not overwrite fresher DB state (e.g. a postpone
-    // that landed via /api/sessions/status while this tab was idle).
-    if (body.revision && body.revision !== currentRevision) {
-      return NextResponse.json(
-        {
-          error: "Veri başka bir yerden güncellendi. Güncel veri yükleniyor.",
-          revision: currentRevision,
-        },
-        { status: 409 },
-      );
-    }
-    if (user.role === "instructor") {
-      const current = currentSnapshot as {
-        students?: Array<{ id: string; instructorId: string; groupId?: string }>;
-        archivedStudents?: Array<{ id: string; instructorId: string }>;
-        sessions?: Array<{ id: string; studentId: string; status?: string }>;
-        postponeRequests?: Array<{ id: string; studentId: string; reason?: string; status?: string }>;
-        customGroups?: Array<{ id: string }>;
-      };
-      const incoming = body.snapshot as typeof current;
-      const shared = ["staff-delfin", "staff-elif"];
-      const owns = (student: { instructorId: string }) =>
-        student.instructorId === user.id ||
-        (shared.includes(student.instructorId) && shared.includes(user.id));
-      const existingOwnedIds = new Set((current.students ?? []).filter(owns).map((student) => student.id));
-      const incomingStudents = (incoming.students ?? []).filter((student) =>
-        existingOwnedIds.has(student.id) || owns(student),
-      ).map((student) => existingOwnedIds.has(student.id)
-        ? { ...student, instructorId: (current.students ?? []).find((item) => item.id === student.id)?.instructorId ?? student.instructorId }
-        : student,
-      );
-      const existingGroupIds = new Set((current.customGroups ?? []).map((group) => group.id));
-      const groupsCreatedForOwnedStudents = (incoming.customGroups ?? []).filter(
-        (group) =>
-          !existingGroupIds.has(group.id) &&
-          incomingStudents.some((student) => student.groupId === group.id),
-      );
-      const incomingOwnedIds = new Set(incomingStudents.map((student) => student.id));
-      const mergedStudents = mergeById(current.students ?? [], incomingStudents);
-      if (hasDuplicateStudentEmail(mergedStudents)) {
-        return NextResponse.json(
-          { error: "Bu e-posta ile kayıtlı başka bir öğrenci var." },
-          { status: 409 },
-        );
-      }
-      const savedSnapshot = {
-        ...current,
-        students: mergedStudents,
-        archivedStudents: current.archivedStudents,
-        sessions: mergeSessionsKeepServerStatus(
-          current.sessions,
-          incoming.sessions,
-          incomingOwnedIds,
-        ),
-        postponeRequests: mergePostponePreferServer(
-          current.postponeRequests,
-          incoming.postponeRequests,
-          incomingOwnedIds,
-        ),
-        customGroups: [...(current.customGroups ?? []), ...groupsCreatedForOwnedStudents],
-      };
-      await writeStudioSnapshot(
-        {
-          configured: true,
-          snapshot: savedSnapshot,
-        },
-        {
-          mode: "studioPost",
-          previousSessionIds: new Set((current.sessions ?? []).map((session) => session.id)),
-          previousPostponeById: new Map(
-            (current.postponeRequests ?? []).map((request) => [
-              request.id,
-              { reason: request.reason ?? "" },
-            ]),
-          ),
-        },
-      );
-      return NextResponse.json({ ok: true, revision: snapshotRevision(savedSnapshot) });
-    }
-
-    const currentForValidation = currentSnapshot as {
-      students?: SnapshotStudentIdentity[];
-      archivedStudents?: SnapshotStudentIdentity[];
-    };
-    const currentStudents = currentForValidation.students ?? [];
-    const currentArchived = currentForValidation.archivedStudents ?? [];
-    const incomingSnapshot = body.snapshot as {
-      students?: SnapshotStudentIdentity[];
-      archivedStudents?: SnapshotStudentIdentity[];
-    };
-    const incomingStudents = incomingSnapshot.students ?? [];
-    const incomingArchived = incomingSnapshot.archivedStudents ?? [];
-    if (hasDuplicateStudentEmail([...incomingStudents, ...incomingArchived])) {
-      return NextResponse.json(
-        { error: "Bu e-posta ile kayıtlı başka bir öğrenci var." },
-        { status: 409 },
-      );
-    }
-
-    const mergedStudents = mergeById(currentStudents, incomingStudents);
-    const incomingActiveIds = new Set(incomingStudents.map((student) => student.id));
-    const mergedArchivedStudents = mergeById(currentArchived, incomingArchived)
-      .filter((student) => !incomingActiveIds.has(student.id));
-    const incomingStudentIds = new Set([
-      ...incomingStudents.map((student) => student.id),
-      ...incomingArchived.map((student) => student.id),
-    ]);
-    const currentValue = currentSnapshot as {
-      sessions?: Array<{ id: string; studentId: string; status?: string }>;
-      postponeRequests?: Array<{ id: string; studentId: string; reason?: string; status?: string }>;
-      customGroups?: Array<{ id: string }>;
-    };
-    const incomingValue = body.snapshot as {
-      sessions?: Array<{ id: string; studentId: string; status?: string }>;
-      postponeRequests?: Array<{ id: string; studentId: string; reason?: string; status?: string }>;
-      customGroups?: Array<{ id: string }>;
-    };
-    const savedSnapshot = {
-      ...currentSnapshot,
-      ...body.snapshot,
-      students: mergedStudents,
-      archivedStudents: mergedArchivedStudents,
-      sessions: mergeSessionsKeepServerStatus(
-        currentValue.sessions,
-        incomingValue.sessions,
-        incomingStudentIds,
+  return NextResponse.json({
+    configured: true,
+    data: {
+      students: data.students.filter((student) =>
+        visibleStudentIds.has(student.id),
       ),
-      postponeRequests: mergePostponePreferServer(
-        currentValue.postponeRequests,
-        incomingValue.postponeRequests,
-        incomingStudentIds,
+      archivedStudents:
+        user.role === "super_admin"
+          ? data.archivedStudents
+          : data.archivedStudents.filter((student) =>
+              visibleStudentIds.has(student.id),
+            ),
+      sessions: data.sessions.filter((session) =>
+        visibleStudentIds.has(session.studentId),
       ),
-      customGroups: mergeById(currentValue.customGroups, incomingValue.customGroups),
-    };
-    const next = {
-      configured: true,
-      snapshot: savedSnapshot,
-    };
-
-    await writeStudioSnapshot(next, {
-      mode: "studioPost",
-      previousSessionIds: new Set((currentValue.sessions ?? []).map((session) => session.id)),
-      previousPostponeById: new Map(
-        (currentValue.postponeRequests ?? []).map((request) => [
-          request.id,
-          { reason: request.reason ?? "" },
-        ]),
+      postponeRequests: data.postponeRequests.filter((postpone) =>
+        visibleStudentIds.has(postpone.studentId),
       ),
-    });
-    return NextResponse.json({ ok: true, revision: snapshotRevision(savedSnapshot) });
-  } catch {
-    return NextResponse.json(
-      { error: "Stüdyo verisi kaydedilemedi." },
-      { status: 500 },
-    );
-  }
-}
-
-export async function DELETE(request: Request) {
-  const user = await getSessionUser();
-  if (user?.role !== "super_admin" && user?.role !== "instructor") {
-    return NextResponse.json({ error: "Bu işlem için yönetici oturumu gerekli." }, { status: 403 });
-  }
-  try {
-    const body = (await request.json()) as { studentId?: string };
-    const studentId = body.studentId?.trim();
-    if (!studentId) return NextResponse.json({ error: "Öğrenci kimliği gerekli." }, { status: 400 });
-
-    const current = await readStudioSnapshot();
-    const snapshot = (current.snapshot ?? {}) as {
-      students?: Array<{ id: string; instructorId: string }>;
-      archivedStudents?: Array<{ id: string; instructorId: string }>;
-    };
-    const student = [...(snapshot.students ?? []), ...(snapshot.archivedStudents ?? [])]
-      .find((item) => item.id === studentId);
-    if (!student) return NextResponse.json({ error: "Öğrenci bulunamadı." }, { status: 404 });
-    if (user.role === "instructor") {
-      const shared = ["staff-delfin", "staff-elif"];
-      const allowed = student.instructorId === user.id ||
-        (shared.includes(student.instructorId) && shared.includes(user.id));
-      if (!allowed) return NextResponse.json({ error: "Bu öğrenci sana atanmamış." }, { status: 403 });
-    }
-
-    if (isSupabaseConfigured()) await deleteSupabaseStudent(studentId);
-    return NextResponse.json({ ok: true });
-  } catch {
-    return NextResponse.json({ error: "Öğrenci silinemedi." }, { status: 500 });
-  }
+      customGroups: data.customGroups,
+      blockedEmails: user.role === "super_admin" ? data.blockedEmails : [],
+    },
+  });
 }

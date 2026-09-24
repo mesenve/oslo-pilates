@@ -1,4 +1,4 @@
-import type { Session, Student, StudioState } from "@/types/studio";
+import type { ClassGroup, Session, Student, StudioState } from "@/types/studio";
 
 type SupabaseRow = Record<string, unknown>;
 
@@ -68,7 +68,7 @@ export async function deleteSupabasePostponeRequest(requestId: string) {
   });
 }
 
-/** Single-row upsert so a postpone request cannot be lost if a full snapshot write races. */
+/** Single-row upsert for an instructor-created postpone record. */
 export async function upsertSupabasePostponeRequest(row: {
   id: string;
   studentId: string;
@@ -292,7 +292,7 @@ function toSession(row: SupabaseRow): Session {
   };
 }
 
-export async function readSupabaseSnapshot(): Promise<Pick<StudioState, "students" | "archivedStudents" | "sessions" | "postponeRequests" | "customGroups"> & { blockedEmails: string[] }> {
+export async function readSupabaseStudioData(): Promise<Pick<StudioState, "students" | "archivedStudents" | "sessions" | "postponeRequests" | "customGroups"> & { blockedEmails: string[] }> {
   const [studentRows, sessionRows, postponeRows, groupRows, blockedRows] = await Promise.all([
     request<SupabaseRow[]>("students?select=*&order=name"),
     request<SupabaseRow[]>("sessions?select=*&order=session_date"),
@@ -359,88 +359,69 @@ function studentRow(student: Student, archived: boolean) {
   };
 }
 
-export async function writeSupabaseSnapshot(
-  snapshot: Pick<StudioState, "students" | "archivedStudents" | "sessions" | "postponeRequests" | "customGroups">,
-  options?: {
-    /** full = upsert all (server-owned normalize). studioPost = students/groups + new sessions + reason patches only. */
-    mode?: "full" | "studioPost";
-    previousSessionIds?: Set<string>;
-    previousPostponeById?: Map<string, { reason: string }>;
-  },
-) {
-  const mode = options?.mode ?? "full";
-  const students = [
-    ...snapshot.students.map((student) => studentRow(student, false)),
-    ...snapshot.archivedStudents.map((student) => studentRow(student, true)),
-  ];
-  const customGroups = snapshot.customGroups.map((group) => ({
-    id: group.id,
-    days: group.days,
-    time: group.time,
-    capacity: group.capacity,
-    label: group.label,
-  }));
-
-  // Keep REST payloads small.  A full studio snapshot contains hundreds of
-  // sessions; sending them as one request can be rejected by the proxy and
-  // leaves the preceding student upsert committed while sessions are lost.
-  const upsert = async (table: string, rows: SupabaseRow[], conflict: string) => {
-    if (rows.length === 0) return;
-    const chunkSize = 100;
-    for (let offset = 0; offset < rows.length; offset += chunkSize) {
-      await request<SupabaseRow[]>(`${table}?on_conflict=${conflict}`, {
-        method: "POST",
-        headers: { Prefer: "resolution=merge-duplicates,return=minimal" },
-        body: JSON.stringify(rows.slice(offset, offset + chunkSize)),
-      });
-    }
-  };
-
-  await upsert("students", students, "id");
-  await upsert("custom_groups", customGroups, "id");
-
-  if (mode === "studioPost") {
-    const previousIds = options?.previousSessionIds ?? new Set<string>();
-    const newSessions = snapshot.sessions
-      .filter((session) => !previousIds.has(session.id))
-      .map((session) => ({
+export async function saveSupabaseStudentBundle(input: {
+  student: Student;
+  sessions: Session[];
+  customGroup?: ClassGroup;
+  clearPostpones?: boolean;
+}) {
+  await request<unknown>("rpc/save_student_bundle", {
+    method: "POST",
+    body: JSON.stringify({
+      p_student: studentRow(input.student, false),
+      p_sessions: input.sessions.map((session) => ({
         id: session.id,
         student_id: session.studentId,
         group_id: session.groupId,
         session_date: session.date,
         status: session.status,
-      }));
-    await upsert("sessions", newSessions, "id");
+      })),
+      p_custom_group: input.customGroup
+        ? {
+            id: input.customGroup.id,
+            days: input.customGroup.days,
+            time: input.customGroup.time,
+            capacity: input.customGroup.capacity,
+            label: input.customGroup.label,
+          }
+        : null,
+      p_clear_postpones: input.clearPostpones ?? false,
+    }),
+  });
+}
 
-    const previousPostpone = options?.previousPostponeById ?? new Map();
-    for (const requestRow of snapshot.postponeRequests) {
-      const previous = previousPostpone.get(requestRow.id);
-      if (!previous) continue;
-      if ((previous.reason ?? "") === (requestRow.reason ?? "")) continue;
-      await request<unknown>(`postpone_requests?id=eq.${encodeURIComponent(requestRow.id)}`, {
-        method: "PATCH",
-        headers: { Prefer: "return=minimal" },
-        body: JSON.stringify({ reason: requestRow.reason ?? "" }),
-      });
-    }
-    return;
-  }
+export async function patchSupabaseStudent(
+  studentId: string,
+  fields: Record<string, unknown>,
+) {
+  await request<unknown>(`students?id=eq.${encodeURIComponent(studentId)}`, {
+    method: "PATCH",
+    headers: { Prefer: "return=minimal" },
+    body: JSON.stringify({ ...fields, updated_at: new Date().toISOString() }),
+  });
+}
 
-  const sessions = snapshot.sessions.map((session) => ({
-    id: session.id,
-    student_id: session.studentId,
-    group_id: session.groupId,
-    session_date: session.date,
-    status: session.status,
-  }));
-  const postponeRequests = snapshot.postponeRequests.map((requestRow) => ({
-    id: requestRow.id,
-    student_id: requestRow.studentId,
-    session_id: requestRow.sessionId,
-    reason: requestRow.reason,
-    status: requestRow.status,
-    created_at: requestRow.createdAt,
-  }));
-  await upsert("sessions", sessions, "id");
-  await upsert("postpone_requests", postponeRequests, "id");
+export async function patchSupabaseStudentPackage(
+  studentId: string,
+  patch: Record<string, unknown>,
+) {
+  const result = await request<unknown>("rpc/patch_student_package", {
+    method: "POST",
+    body: JSON.stringify({ p_student_id: studentId, p_patch: patch }),
+  });
+  return result;
+}
+
+export async function patchSupabasePostponeReason(
+  requestId: string,
+  reason: string,
+) {
+  await request<unknown>(
+    `postpone_requests?id=eq.${encodeURIComponent(requestId)}`,
+    {
+      method: "PATCH",
+      headers: { Prefer: "return=minimal" },
+      body: JSON.stringify({ reason, updated_at: new Date().toISOString() }),
+    },
+  );
 }

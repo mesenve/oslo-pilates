@@ -1,7 +1,7 @@
-import { readStudioSnapshot, snapshotRevision } from "@/app/api/studio/route";
 import {
   applyStudentPostponeRpc,
   isSupabaseConfigured,
+  readSupabaseStudioData,
   reviewStudentPostponeRpc,
   upsertSupabasePostponeRequest,
   upsertSupabaseSessionStatus,
@@ -17,11 +17,6 @@ import { NextResponse } from "next/server";
 
 const allowedStatuses = new Set(["attended", "postponed", "missed", "upcoming", "postpone_pending"]);
 
-async function revisionAfterWrite() {
-  const state = await readStudioSnapshot();
-  return snapshotRevision(state.snapshot);
-}
-
 export async function POST(request: Request) {
   const user = await getSessionUser();
   if (!user) return NextResponse.json({ error: "Oturum gerekli." }, { status: 401 });
@@ -33,8 +28,8 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Supabase yapılandırılmadı." }, { status: 503 });
   }
 
-  const state = await readStudioSnapshot();
-  const snapshot = state.snapshot as {
+  const studio = await readSupabaseStudioData();
+  const data = studio as {
     students?: Array<{
       id: string;
       instructorId: string;
@@ -47,14 +42,14 @@ export async function POST(request: Request) {
     postponeRequests?: Array<{ id: string; studentId: string; sessionId: string; reason: string; status: string; createdAt: string }>;
     customGroups?: Array<{ id: string; time: string; timeByDay?: Record<string, string> }>;
   } | null;
-  const session = snapshot?.sessions?.find((item) => item.id === body.sessionId);
-  const student = snapshot?.students?.find((item) => item.id === session?.studentId);
+  const session = data?.sessions?.find((item) => item.id === body.sessionId);
+  const student = data?.students?.find((item) => item.id === session?.studentId);
   if (user.role === "student") {
-    if (!snapshot || !session || !student || student.id !== user.id) {
+    if (!data || !session || !student || student.id !== user.id) {
       return NextResponse.json({ error: "Bu işlem için yetkiniz yok." }, { status: 403 });
     }
     if (body.status === "upcoming") {
-      const pendingRequest = snapshot.postponeRequests?.find(
+      const pendingRequest = data.postponeRequests?.find(
         (item) => item.sessionId === session.id && item.status === "pending",
       );
       if (!pendingRequest || !["upcoming", "postpone_pending"].includes(session.status)) {
@@ -65,12 +60,12 @@ export async function POST(request: Request) {
         requestId: pendingRequest.id,
         studentId: student.id,
       });
-      return NextResponse.json({ ok: true, revision: await revisionAfterWrite() });
+      return NextResponse.json({ ok: true });
     }
     if (body.status !== "postpone_pending") {
       return NextResponse.json({ error: "Bu işlem için yetkiniz yok." }, { status: 403 });
     }
-    const existingPendingRequest = snapshot.postponeRequests?.some(
+    const existingPendingRequest = data.postponeRequests?.some(
       (item) => item.sessionId === session.id && item.status === "pending",
     );
     if (existingPendingRequest) {
@@ -79,13 +74,13 @@ export async function POST(request: Request) {
     if (session.status !== "upcoming") {
       return NextResponse.json({ error: "Bu ders için erteleme yapılamaz." }, { status: 409 });
     }
-    const group = getClassGroupById(session.groupId) ?? snapshot.customGroups?.find((item) => item.id === session.groupId);
+    const group = getClassGroupById(session.groupId) ?? data.customGroups?.find((item) => item.id === session.groupId);
     const day = weekdayFromISO(session.date);
     const time = (day && group?.timeByDay?.[day]) ?? group?.time ?? "";
     const hasRight = remainingPostponeRights(
       student as Student,
-      (snapshot.postponeRequests ?? []) as StudioState["postponeRequests"],
-      (snapshot.sessions ?? []) as StudioState["sessions"],
+      (data.postponeRequests ?? []) as StudioState["postponeRequests"],
+      (data.sessions ?? []) as StudioState["sessions"],
     ) > 0;
     if (!hasRight || !isAtLeast24HoursAway(session.date, time)) {
       return NextResponse.json({ error: "Erteleme koşulları sağlanmıyor." }, { status: 409 });
@@ -110,7 +105,6 @@ export async function POST(request: Request) {
     return NextResponse.json({
       ok: true,
       request: nextRequest,
-      revision: await revisionAfterWrite(),
     });
   }
 
@@ -119,14 +113,13 @@ export async function POST(request: Request) {
     student.instructorId === user.id ||
     (sharedPair.includes(student.instructorId) && sharedPair.includes(user.id))
   ));
-  if (!session || !student || !allowed || !snapshot) {
+  if (!session || !student || !allowed || !data) {
     return NextResponse.json({ error: "Bu ders için yetkiniz yok." }, { status: 403 });
   }
-  const pendingPostpone = snapshot.postponeRequests?.find(
+  const pendingPostpone = data.postponeRequests?.find(
     (item) => item.sessionId === session.id && item.status === "pending",
   );
-  // Pending request is source of truth: session can still be "upcoming" if a
-  // later snapshot write raced and dropped postpone_pending.
+  // Pending request remains the approval source of truth.
   const approvingPostpone = body.status === "postponed" && Boolean(pendingPostpone);
   const rejectingPostpone =
     body.status === "upcoming" && Boolean(pendingPostpone) && session.status === "postpone_pending";
@@ -148,7 +141,7 @@ export async function POST(request: Request) {
       requestStatus: approvingPostpone ? "approved" : "rejected",
       sessionStatus: body.status!,
     });
-    return NextResponse.json({ ok: true, revision: await revisionAfterWrite() });
+    return NextResponse.json({ ok: true });
   }
 
   // Manual status change that should close a dangling pending postpone.
@@ -162,7 +155,7 @@ export async function POST(request: Request) {
       requestStatus: "rejected",
       sessionStatus: body.status,
     });
-    return NextResponse.json({ ok: true, revision: await revisionAfterWrite() });
+    return NextResponse.json({ ok: true });
   }
 
   // Instructor manual session outcome (attended / missed / postponed without pending request).
@@ -178,5 +171,5 @@ export async function POST(request: Request) {
       createdAt,
     });
   }
-  return NextResponse.json({ ok: true, revision: await revisionAfterWrite() });
+  return NextResponse.json({ ok: true });
 }
