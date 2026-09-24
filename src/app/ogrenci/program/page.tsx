@@ -135,6 +135,7 @@ function ProgramSessionRow({
   canPostpone,
   canAttend,
   postponeHint,
+  postponeNote,
   onAttend,
   onPostpone,
   onWithdrawPostpone,
@@ -157,6 +158,7 @@ function ProgramSessionRow({
       canPostpone={canPostponeAtThisTime}
       canAttend={canAttend}
       postponeHint={hint}
+      postponeNote={postponeNote}
       onAttend={onAttend}
       onPostpone={onPostpone}
       onWithdrawPostpone={onWithdrawPostpone}

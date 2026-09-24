@@ -495,7 +495,7 @@ export default function StudentDetailPage() {
             visiblePostponeRequests,
             visibleSessions,
           ) ?? student.postponeLessonUsedAt ?? "unused"
-        }:${noteRequest?.id ?? "none"}:${noteRequest?.reason ?? ""}`}
+        }:${noteRequest?.id ?? "none"}`}
         used={student.postponeLessonUsed ?? false}
         usedAt={
           postponeUsedDateInPackage(
@@ -505,16 +505,22 @@ export default function StudentDetailPage() {
           ) ?? student.postponeLessonUsedAt ?? ""
         }
         note={noteRequest?.reason ?? ""}
+        noteLessonLabel={
+          noteRequest
+            ? (() => {
+                const session = visibleSessions.find(
+                  (item) => item.id === noteRequest.sessionId,
+                );
+                return session ? formatLongDate(session.date) : null;
+              })()
+            : null
+        }
         onChange={(used, usedAt) =>
           void setPostponeLessonUsed(student.id, used, usedAt)
         }
-        onNoteBlur={
+        onSaveNote={
           noteRequest
-            ? (reason) => {
-                if (reason.trim() !== (noteRequest.reason ?? "").trim()) {
-                  void setPostponeRequestReason(noteRequest.id, reason);
-                }
-              }
+            ? (reason) => setPostponeRequestReason(noteRequest.id, reason)
             : undefined
         }
       />
@@ -654,16 +660,21 @@ function PostponeUsedCard({
   used,
   usedAt,
   note,
+  noteLessonLabel,
   onChange,
-  onNoteBlur,
+  onSaveNote,
 }: {
   used: boolean;
   usedAt: string;
   note: string;
+  noteLessonLabel?: string | null;
   onChange: (used: boolean, usedAt?: string) => void;
-  onNoteBlur?: (reason: string) => void;
+  onSaveNote?: (reason: string) => Promise<void>;
 }) {
   const [dateValue, setDateValue] = useState(usedAt || todayISO());
+  const [noteDraft, setNoteDraft] = useState(note);
+  const [savingNote, setSavingNote] = useState(false);
+  const noteDirty = noteDraft.trim() !== (note ?? "").trim();
 
   return (
     <Card className="space-y-3 p-4">
@@ -696,19 +707,38 @@ function PostponeUsedCard({
           className="w-full rounded-2xl border border-border bg-white px-3 py-2 text-sm"
         />
       </div>
-      {onNoteBlur ? (
-        <label className="block space-y-1">
-          <span className="text-xs uppercase tracking-[0.16em] text-muted">
-            Erteleme notu
-          </span>
-          <textarea
-            defaultValue={note}
-            rows={2}
-            placeholder="Öğrencinin göreceği erteleme notu…"
-            className="w-full rounded-2xl border border-border bg-white px-3 py-2 text-sm"
-            onBlur={(event) => onNoteBlur(event.target.value)}
-          />
-        </label>
+      {onSaveNote ? (
+        <div className="space-y-2">
+          <label className="block space-y-1">
+            <span className="text-xs uppercase tracking-[0.16em] text-muted">
+              Erteleme notu
+            </span>
+            <textarea
+              value={noteDraft}
+              rows={2}
+              placeholder="Öğrencinin göreceği erteleme notu…"
+              className="w-full rounded-2xl border border-border bg-white px-3 py-2 text-sm"
+              onChange={(event) => setNoteDraft(event.target.value)}
+            />
+          </label>
+          {noteLessonLabel ? (
+            <p className="text-xs text-muted">
+              Öğrenci bu notu {noteLessonLabel} dersinde görür.
+            </p>
+          ) : null}
+          <Button
+            disabled={savingNote || !noteDirty}
+            onClick={() => {
+              if (savingNote || !noteDirty) return;
+              setSavingNote(true);
+              void onSaveNote(noteDraft)
+                .catch(() => undefined)
+                .finally(() => setSavingNote(false));
+            }}
+          >
+            {savingNote ? "Kaydediliyor…" : "Notu Kaydet"}
+          </Button>
+        </div>
       ) : null}
       {usedAt ? (
         <p className="text-sm text-amber-800">
