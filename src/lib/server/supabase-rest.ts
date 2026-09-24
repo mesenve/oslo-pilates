@@ -68,6 +68,39 @@ export async function deleteSupabasePostponeRequest(requestId: string) {
   });
 }
 
+/** Single-row upsert so a postpone request cannot be lost if a full snapshot write races. */
+export async function upsertSupabasePostponeRequest(row: {
+  id: string;
+  studentId: string;
+  sessionId: string;
+  reason: string;
+  status: string;
+  createdAt: string;
+}) {
+  await request<unknown>("postpone_requests?on_conflict=id", {
+    method: "POST",
+    headers: { Prefer: "resolution=merge-duplicates,return=minimal" },
+    body: JSON.stringify([
+      {
+        id: row.id,
+        student_id: row.studentId,
+        session_id: row.sessionId,
+        reason: row.reason,
+        status: row.status,
+        created_at: row.createdAt,
+      },
+    ]),
+  });
+}
+
+export async function upsertSupabaseSessionStatus(sessionId: string, status: string) {
+  await request<unknown>(`sessions?id=eq.${encodeURIComponent(sessionId)}`, {
+    method: "PATCH",
+    headers: { Prefer: "return=minimal" },
+    body: JSON.stringify({ status }),
+  });
+}
+
 /** Permanently remove one student and all dependent records. */
 export async function deleteSupabaseStudent(studentId: string) {
   const filter = encodeURIComponent(studentId);

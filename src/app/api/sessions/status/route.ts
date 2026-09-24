@@ -1,5 +1,5 @@
 import { readStudioSnapshot, snapshotRevision, writeStudioSnapshot } from "@/app/api/studio/route";
-import { deleteSupabasePostponeRequest, isSupabaseConfigured } from "@/lib/server/supabase-rest";
+import { deleteSupabasePostponeRequest, isSupabaseConfigured, upsertSupabasePostponeRequest, upsertSupabaseSessionStatus } from "@/lib/server/supabase-rest";
 import { getSessionUser } from "@/lib/server/session";
 import { todayISO } from "@/lib/dates";
 import { getClassGroupById } from "@/data/groups";
@@ -45,14 +45,15 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: "Geri alınabilecek bir erteleme talebi yok." }, { status: 409 });
       }
       snapshot.sessions = snapshot.sessions?.map((item) =>
-        item.id === session.id ? { ...item, status: "upcoming" } : item,
-      );
+      item.id === session.id ? { ...item, status: "upcoming" } : item,
+    );
       snapshot.postponeRequests = snapshot.postponeRequests?.filter(
         (item) => item.id !== pendingRequest.id,
       );
       await writeStudioSnapshot({ configured: true, snapshot });
       if (isSupabaseConfigured()) {
         await deleteSupabasePostponeRequest(pendingRequest.id);
+        await upsertSupabaseSessionStatus(session.id, "upcoming");
       }
       return NextResponse.json({ ok: true, revision: snapshotRevision(snapshot) });
     }
@@ -94,6 +95,10 @@ export async function POST(request: Request) {
     );
     snapshot.postponeRequests = [nextRequest, ...(snapshot.postponeRequests ?? [])];
     await writeStudioSnapshot({ configured: true, snapshot });
+    if (isSupabaseConfigured()) {
+      await upsertSupabasePostponeRequest(nextRequest);
+      await upsertSupabaseSessionStatus(session.id, "postpone_pending");
+    }
     return NextResponse.json({ ok: true, request: nextRequest, revision: snapshotRevision(snapshot) });
   }
   const sharedPair = ["staff-delfin", "staff-elif"];
