@@ -82,10 +82,9 @@ export function SessionBadge({ status }: { status: SessionStatus }) {
       ? "success"
       : status === "upcoming" ||
           status === "attend_pending" ||
-          status === "postpone_pending" ||
-          status === "postponed"
+          status === "postpone_pending"
         ? "warning"
-        : status === "missed"
+        : status === "missed" || status === "postponed"
           ? "danger"
           : "neutral";
   return <Badge tone={tone}>{SESSION_LABELS[status]}</Badge>;

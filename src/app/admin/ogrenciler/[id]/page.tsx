@@ -508,6 +508,21 @@ export default function StudentDetailPage() {
                   <RequestBadge status={request.status} />
                 </div>
                 {lessonTime ? <p className="text-sm text-muted">{lessonTime}</p> : null}
+                {request.id === requests[0]?.id ? (
+                  <PostponeUsedFields
+                    used={student.postponeLessonUsed ?? false}
+                    usedAt={
+                      postponeUsedDateInPackage(
+                        student,
+                        visiblePostponeRequests,
+                        visibleSessions,
+                      ) ?? student.postponeLessonUsedAt ?? ""
+                    }
+                    onChange={(used, usedAt) =>
+                      setPostponeLessonUsed(student.id, used, usedAt)
+                    }
+                  />
+                ) : null}
                 <PostponeNoteEditor
                   key={`${request.id}:${request.reason ?? ""}`}
                   initialNote={request.reason ?? ""}
@@ -542,25 +557,6 @@ export default function StudentDetailPage() {
       </section>
 
       {actionError ? <p className="text-sm text-red-700">{actionError}</p> : null}
-
-      <PostponeUsedCard
-        key={`${
-          postponeUsedDateInPackage(
-            student,
-            visiblePostponeRequests,
-            visibleSessions,
-          ) ?? student.postponeLessonUsedAt ?? "unused"
-        }`}
-        used={student.postponeLessonUsed ?? false}
-        usedAt={
-          postponeUsedDateInPackage(
-            student,
-            visiblePostponeRequests,
-            visibleSessions,
-          ) ?? student.postponeLessonUsedAt ?? ""
-        }
-        onChange={(used, usedAt) => setPostponeLessonUsed(student.id, used, usedAt)}
-      />
 
       <section className="space-y-3">
         <h2 className="font-serif text-xl">Tüm dersler</h2>
@@ -655,7 +651,7 @@ function AttendanceStatusPicker({
     {
       value: "postponed",
       label: "Ertelendi",
-      className: "border-amber-100 bg-amber-50 text-amber-800",
+      className: "border-red-100 bg-red-50 text-red-700",
     },
     {
       value: "missed",
@@ -773,7 +769,7 @@ function PostponeNoteEditor({
   );
 }
 
-function PostponeUsedCard({
+function PostponeUsedFields({
   used,
   usedAt,
   onChange,
@@ -786,7 +782,7 @@ function PostponeUsedCard({
   const [error, setError] = useState<string | null>(null);
 
   return (
-    <Card className="space-y-3 p-4">
+    <div className="space-y-3">
       <label className="flex cursor-pointer items-center gap-3">
         <input
           type="checkbox"
@@ -830,7 +826,7 @@ function PostponeUsedCard({
           Erteleme hakkı {formatLongDate(usedAt)} tarihinde kullanıldı.
         </p>
       ) : null}
-    </Card>
+    </div>
   );
 }
 
