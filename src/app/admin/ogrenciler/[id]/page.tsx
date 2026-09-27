@@ -479,7 +479,9 @@ export default function StudentDetailPage() {
       ) : (
         selected.map((session) => {
           const status = effectiveSessionStatus(session);
-          const request = requests.find((item) => item.sessionId === session.id);
+          const request = studentRequests.find(
+            (item) => item.sessionId === session.id,
+          );
           return (
             <Card key={session.id} className="space-y-2 p-4">
               <div className="flex items-center justify-between gap-3">
