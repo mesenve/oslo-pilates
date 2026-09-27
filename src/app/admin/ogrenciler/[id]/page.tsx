@@ -726,6 +726,7 @@ function PostponeNoteEditor({
   const [savingNote, setSavingNote] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const noteDirty = noteDraft.trim() !== (initialNote ?? "").trim();
+  const noteSaved = Boolean(initialNote.trim()) && !noteDirty;
 
   return (
     <div className="space-y-2">
@@ -762,7 +763,16 @@ function PostponeNoteEditor({
             .finally(() => setSavingNote(false));
         }}
       >
-        {savingNote ? "Kaydediliyor…" : "Notu Kaydet"}
+        {savingNote ? (
+          "Kaydediliyor…"
+        ) : noteSaved ? (
+          <span className="inline-flex items-center gap-1 text-emerald-700">
+            <CheckIcon className="h-4 w-4" />
+            Not kaydedildi
+          </span>
+        ) : (
+          "Notu Kaydet"
+        )}
       </Button>
       {error ? <p className="text-sm text-red-700">{error}</p> : null}
     </div>
