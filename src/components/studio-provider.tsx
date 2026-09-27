@@ -751,7 +751,11 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
       if (!session || !canManageStudent(current.user, session.studentId, current.students)) {
         return false;
       }
-      if (session.date > todayISO() && outcome !== "upcoming") {
+      if (
+        session.date > todayISO() &&
+        outcome !== "upcoming" &&
+        outcome !== "postponed"
+      ) {
         return false;
       }
       const response = await fetch("/api/sessions/status", {
@@ -760,6 +764,9 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
         body: JSON.stringify({ sessionId, status: outcome }),
       });
       if (!response.ok) return false;
+      const data = (await response.json().catch(() => null)) as {
+        request?: StudioState["postponeRequests"][number];
+      } | null;
       setStudioState((current) => {
         const session = current.sessions.find((item) => item.id === sessionId);
         if (!session) return current;
@@ -825,21 +832,23 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
           };
         }
 
+        const created = data?.request ?? {
+          id: `req-${sessionId}-inst-${Date.now()}`,
+          studentId: session.studentId,
+          sessionId,
+          reason: "Eğitmen erteleme işaretledi.",
+          status: "approved" as const,
+          createdAt: `${todayISO()}T12:00:00`,
+        };
+
         return {
           ...current,
           sessions: current.sessions.map((item) =>
             item.id === sessionId ? { ...item, status: "postponed" } : item,
           ),
           postponeRequests: [
-            {
-              id: `req-${sessionId}-inst-${Date.now()}`,
-              studentId: session.studentId,
-              sessionId,
-              reason: "Eğitmen erteleme işaretledi.",
-              status: "approved" as const,
-              createdAt: `${todayISO()}T12:00:00`,
-            },
-            ...current.postponeRequests,
+            created,
+            ...current.postponeRequests.filter((item) => item.sessionId !== sessionId),
           ],
         };
       });

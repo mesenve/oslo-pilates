@@ -126,10 +126,11 @@ export async function POST(request: Request) {
   if (
     session.date > todayISO() &&
     body.status !== "upcoming" &&
+    body.status !== "postponed" &&
     !approvingPostpone
   ) {
     return NextResponse.json(
-      { error: "Gelecekteki dersler bekleniyor olarak kalır." },
+      { error: "Gelecekteki dersler yalnızca bekleniyor veya ertelendi olabilir." },
       { status: 400 },
     );
   }
@@ -162,14 +163,23 @@ export async function POST(request: Request) {
   await upsertSupabaseSessionStatus(session.id, body.status!);
   if (body.status === "postponed" && !pendingPostpone) {
     const createdAt = new Date().toISOString();
-    await upsertSupabasePostponeRequest({
+    const request = {
       id: `req-${session.id}-${Date.now()}`,
       studentId: student.id,
       sessionId: session.id,
       reason: body.reason?.trim() || "Eğitmen erteleme işaretledi.",
-      status: "approved",
+      status: "approved" as const,
       createdAt,
+    };
+    await upsertSupabasePostponeRequest({
+      id: request.id,
+      studentId: request.studentId,
+      sessionId: request.sessionId,
+      reason: request.reason,
+      status: request.status,
+      createdAt: request.createdAt,
     });
+    return NextResponse.json({ ok: true, request });
   }
   return NextResponse.json({ ok: true });
 }

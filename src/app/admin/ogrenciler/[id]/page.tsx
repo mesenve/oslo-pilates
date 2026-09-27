@@ -110,10 +110,6 @@ export default function StudentDetailPage() {
   const requests = visiblePostponeRequests.filter(
     (request) => request.studentId === student?.id,
   );
-  const noteRequest =
-    requests.find((request) => request.status === "approved") ??
-    requests.find((request) => request.status === "pending") ??
-    requests[0];
 
   if (!student) {
     return (
@@ -512,6 +508,12 @@ export default function StudentDetailPage() {
                   <RequestBadge status={request.status} />
                 </div>
                 {lessonTime ? <p className="text-sm text-muted">{lessonTime}</p> : null}
+                <PostponeNoteEditor
+                  key={`${request.id}:${request.reason ?? ""}`}
+                  initialNote={request.reason ?? ""}
+                  lessonLabel={session ? formatLongDate(session.date) : null}
+                  onSave={(reason) => setPostponeRequestReason(request.id, reason)}
+                />
                 {request.status === "pending" ? (
                   <Button
                     disabled={approvingId === request.id}
@@ -548,7 +550,7 @@ export default function StudentDetailPage() {
             visiblePostponeRequests,
             visibleSessions,
           ) ?? student.postponeLessonUsedAt ?? "unused"
-        }:${noteRequest?.id ?? "none"}`}
+        }`}
         used={student.postponeLessonUsed ?? false}
         usedAt={
           postponeUsedDateInPackage(
@@ -557,36 +559,27 @@ export default function StudentDetailPage() {
             visibleSessions,
           ) ?? student.postponeLessonUsedAt ?? ""
         }
-        note={noteRequest?.reason ?? ""}
-        noteLessonLabel={
-          noteRequest
-            ? (() => {
-                const session = visibleSessions.find(
-                  (item) => item.id === noteRequest.sessionId,
-                );
-                return session ? formatLongDate(session.date) : null;
-              })()
-            : null
-        }
         onChange={(used, usedAt) => setPostponeLessonUsed(student.id, used, usedAt)}
-        onSaveNote={
-          noteRequest
-            ? (reason) => setPostponeRequestReason(noteRequest.id, reason)
-            : undefined
-        }
       />
 
       <section className="space-y-3">
         <h2 className="font-serif text-xl">Tüm dersler</h2>
         {mine.map((session) => {
           const status = effectiveSessionStatus(session);
-          const canChangeStatus = session.date < today || status !== "upcoming";
           const pickerStatus =
             status === "attend_pending"
               ? "attended"
               : status === "postpone_pending"
                 ? "postponed"
-                : status;
+                : status === "upcoming" ||
+                    status === "attended" ||
+                    status === "postponed" ||
+                    status === "missed"
+                  ? status
+                  : "upcoming";
+          const futureOnly =
+            session.date > today &&
+            (pickerStatus === "upcoming" || pickerStatus === "postponed");
           return (
             <div
               key={session.id}
@@ -599,21 +592,18 @@ export default function StudentDetailPage() {
               >
                 {formatLongDate(session.date)}
               </button>
-              {canChangeStatus ? (
-                <AttendanceStatusPicker
-                  status={pickerStatus as "attended" | "postponed" | "missed"}
-                  onChange={(nextStatus) => {
-                    setActionError(null);
-                    void markSessionByInstructor(session.id, nextStatus).then((ok) => {
-                      if (!ok) {
-                        setActionError("Ders durumu güncellenemedi. Tekrar dene.");
-                      }
-                    });
-                  }}
-                />
-              ) : (
-                <SessionBadge status={status} />
-              )}
+              <AttendanceStatusPicker
+                status={pickerStatus}
+                futureOnly={futureOnly}
+                onChange={(nextStatus) => {
+                  setActionError(null);
+                  void markSessionByInstructor(session.id, nextStatus).then((ok) => {
+                    if (!ok) {
+                      setActionError("Ders durumu güncellenemedi. Tekrar dene.");
+                    }
+                  });
+                }}
+              />
             </div>
           );
         })}
@@ -638,18 +628,25 @@ export default function StudentDetailPage() {
 
 function AttendanceStatusPicker({
   status,
+  futureOnly = false,
   onChange,
 }: {
-  status: "attended" | "postponed" | "missed";
-  onChange: (status: "attended" | "postponed" | "missed") => void;
+  status: "upcoming" | "attended" | "postponed" | "missed";
+  futureOnly?: boolean;
+  onChange: (status: "upcoming" | "attended" | "postponed" | "missed") => void;
 }) {
   const [open, setOpen] = useState(false);
   const pickerRef = useRef<HTMLDivElement>(null);
-  const options: Array<{
-    value: "attended" | "postponed" | "missed";
+  const allOptions: Array<{
+    value: "upcoming" | "attended" | "postponed" | "missed";
     label: string;
     className: string;
   }> = [
+    {
+      value: "upcoming",
+      label: "Bekleniyor",
+      className: "border-amber-100 bg-amber-50 text-amber-800",
+    },
     {
       value: "attended",
       label: "Geldi",
@@ -657,7 +654,7 @@ function AttendanceStatusPicker({
     },
     {
       value: "postponed",
-      label: "Erteleme",
+      label: "Ertelendi",
       className: "border-amber-100 bg-amber-50 text-amber-800",
     },
     {
@@ -666,7 +663,15 @@ function AttendanceStatusPicker({
       className: "border-red-100 bg-red-50 text-red-700",
     },
   ];
-  const current = options.find((option) => option.value === status) ?? options[0];
+  const options = futureOnly
+    ? allOptions.filter(
+        (option) => option.value === "upcoming" || option.value === "postponed",
+      )
+    : allOptions;
+  const current =
+    options.find((option) => option.value === status) ??
+    allOptions.find((option) => option.value === status) ??
+    options[0];
 
   useEffect(() => {
     if (!open) return;
@@ -712,26 +717,73 @@ function AttendanceStatusPicker({
   );
 }
 
+function PostponeNoteEditor({
+  initialNote,
+  lessonLabel,
+  onSave,
+}: {
+  initialNote: string;
+  lessonLabel?: string | null;
+  onSave: (reason: string) => Promise<boolean>;
+}) {
+  const [noteDraft, setNoteDraft] = useState(initialNote);
+  const [savingNote, setSavingNote] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const noteDirty = noteDraft.trim() !== (initialNote ?? "").trim();
+
+  return (
+    <div className="space-y-2">
+      <label className="block space-y-1">
+        <span className="text-xs uppercase tracking-[0.16em] text-muted">
+          Erteleme notu
+        </span>
+        <textarea
+          value={noteDraft}
+          rows={2}
+          placeholder="Öğrencinin göreceği erteleme notu…"
+          className="w-full rounded-2xl border border-border bg-white px-3 py-2 text-sm"
+          onChange={(event) => setNoteDraft(event.target.value)}
+        />
+      </label>
+      {lessonLabel ? (
+        <p className="text-xs text-muted">
+          Öğrenci bu notu {lessonLabel} dersinde görür.
+        </p>
+      ) : null}
+      <Button
+        disabled={savingNote || !noteDirty}
+        onClick={() => {
+          if (savingNote || !noteDirty) return;
+          setError(null);
+          setSavingNote(true);
+          void onSave(noteDraft)
+            .then((ok) => {
+              if (!ok) setError("Not kaydedilemedi. Tekrar dene.");
+            })
+            .catch(() => {
+              setError("Not kaydedilemedi. Tekrar dene.");
+            })
+            .finally(() => setSavingNote(false));
+        }}
+      >
+        {savingNote ? "Kaydediliyor…" : "Notu Kaydet"}
+      </Button>
+      {error ? <p className="text-sm text-red-700">{error}</p> : null}
+    </div>
+  );
+}
+
 function PostponeUsedCard({
   used,
   usedAt,
-  note,
-  noteLessonLabel,
   onChange,
-  onSaveNote,
 }: {
   used: boolean;
   usedAt: string;
-  note: string;
-  noteLessonLabel?: string | null;
   onChange: (used: boolean, usedAt?: string) => Promise<boolean>;
-  onSaveNote?: (reason: string) => Promise<boolean>;
 }) {
   const [dateValue, setDateValue] = useState(usedAt || todayISO());
-  const [noteDraft, setNoteDraft] = useState(note);
-  const [savingNote, setSavingNote] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const noteDirty = noteDraft.trim() !== (note ?? "").trim();
 
   return (
     <Card className="space-y-3 p-4">
@@ -772,45 +824,6 @@ function PostponeUsedCard({
           className="w-full rounded-2xl border border-border bg-white px-3 py-2 text-sm"
         />
       </div>
-      {onSaveNote ? (
-        <div className="space-y-2">
-          <label className="block space-y-1">
-            <span className="text-xs uppercase tracking-[0.16em] text-muted">
-              Erteleme notu
-            </span>
-            <textarea
-              value={noteDraft}
-              rows={2}
-              placeholder="Öğrencinin göreceği erteleme notu…"
-              className="w-full rounded-2xl border border-border bg-white px-3 py-2 text-sm"
-              onChange={(event) => setNoteDraft(event.target.value)}
-            />
-          </label>
-          {noteLessonLabel ? (
-            <p className="text-xs text-muted">
-              Öğrenci bu notu {noteLessonLabel} dersinde görür.
-            </p>
-          ) : null}
-          <Button
-            disabled={savingNote || !noteDirty}
-            onClick={() => {
-              if (savingNote || !noteDirty) return;
-              setError(null);
-              setSavingNote(true);
-              void onSaveNote(noteDraft)
-                .then((ok) => {
-                  if (!ok) setError("Not kaydedilemedi. Tekrar dene.");
-                })
-                .catch(() => {
-                  setError("Not kaydedilemedi. Tekrar dene.");
-                })
-                .finally(() => setSavingNote(false));
-            }}
-          >
-            {savingNote ? "Kaydediliyor…" : "Notu Kaydet"}
-          </Button>
-        </div>
-      ) : null}
       {error ? <p className="text-sm text-red-700">{error}</p> : null}
       {usedAt ? (
         <p className="text-sm text-amber-800">
