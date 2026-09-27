@@ -107,7 +107,7 @@ export default function StudentDetailPage() {
     : "";
   const groupLabel = group?.label ?? "Program bilgisi yok";
   const lessonTime = hasCustomTime ? customTime : (group?.time && group.time !== "Belirtilmedi" && group.time !== "—" ? group.time : "Saat bilgisi yok");
-  const requests = visiblePostponeRequests
+  const studentRequests = visiblePostponeRequests
     .filter((request) => request.studentId === student?.id)
     .sort((a, b) => {
       const aActive = a.status === "pending" || a.status === "approved";
@@ -119,6 +119,14 @@ export default function StudentDetailPage() {
       (request, index, all) =>
         all.findIndex((item) => item.sessionId === request.sessionId) === index,
     );
+  // Paket başına tek erteleme kartı: bekleyen varsa o, yoksa en güncel onaylı.
+  const postponeCard =
+    studentRequests.find((request) => request.status === "pending") ??
+    studentRequests.find((request) => request.status === "approved") ??
+    null;
+  const postponeCardSession = postponeCard
+    ? visibleSessions.find((item) => item.id === postponeCard.sessionId)
+    : undefined;
 
   if (!student) {
     return (
@@ -503,65 +511,71 @@ export default function StudentDetailPage() {
 
       <section className="space-y-3">
         <h2 className="font-serif text-xl">Erteleme</h2>
-        {requests.length === 0 ? (
+        {!postponeCard ? (
           <EmptyState>Bu öğrencinin erteleme kaydı yok.</EmptyState>
         ) : (
-          requests.map((request) => {
-            const session = visibleSessions.find((item) => item.id === request.sessionId);
-            return (
-              <Card key={request.id} className="space-y-2 p-4">
-                <div className="flex items-center justify-between gap-3">
-                  <p className="capitalize">
-                    {session ? formatLongDate(session.date) : "Ders bulunamadı"}
-                  </p>
-                  <RequestBadge status={request.status} />
-                </div>
-                {lessonTime ? <p className="text-sm text-muted">{lessonTime}</p> : null}
-                {request.id === requests[0]?.id ? (
-                  <PostponeUsedFields
-                    used={student.postponeLessonUsed ?? false}
-                    usedAt={
-                      postponeUsedDateInPackage(
-                        student,
-                        visiblePostponeRequests,
-                        visibleSessions,
-                      ) ?? student.postponeLessonUsedAt ?? ""
-                    }
-                    onChange={(used, usedAt) =>
-                      setPostponeLessonUsed(student.id, used, usedAt)
-                    }
-                  />
-                ) : null}
-                <PostponeNoteEditor
-                  key={`${request.id}:${request.reason ?? ""}`}
-                  initialNote={request.reason ?? ""}
-                  lessonLabel={session ? formatLongDate(session.date) : null}
-                  onSave={(reason) => setPostponeRequestReason(request.id, reason)}
-                />
-                {request.status === "pending" ? (
-                  <Button
-                    disabled={approvingId === request.id}
-                    onClick={() => {
-                      if (approvingId) return;
-                      setActionError(null);
-                      setApprovingId(request.id);
-                      void approveRequest(request.id)
-                        .then((ok) => {
-                          if (!ok) setActionError("Talep onaylanamadı. Tekrar dene.");
-                        })
-                        .catch(() => {
-                          setActionError("Talep onaylanamadı. Tekrar dene.");
-                        })
-                        .finally(() => setApprovingId(null));
-                    }}
-                  >
-                    {approvingId === request.id ? "Onaylanıyor…" : "Onayla"}
-                  </Button>
-                ) : null}
-                {request.actedAt ? <p className="text-xs text-muted">İşlemi yapan: {getStaffById(request.actedBy ?? "")?.name ?? request.actedBy ?? "—"}</p> : null}
-              </Card>
-            );
-          })
+          <Card className="space-y-2 p-4">
+            <div className="flex items-center justify-between gap-3">
+              <p className="capitalize">
+                {postponeCardSession
+                  ? formatLongDate(postponeCardSession.date)
+                  : "Ders bulunamadı"}
+              </p>
+              <RequestBadge status={postponeCard.status} />
+            </div>
+            {lessonTime ? <p className="text-sm text-muted">{lessonTime}</p> : null}
+            <PostponeUsedFields
+              used={student.postponeLessonUsed ?? false}
+              usedAt={
+                postponeUsedDateInPackage(
+                  student,
+                  visiblePostponeRequests,
+                  visibleSessions,
+                ) ?? student.postponeLessonUsedAt ?? ""
+              }
+              onChange={(used, usedAt) =>
+                setPostponeLessonUsed(student.id, used, usedAt)
+              }
+            />
+            <PostponeNoteEditor
+              key={`${postponeCard.id}:${postponeCard.reason ?? ""}`}
+              initialNote={postponeCard.reason ?? ""}
+              lessonLabel={
+                postponeCardSession
+                  ? formatLongDate(postponeCardSession.date)
+                  : null
+              }
+              onSave={(reason) => setPostponeRequestReason(postponeCard.id, reason)}
+            />
+            {postponeCard.status === "pending" ? (
+              <Button
+                disabled={approvingId === postponeCard.id}
+                onClick={() => {
+                  if (approvingId) return;
+                  setActionError(null);
+                  setApprovingId(postponeCard.id);
+                  void approveRequest(postponeCard.id)
+                    .then((ok) => {
+                      if (!ok) setActionError("Talep onaylanamadı. Tekrar dene.");
+                    })
+                    .catch(() => {
+                      setActionError("Talep onaylanamadı. Tekrar dene.");
+                    })
+                    .finally(() => setApprovingId(null));
+                }}
+              >
+                {approvingId === postponeCard.id ? "Onaylanıyor…" : "Onayla"}
+              </Button>
+            ) : null}
+            {postponeCard.actedAt ? (
+              <p className="text-xs text-muted">
+                İşlemi yapan:{" "}
+                {getStaffById(postponeCard.actedBy ?? "")?.name ??
+                  postponeCard.actedBy ??
+                  "—"}
+              </p>
+            ) : null}
+          </Card>
         )}
       </section>
 

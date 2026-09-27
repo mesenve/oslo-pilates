@@ -185,6 +185,17 @@ export async function POST(request: Request) {
       status: "approved" as const,
       createdAt,
     };
+    // Paket başına tek aktif erteleme: eski onaylı/pending talepleri kapat.
+    const otherActive = (data.postponeRequests ?? []).filter(
+      (item) =>
+        item.studentId === student.id &&
+        item.sessionId !== session.id &&
+        item.status !== "rejected",
+    );
+    for (const item of otherActive) {
+      await patchSupabasePostponeStatus(item.id, "rejected");
+      await upsertSupabaseSessionStatus(item.sessionId, "upcoming");
+    }
     await upsertSupabasePostponeRequest({
       id: request.id,
       studentId: request.studentId,

@@ -843,12 +843,30 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
 
         return {
           ...current,
-          sessions: current.sessions.map((item) =>
-            item.id === sessionId ? { ...item, status: "postponed" } : item,
-          ),
+          sessions: current.sessions.map((item) => {
+            if (item.id === sessionId) return { ...item, status: "postponed" };
+            if (
+              item.studentId === session.studentId &&
+              current.postponeRequests.some(
+                (request) =>
+                  request.sessionId === item.id &&
+                  request.studentId === session.studentId &&
+                  request.status !== "rejected",
+              )
+            ) {
+              return { ...item, status: "upcoming" };
+            }
+            return item;
+          }),
           postponeRequests: [
             created,
-            ...current.postponeRequests.filter((item) => item.sessionId !== sessionId),
+            ...current.postponeRequests
+              .filter((item) => item.sessionId !== sessionId)
+              .map((item) =>
+                item.studentId === session.studentId && item.status !== "rejected"
+                  ? { ...item, status: "rejected" as const }
+                  : item,
+              ),
           ],
         };
       });
