@@ -107,9 +107,18 @@ export default function StudentDetailPage() {
     : "";
   const groupLabel = group?.label ?? "Program bilgisi yok";
   const lessonTime = hasCustomTime ? customTime : (group?.time && group.time !== "Belirtilmedi" && group.time !== "—" ? group.time : "Saat bilgisi yok");
-  const requests = visiblePostponeRequests.filter(
-    (request) => request.studentId === student?.id,
-  );
+  const requests = visiblePostponeRequests
+    .filter((request) => request.studentId === student?.id)
+    .sort((a, b) => {
+      const aActive = a.status === "pending" || a.status === "approved";
+      const bActive = b.status === "pending" || b.status === "approved";
+      if (aActive !== bActive) return aActive ? -1 : 1;
+      return b.createdAt.localeCompare(a.createdAt);
+    })
+    .filter(
+      (request, index, all) =>
+        all.findIndex((item) => item.sessionId === request.sessionId) === index,
+    );
 
   if (!student) {
     return (

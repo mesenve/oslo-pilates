@@ -2,6 +2,7 @@ import {
   applyStudentPostponeRpc,
   isSupabaseConfigured,
   readSupabaseStudioData,
+  patchSupabasePostponeStatus,
   reviewStudentPostponeRpc,
   upsertSupabasePostponeRequest,
   upsertSupabaseSessionStatus,
@@ -116,9 +117,12 @@ export async function POST(request: Request) {
   if (!session || !student || !allowed || !data) {
     return NextResponse.json({ error: "Bu ders için yetkiniz yok." }, { status: 403 });
   }
-  const pendingPostpone = data.postponeRequests?.find(
-    (item) => item.sessionId === session.id && item.status === "pending",
+  const activePostpone = data.postponeRequests?.find(
+    (item) => item.sessionId === session.id && item.status !== "rejected",
   );
+  const pendingPostpone = activePostpone?.status === "pending"
+    ? activePostpone
+    : undefined;
   // Pending request remains the approval source of truth.
   const approvingPostpone = body.status === "postponed" && Boolean(pendingPostpone);
   const rejectingPostpone =
@@ -160,6 +164,16 @@ export async function POST(request: Request) {
   }
 
   // Instructor manual session outcome (attended / missed / postponed without pending request).
+  if (body.status === "postponed" && !pendingPostpone && activePostpone) {
+    await upsertSupabaseSessionStatus(session.id, "postponed");
+    return NextResponse.json({ ok: true, request: activePostpone });
+  }
+  if (
+    activePostpone &&
+    (body.status === "attended" || body.status === "missed" || body.status === "upcoming")
+  ) {
+    await patchSupabasePostponeStatus(activePostpone.id, "rejected");
+  }
   await upsertSupabaseSessionStatus(session.id, body.status!);
   if (body.status === "postponed" && !pendingPostpone) {
     const createdAt = new Date().toISOString();

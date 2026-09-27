@@ -426,6 +426,20 @@ export async function patchSupabasePostponeReason(
   );
 }
 
+export async function patchSupabasePostponeStatus(
+  requestId: string,
+  status: "pending" | "approved" | "rejected",
+) {
+  await request<unknown>(
+    `postpone_requests?id=eq.${encodeURIComponent(requestId)}`,
+    {
+      method: "PATCH",
+      headers: { Prefer: "return=minimal" },
+      body: JSON.stringify({ status, updated_at: new Date().toISOString() }),
+    },
+  );
+}
+
 export type SupabasePasswordResetRow = {
   token: string;
   kind: "student" | "staff";
