@@ -15,6 +15,11 @@ export function isIrregularGroup(groupId: string) {
   return groupId === IRREGULAR_GROUP_ID;
 }
 
+/** Returns true when the id belongs to one of the built-in ready-made groups. */
+export function isPresetGroupId(groupId: string) {
+  return CLASS_GROUPS.some((group) => group.id === groupId);
+}
+
 export function getClassGroups(): ClassGroup[] {
   const byId = new Map<string, ClassGroup>();
   for (const group of CLASS_GROUPS) byId.set(group.id, group);

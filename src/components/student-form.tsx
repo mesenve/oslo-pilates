@@ -79,7 +79,11 @@ export function StudentForm({
   })();
 
   function update(field: keyof typeof form, value: string) {
-    setForm((current) => ({ ...current, [field]: value }));
+    setForm((current) =>
+      field === "customTime"
+        ? { ...current, customTime: value, customScheduleEnabled: true }
+        : { ...current, [field]: value },
+    );
     setError(null);
   }
 
@@ -90,30 +94,26 @@ export function StudentForm({
 
   function selectGroup(groupId: string) {
     setForm((current) => {
-      const wasIrregular = isIrregularGroup(current.groupId);
       const isNowIrregular = isIrregularGroup(groupId);
       const groupDays = getClassGroupById(groupId)?.days ?? [];
       if (!isNowIrregular) {
-        // Hazır bir grup seçildiğinde öğrencinin programı doğrudan grubun
-        // gün ve saatini kullanır; aynı özel program grubu düzenleniyorsa
-        // mevcut alanları temizleyip paketin geçmişini bozmayız.
-        const editingSameCustomGroup =
-          current.groupId === groupId && current.customDays.length > 0;
+        // Kayıtlı bir grup seçildiğinde eski özel gün/saat değerleri hiçbir
+        // koşulda yeni pakete taşınmamalı. Özel program için öğretmen gün
+        // düğmelerine veya saat alanına ayrıca dokunmalıdır.
         return {
           ...current,
           groupId,
-          customDays: editingSameCustomGroup ? current.customDays : [],
-          customTime: editingSameCustomGroup ? current.customTime : "",
+          customDays: [],
+          customTime: "",
+          customScheduleEnabled: false,
         };
       }
       return {
         ...current,
         groupId,
-        customDays:
-          isNowIrregular && current.customDays.length === 0 && !wasIrregular
-            ? [...groupDays]
-            : current.customDays,
+        customDays: current.customDays.length === 0 ? [...groupDays] : current.customDays,
         customTime: current.customTime,
+        customScheduleEnabled: true,
       };
     });
     setError(null);
@@ -141,11 +141,11 @@ export function StudentForm({
       return;
     }
     const isIrregular = isIrregularGroup(form.groupId);
-    if (isIrregular && (!form.customDays.length || !form.customTime)) {
+    if (isIrregular && (!form.customDays.length || !form.customTime.trim())) {
       setError("Özel program için gün ve saat gerekli.");
       return;
     }
-    if (form.customDays.length && !form.customTime) {
+    if (form.customScheduleEnabled && (!form.customDays.length || !form.customTime.trim())) {
       setError("Özel programda gün ve saat birlikte girilmeli.");
       return;
     }
@@ -156,7 +156,7 @@ export function StudentForm({
     // Gün ve saat elle girildiyse öğrenci hazır grubun üzerinde kalmaz:
     // bu program kayıtla birlikte kendi kalıcı grubuna dönüşür.
     const newGroup: ClassGroup | undefined =
-      form.customDays.length && form.customTime.trim()
+      form.customScheduleEnabled && form.customDays.length && form.customTime.trim()
         ? {
       id: groupIdForSchedule(form.customDays, form.customTime),
       days: form.customDays,
@@ -438,6 +438,7 @@ function formFromStudent(
   defaultInstructorId?: string,
 ) {
   const groupId = student?.groupId ?? fallbackGroupId;
+  const existingCustomSchedule = student?.package.customSchedule;
   return {
     name: student?.name ?? "",
     email: student?.email ?? "",
@@ -455,8 +456,9 @@ function formFromStudent(
     note: student?.note ?? "",
     monthlyPostponeLimit: student ? String(student.monthlyPostponeLimit) : "",
     startDate: student?.package.startDate ?? todayISO(),
-    customDays: student?.package.customSchedule?.days ?? [],
-    customTime: student?.package.customSchedule?.time ?? "",
+    customDays: isIrregularGroup(groupId) ? existingCustomSchedule?.days ?? [] : [],
+    customTime: isIrregularGroup(groupId) ? existingCustomSchedule?.time ?? "" : "",
+    customScheduleEnabled: isIrregularGroup(groupId) && Boolean(existingCustomSchedule),
   };
 }
 
@@ -488,8 +490,8 @@ function toInput(
       ? Math.max(0, Math.round(monthlyPostponeLimit))
       : 1,
     startDate: form.startDate || todayISO(),
-    customDays: form.customDays,
-    customTime: form.customTime,
+    customDays: newGroup ? form.customDays : undefined,
+    customTime: newGroup ? form.customTime : undefined,
     customGroup: newGroup,
   };
 }

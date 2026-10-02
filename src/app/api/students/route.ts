@@ -1,4 +1,5 @@
 import { canManageStudent } from "@/lib/access";
+import { getClassGroupById, isPresetGroupId } from "@/data/groups";
 import {
   deleteSupabaseStudent,
   patchSupabaseStudent,
@@ -7,7 +8,7 @@ import {
   saveSupabaseStudentBundle,
 } from "@/lib/server/supabase-rest";
 import { getSessionUser } from "@/lib/server/session";
-import type { ClassGroup, Session, Student } from "@/types/studio";
+import type { ClassGroup, DayOfWeek, Session, Student } from "@/types/studio";
 import { NextResponse } from "next/server";
 
 type SaveBody = {
@@ -44,6 +45,62 @@ function findStudent(
   archived: Student[],
 ) {
   return [...active, ...archived].find((student) => student.id === id);
+}
+
+const DAY_BY_UTC_INDEX: DayOfWeek[] = [
+  "sunday",
+  "monday",
+  "tuesday",
+  "wednesday",
+  "thursday",
+  "friday",
+  "saturday",
+];
+
+function sameDays(left: DayOfWeek[], right: DayOfWeek[]) {
+  return left.length === right.length && left.every((day) => right.includes(day));
+}
+
+function validateStudentSchedule(
+  student: Student,
+  sessions: Session[],
+  customGroup: ClassGroup | undefined,
+  customGroups: ClassGroup[],
+) {
+  const selectedGroup = isPresetGroupId(student.groupId)
+    ? getClassGroupById(student.groupId)
+    : customGroups.find((group) => group.id === student.groupId);
+  const customDays = student.package.customSchedule?.days ?? [];
+
+  // A selected saved group is authoritative. A different custom schedule here
+  // is the exact stale-data combination that used to add unintended weekdays.
+  if (selectedGroup && customDays.length && !sameDays(customDays, selectedGroup.days)) {
+    return "Seçilen grup ile özel program günleri uyuşmuyor.";
+  }
+  if (customGroup && customGroup.id !== student.groupId) {
+    return "Özel grup öğrenci programıyla eşleşmiyor.";
+  }
+  if (customGroup && customDays.length && !sameDays(customDays, customGroup.days)) {
+    return "Özel program günleri grupla uyuşmuyor.";
+  }
+
+  const days = customGroup?.days ?? (customDays.length ? customDays : selectedGroup?.days ?? []);
+  if (!days.length) return "Ders günleri tanımlı değil.";
+  if (sessions.length !== student.package.totalSessions) {
+    return "Seans sayısı paket bilgisiyle eşleşmiyor.";
+  }
+  const uniqueDates = new Set<string>();
+  for (const session of sessions) {
+    if (session.groupId !== student.groupId) return "Ders grubu öğrenci programıyla eşleşmiyor.";
+    if (uniqueDates.has(session.date)) return "Aynı tarih için birden fazla seans var.";
+    uniqueDates.add(session.date);
+    const date = new Date(`${session.date}T00:00:00Z`);
+    const day = DAY_BY_UTC_INDEX[date.getUTCDay()];
+    if (!day || !days.includes(day)) {
+      return "Seans günleri seçilen programla eşleşmiyor.";
+    }
+  }
+  return null;
 }
 
 export async function POST(request: Request) {
@@ -97,6 +154,15 @@ export async function POST(request: Request) {
   }
   if (body.sessions.some((session) => session.studentId !== body.student!.id)) {
     return NextResponse.json({ error: "Ders verisi öğrenciyle eşleşmiyor." }, { status: 400 });
+  }
+  const scheduleError = validateStudentSchedule(
+    body.student,
+    body.sessions,
+    body.customGroup,
+    data.customGroups,
+  );
+  if (scheduleError) {
+    return NextResponse.json({ error: scheduleError }, { status: 400 });
   }
 
   const periodChanged = Boolean(

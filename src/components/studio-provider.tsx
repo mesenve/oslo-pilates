@@ -6,7 +6,12 @@ import {
   getStaffById,
 } from "@/data/staff";
 import { buildSessionsForStudent, collectSessionDates } from "@/data/seed";
-import { getClassGroupById, legacyGroupFromId, setCustomGroups } from "@/data/groups";
+import {
+  getClassGroupById,
+  isPresetGroupId,
+  legacyGroupFromId,
+  setCustomGroups,
+} from "@/data/groups";
 import { studentsForUser, sessionsForUser, postponeRequestsForUser, canManageStudent, isStaffRole } from "@/lib/access";
 import { fetchAttendanceMarks, pushAttendanceMark } from "@/lib/attendance-client";
 import { mergeActivatedInvites, mergeAttendanceMarks } from "@/lib/attendance-sync";
@@ -963,7 +968,7 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
       fromPackageStart: true,
       group:
         input.customGroup ??
-        current.customGroups.find((group) => group.id === student.groupId),
+        groupOverrideForStudent(student.groupId, current.customGroups),
     });
     const saved = await saveStudentBundle(
       "create",
@@ -1036,7 +1041,7 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
         fromPackageStart: true,
         group:
           input.customGroup ??
-          current.customGroups.find((group) => group.id === student.groupId),
+          groupOverrideForStudent(student.groupId, current.customGroups),
       });
       const saved = await saveStudentBundle(
         "restore",
@@ -1150,7 +1155,7 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
         fromPackageStart: true,
         group:
           normalized.customGroup ??
-          current.customGroups.find((group) => group.id === student.groupId),
+          groupOverrideForStudent(student.groupId, current.customGroups),
       }).map((session) => ({
         ...session,
         status: statusByDate.get(session.date) ?? session.status,
@@ -1417,6 +1422,15 @@ function withInvite(student: Student, token = createInviteToken()): Student {
     invitedAt: new Date().toISOString(),
   };
 }
+
+function groupOverrideForStudent(
+  groupId: string,
+  customGroups: StudioState["customGroups"],
+) {
+  if (isPresetGroupId(groupId)) return undefined;
+  return customGroups.find((group) => group.id === groupId) ?? legacyGroupFromId(groupId);
+}
+
 function studentFromInput(
   id: string,
   input: NewStudentInput,

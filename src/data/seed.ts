@@ -50,9 +50,13 @@ export function buildSessionsForStudent(
   options?: { fromToday?: boolean; fromPackageStart?: boolean; group?: ClassGroup },
 ): Session[] {
   const group = options?.group ?? getClassGroupById(student.groupId);
-  const days = student.package.customSchedule?.days?.length
-    ? student.package.customSchedule.days
-    : group?.days ?? [];
+  const customDays = student.package.customSchedule?.days ?? [];
+  const groupDays = group?.days ?? [];
+  const customMatchesGroup =
+    !group ||
+    (customDays.length === groupDays.length &&
+      customDays.every((day) => groupDays.includes(day)));
+  const days = customDays.length && customMatchesGroup ? customDays : groupDays;
   if (days.length === 0) return [];
 
   const currentMonday = startOfWeekMonday();
