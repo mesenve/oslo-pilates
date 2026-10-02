@@ -1,6 +1,7 @@
 import {
   applyStudentPostponeRpc,
   isSupabaseConfigured,
+  patchSupabaseAttendanceStatus,
   readSupabaseStudioData,
   patchSupabasePostponeStatus,
   reviewStudentPostponeRpc,
@@ -146,6 +147,9 @@ export async function POST(request: Request) {
       requestStatus: approvingPostpone ? "approved" : "rejected",
       sessionStatus: body.status!,
     });
+    if (body.status === "upcoming") {
+      await patchSupabaseAttendanceStatus(session.id, "upcoming");
+    }
     return NextResponse.json({ ok: true });
   }
 
@@ -160,12 +164,18 @@ export async function POST(request: Request) {
       requestStatus: "rejected",
       sessionStatus: body.status,
     });
+    if (body.status === "attended") {
+      await patchSupabaseAttendanceStatus(session.id, "attended");
+    } else {
+      await patchSupabaseAttendanceStatus(session.id, "upcoming");
+    }
     return NextResponse.json({ ok: true });
   }
 
   // Instructor manual session outcome (attended / missed / postponed without pending request).
   if (body.status === "postponed" && !pendingPostpone && activePostpone) {
     await upsertSupabaseSessionStatus(session.id, "postponed");
+    await patchSupabaseAttendanceStatus(session.id, "upcoming");
     return NextResponse.json({ ok: true, request: activePostpone });
   }
   if (
@@ -175,6 +185,13 @@ export async function POST(request: Request) {
     await patchSupabasePostponeStatus(activePostpone.id, "rejected");
   }
   await upsertSupabaseSessionStatus(session.id, body.status!);
+  if (body.status === "attended") {
+    await patchSupabaseAttendanceStatus(session.id, "attended");
+  } else if (body.status === "upcoming" || body.status === "missed" || body.status === "postponed") {
+    // A manual instructor result supersedes a stale student request. Do not
+    // create a mark when none exists; only close an existing one.
+    await patchSupabaseAttendanceStatus(session.id, "upcoming");
+  }
   if (body.status === "postponed" && !pendingPostpone) {
     const createdAt = new Date().toISOString();
     const request = {

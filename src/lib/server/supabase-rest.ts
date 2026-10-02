@@ -101,6 +101,24 @@ export async function upsertSupabaseSessionStatus(sessionId: string, status: str
   });
 }
 
+/** Keep an existing attendance mark aligned with an instructor's manual result.
+ * This intentionally updates only an existing mark; instructor-only changes
+ * must not create a student attendance record.
+ */
+export async function patchSupabaseAttendanceStatus(
+  sessionId: string,
+  status: "attended" | "upcoming",
+) {
+  await request<unknown>(
+    `attendance_marks?session_id=eq.${encodeURIComponent(sessionId)}`,
+    {
+      method: "PATCH",
+      headers: { Prefer: "return=minimal" },
+      body: JSON.stringify({ status, updated_at: new Date().toISOString() }),
+    },
+  );
+}
+
 /** Atomically create pending postpone request + set session postpone_pending. */
 export async function applyStudentPostponeRpc(input: {
   sessionId: string;

@@ -3,7 +3,10 @@ import {
   listAttendanceMarks,
   saveAttendanceMark,
 } from "@/lib/server/attendance-store";
-import { readSupabaseStudioData } from "@/lib/server/supabase-rest";
+import {
+  readSupabaseStudioData,
+  upsertSupabaseSessionStatus,
+} from "@/lib/server/supabase-rest";
 import { todayISO } from "@/lib/dates";
 import { NextResponse } from "next/server";
 import { getSessionUser } from "@/lib/server/session";
@@ -104,6 +107,9 @@ export async function POST(request: Request) {
       groupId: canonicalGroupId,
       status,
     });
+    // Keep the canonical session row in sync with the attendance mark so a
+    // later studio refresh cannot resurrect an already approved request.
+    await upsertSupabaseSessionStatus(sessionId, status);
     return NextResponse.json({ ok: true, mark });
   } catch (error) {
     console.error("Attendance save failed:", error);
