@@ -90,6 +90,8 @@ export type ClassGroup = {
 
 export type Student = {
   id: string;
+  /** Supabase row version used to reject stale concurrent edits. */
+  updatedAt?: string;
   name: string;
   email: string;
   phone: string;

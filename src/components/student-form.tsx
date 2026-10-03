@@ -12,6 +12,7 @@ import {
   getClassGroupById,
   getGroupSelectOptions,
   isIrregularGroup,
+  isPresetGroupId,
   groupIdForSchedule,
   groupLabelForSchedule,
 } from "@/data/groups";
@@ -439,6 +440,12 @@ function formFromStudent(
 ) {
   const groupId = student?.groupId ?? fallbackGroupId;
   const existingCustomSchedule = student?.package.customSchedule;
+  const existingGroup = groupId ? getClassGroupById(groupId) : undefined;
+  const legacyCustomSchedule =
+    existingGroup && !isPresetGroupId(groupId) && existingGroup.days.length > 0 && existingGroup.time.trim()
+      ? { days: existingGroup.days, time: existingGroup.time }
+      : undefined;
+  const schedule = existingCustomSchedule ?? legacyCustomSchedule;
   return {
     name: student?.name ?? "",
     email: student?.email ?? "",
@@ -456,9 +463,12 @@ function formFromStudent(
     note: student?.note ?? "",
     monthlyPostponeLimit: student ? String(student.monthlyPostponeLimit) : "",
     startDate: student?.package.startDate ?? todayISO(),
-    customDays: isIrregularGroup(groupId) ? existingCustomSchedule?.days ?? [] : [],
-    customTime: isIrregularGroup(groupId) ? existingCustomSchedule?.time ?? "" : "",
-    customScheduleEnabled: isIrregularGroup(groupId) && Boolean(existingCustomSchedule),
+    // Existing custom schedules must be loaded even when their generated
+    // group id is not the special "duzensiz" id; otherwise saving an
+    // unchanged student silently clears the custom days and time.
+    customDays: schedule?.days ?? [],
+    customTime: schedule?.time ?? "",
+    customScheduleEnabled: Boolean(schedule),
   };
 }
 

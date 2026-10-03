@@ -15,6 +15,7 @@ import {
 import { studentsForUser, sessionsForUser, postponeRequestsForUser, canManageStudent, isStaffRole } from "@/lib/access";
 import { fetchAttendanceMarks, pushAttendanceMark } from "@/lib/attendance-client";
 import { mergeActivatedInvites, mergeAttendanceMarks } from "@/lib/attendance-sync";
+import { packagePeriodKey } from "@/lib/package-period";
 import { addDays, startOfWeekMonday, toISODate, todayISO } from "@/lib/dates";
 import {
   createInviteToken,
@@ -30,6 +31,8 @@ import {
   loginStudentAccount,
 } from "@/lib/invite-client";
 import { fetchStudioData } from "@/lib/studio-client";
+import { PACKAGE_TYPE_LABELS } from "@/data/packages";
+import { DAY_LABELS } from "@/lib/labels";
 import {
   getServerStudioState,
   getStudioState,
@@ -179,7 +182,14 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
       : "loading";
 
   useEffect(() => {
-    const groups = [...(state.customGroups ?? [])];
+    const referencedGroupIds = new Set(
+      [...state.students, ...state.archivedStudents]
+        .map((student) => student.groupId)
+        .filter(Boolean),
+    );
+    const groups = (state.customGroups ?? []).filter((group) =>
+      referencedGroupIds.has(group.id),
+    );
     const knownIds = new Set(groups.map((group) => group.id));
     state.students.forEach((student) => {
       if (knownIds.has(student.groupId) || getClassGroupById(student.groupId)) return;
@@ -190,7 +200,7 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
       }
     });
     setCustomGroups(groups);
-  }, [state.customGroups, state.students]);
+  }, [state.archivedStudents, state.customGroups, state.students]);
 
   useEffect(() => {
     if (!ready) return;
@@ -1103,7 +1113,7 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
         previous.package.totalSessions - previous.package.remainingSessions;
       let student = studentFromInput(studentId, normalized, email, previous);
       const periodChanged =
-        student.packageHistory?.length !== (previous.packageHistory?.length ?? 0);
+        packagePeriodKey(previous) !== packagePeriodKey(student);
       student.package.remainingSessions = periodChanged
         ? normalized.totalSessions
         : Math.max(
@@ -1135,7 +1145,7 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
           email !== previous.email.toLowerCase()
             ? withInvite(student)
             : {
-                ...student,
+          ...student,
                 accountStatus: "invited",
                 inviteToken: previous.inviteToken,
                 inviteExpiresAt: previous.inviteExpiresAt,
@@ -1158,7 +1168,10 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
           groupOverrideForStudent(student.groupId, current.customGroups),
       }).map((session) => ({
         ...session,
-        status: statusByDate.get(session.date) ?? session.status,
+        // Do not carry an old attendance result into a newly-created package
+        // period. For ordinary profile edits, preserving the date status is
+        // still correct.
+        status: periodChanged ? session.status : statusByDate.get(session.date) ?? session.status,
       }));
       const saved = await saveStudentBundle(
         "update",
@@ -1398,15 +1411,35 @@ function emailTaken(
 }
 
 function collectStudentChanges(previous: Student, next: Student) {
+  const scheduleLabel = (student: Student) => {
+    const schedule = student.package.customSchedule;
+    return schedule
+      ? `${schedule.days.map((day) => DAY_LABELS[day]).join(", ")} · ${schedule.time}`
+      : "";
+  };
+  const measurementsLabel = (student: Student) =>
+    [
+      student.measurements.weightKg ? `Kilo ${student.measurements.weightKg}` : "",
+      student.measurements.heightCm ? `Boy ${student.measurements.heightCm}` : "",
+      student.measurements.waistCm ? `Bel ${student.measurements.waistCm}` : "",
+      student.measurements.hipCm ? `Kalça ${student.measurements.hipCm}` : "",
+      student.measurements.chestCm ? `Göğüs ${student.measurements.chestCm}` : "",
+    ].filter(Boolean).join(" · ");
   const values: Array<[string, string, string]> = [
     ["name", previous.name, next.name],
     ["email", previous.email, next.email],
     ["phone", previous.phone, next.phone],
     ["groupId", previous.groupId, next.groupId],
     ["instructorId", previous.instructorId, next.instructorId],
+    ["packageType", PACKAGE_TYPE_LABELS[previous.packageType], PACKAGE_TYPE_LABELS[next.packageType]],
     ["package.startDate", previous.package.startDate, next.package.startDate],
+    ["package.endDate", previous.package.endDate, next.package.endDate],
     ["package.totalSessions", String(previous.package.totalSessions), String(next.package.totalSessions)],
     ["package.paymentStatus", previous.package.paymentStatus, next.package.paymentStatus],
+    ["package.customSchedule", scheduleLabel(previous), scheduleLabel(next)],
+    ["monthlyPostponeLimit", String(previous.monthlyPostponeLimit), String(next.monthlyPostponeLimit)],
+    ["note", previous.note, next.note],
+    ["measurements", measurementsLabel(previous), measurementsLabel(next)],
   ];
   return values
     .filter(([, before, after]) => before !== after)
@@ -1452,17 +1485,25 @@ function studentFromInput(
     input.customDays?.length && input.customTime?.trim()
       ? { days: input.customDays, time: input.customTime.trim() }
       : undefined;
-  // A new package period is explicit: changing the start date or the number
-  // of sessions creates history. Program/payment edits keep the current
-  // period and therefore do not reset remaining lessons.
+  // A new package period is explicit: changing the start date, lesson count,
+  // package type, group, or custom schedule creates history. Profile and
+  // payment edits keep the current period and therefore do not reset lessons.
   const packagePeriodChanged = Boolean(
     previous &&
-      (startDate !== previous.package.startDate ||
-        input.totalSessions !== previous.package.totalSessions),
+      packagePeriodKey(previous) !==
+        packagePeriodKey({
+          packageType: input.packageType,
+          groupId: input.groupId,
+          package: {
+            startDate,
+            totalSessions: input.totalSessions,
+            customSchedule,
+          },
+        }),
   );
   const packageHistory = [...(previous?.packageHistory ?? [])];
   if (previous && packagePeriodChanged) {
-    const historyId = `pkg-${previous.id}-${previous.package.startDate}`;
+    const historyId = `pkg-${previous.id}-${previous.package.startDate}-${Date.now()}`;
     if (!packageHistory.some((entry) => entry.id === historyId)) {
       packageHistory.push({
         ...previous.package,
@@ -1479,6 +1520,7 @@ function studentFromInput(
 
   return {
     id,
+    updatedAt: previous?.updatedAt,
     name: input.name.trim(),
     email,
     phone: input.phone.trim() || "—",

@@ -83,17 +83,10 @@ export function mergeAttendanceMarks(
     return { ...session, status: mark.status as SessionStatus };
   });
 
-  for (const mark of marksBySession.values()) {
-    if (mark.status !== "attend_pending") continue;
-    next.push({
-      id: mark.sessionId,
-      studentId: mark.studentId,
-      date: mark.date,
-      groupId: mark.groupId,
-      status: mark.status,
-    });
-  }
-
+  // Attendance marks are an overlay on the canonical sessions list.  Never
+  // materialize a mark without a matching session: old package/session marks
+  // can legitimately remain in the database as history, but they must not
+  // resurrect an old lesson in the active student or instructor screens.
   return next;
 }
 

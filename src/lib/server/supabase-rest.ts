@@ -20,10 +20,17 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     },
     cache: "no-store",
   });
-  if (!response.ok) {
-    throw new Error(`Supabase isteği başarısız (${response.status}).`);
-  }
   const body = await response.text();
+  if (!response.ok) {
+    let detail = body;
+    try {
+      const payload = JSON.parse(body) as { message?: string; error?: string; hint?: string };
+      detail = payload.message ?? payload.error ?? payload.hint ?? body;
+    } catch {
+      // Keep the plain response text when Supabase did not return JSON.
+    }
+    throw new Error(`Supabase isteği başarısız (${response.status}): ${detail}`);
+  }
   return (body ? JSON.parse(body) : undefined) as T;
 }
 
@@ -275,6 +282,7 @@ function toStudent(row: SupabaseRow): Student {
   };
   return {
     id: String(row.id),
+    updatedAt: row.updated_at ? String(row.updated_at) : undefined,
     name: String(row.name ?? ""),
     email: String(row.email ?? ""),
     phone: String(row.phone ?? ""),
@@ -313,7 +321,9 @@ function toSession(row: SupabaseRow): Session {
 export async function readSupabaseStudioData(): Promise<Pick<StudioState, "students" | "archivedStudents" | "sessions" | "postponeRequests" | "customGroups"> & { blockedEmails: string[] }> {
   const [studentRows, sessionRows, postponeRows, groupRows, blockedRows] = await Promise.all([
     request<SupabaseRow[]>("students?select=*&order=name"),
-    request<SupabaseRow[]>("sessions?select=*&order=session_date"),
+    // Archived sessions remain in Supabase for attendance history, but active
+    // screens must only receive the current package-period sessions.
+    request<SupabaseRow[]>("sessions?select=*&archived_at=is.null&order=session_date"),
     request<SupabaseRow[]>("postpone_requests?select=*&order=created_at.desc"),
     request<SupabaseRow[]>("custom_groups?select=*&order=label"),
     request<SupabaseRow[]>("blocked_emails?select=email&order=email"),
@@ -404,6 +414,7 @@ export async function saveSupabaseStudentBundle(input: {
           }
         : null,
       p_clear_postpones: input.clearPostpones ?? false,
+      p_expected_updated_at: input.student.updatedAt ?? null,
     }),
   });
 }

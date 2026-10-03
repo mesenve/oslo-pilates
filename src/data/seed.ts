@@ -10,6 +10,7 @@ import {
 } from "@/lib/dates";
 import { DEFAULT_STAFF_PASSWORDS } from "@/lib/staff-auth";
 import { DEFAULT_STUDENT_PASSWORDS } from "@/lib/student-auth";
+import { sessionPeriodToken } from "@/lib/package-period";
 import type {
   ClassGroup,
   DayOfWeek,
@@ -52,6 +53,7 @@ export function buildSessionsForStudent(
   const group = options?.group ?? getClassGroupById(student.groupId);
   const customDays = student.package.customSchedule?.days ?? [];
   const groupDays = group?.days ?? [];
+  const periodToken = sessionPeriodToken(student);
   const customMatchesGroup =
     !group ||
     (customDays.length === groupDays.length &&
@@ -70,7 +72,7 @@ export function buildSessionsForStudent(
       days,
     );
     return dates.map((date) => ({
-      id: `${student.id}-${date}`,
+      id: `${student.id}-${periodToken}-${date}`,
       studentId: student.id,
       groupId: student.groupId,
       date,
@@ -90,7 +92,7 @@ export function buildSessionsForStudent(
       }
     }
     return dates.map((date) => ({
-      id: `${student.id}-${date}`,
+      id: `${student.id}-${periodToken}-${date}`,
       studentId: student.id,
       groupId: student.groupId,
       date,
@@ -111,7 +113,7 @@ export function buildSessionsForStudent(
     student.package.totalSessions - student.package.remainingSessions;
 
   return packageDates.map((date, index) => ({
-    id: `${student.id}-${date}`,
+    id: `${student.id}-${periodToken}-${date}`,
     studentId: student.id,
     groupId: student.groupId,
     date,

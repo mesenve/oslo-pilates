@@ -10,6 +10,7 @@ import {
 import { getSessionUser } from "@/lib/server/session";
 import type { ClassGroup, DayOfWeek, Session, Student } from "@/types/studio";
 import { NextResponse } from "next/server";
+import { packagePeriodKey } from "@/lib/package-period";
 
 type SaveBody = {
   action?: "save";
@@ -126,6 +127,16 @@ export async function POST(request: Request) {
   if (body.mode === "create" && existing) {
     return NextResponse.json({ error: "Öğrenci zaten mevcut." }, { status: 409 });
   }
+  if (
+    body.mode !== "create" &&
+    existing?.updatedAt &&
+    body.student.updatedAt !== existing.updatedAt
+  ) {
+    return NextResponse.json(
+      { error: "Bu öğrenci başka bir ekranda güncellendi. Sayfayı yenileyip tekrar deneyin." },
+      { status: 409 },
+    );
+  }
   if (user!.role === "instructor") {
     if (
       (existing &&
@@ -167,8 +178,7 @@ export async function POST(request: Request) {
 
   const periodChanged = Boolean(
     existing &&
-      (existing.package.startDate !== body.student.package.startDate ||
-        existing.package.totalSessions !== body.student.package.totalSessions),
+      packagePeriodKey(existing) !== packagePeriodKey(body.student),
   );
   const studentToSave: Student = {
     ...body.student,
@@ -202,13 +212,27 @@ export async function POST(request: Request) {
         ? existing.invitedAt
         : body.student.invitedAt,
   };
-  await saveSupabaseStudentBundle({
-    student: studentToSave,
-    sessions: body.sessions,
-    customGroup: body.customGroup,
-    clearPostpones: body.mode === "restore",
-  });
-  return NextResponse.json({ ok: true, student: studentToSave });
+  try {
+    await saveSupabaseStudentBundle({
+      student: studentToSave,
+      sessions: body.sessions,
+      customGroup: body.customGroup,
+      clearPostpones: body.mode === "restore",
+    });
+  } catch (error) {
+    if (error instanceof Error && error.message.includes("student changed")) {
+      return NextResponse.json(
+        { error: "Bu öğrenci başka bir ekranda güncellendi. Sayfayı yenileyip tekrar deneyin." },
+        { status: 409 },
+      );
+    }
+    throw error;
+  }
+  // Return the database version so a second edit in the same tab carries the
+  // current optimistic-lock token instead of the pre-save timestamp.
+  const refreshed = await readSupabaseStudioData();
+  const persistedStudent = findStudent(body.student.id, refreshed.students, refreshed.archivedStudents);
+  return NextResponse.json({ ok: true, student: persistedStudent ?? studentToSave });
 }
 
 export async function PATCH(request: Request) {

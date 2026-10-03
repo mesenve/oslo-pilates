@@ -22,6 +22,7 @@ import { getClassGroupById } from "@/data/groups";
 import { getStaffById, instructorLabelForId } from "@/data/staff";
 import { formatLongDate, todayISO } from "@/lib/dates";
 import { inviteUrl, isInviteValid } from "@/lib/student-auth";
+import { PACKAGE_TYPE_LABELS } from "@/data/packages";
 import { saveInviteLink, sendInviteEmail } from "@/lib/invite-client";
 import { DAY_LABELS, remainingLabel, postponeRightAdminLabel } from "@/lib/labels";
 import Link from "next/link";
@@ -35,9 +36,25 @@ const CHANGE_FIELD_LABELS: Record<string, string> = {
   groupId: "Program değişikliği",
   instructorId: "Eğitmen değişikliği",
   "package.startDate": "Paket değişikliği",
+  "package.endDate": "Paket bitiş tarihi değişikliği",
   "package.totalSessions": "Paket değişikliği",
+  packageType: "Paket türü değişikliği",
   "package.paymentStatus": "Ödeme durumu değişikliği",
+  "package.customSchedule": "Özel program değişikliği",
+  monthlyPostponeLimit: "Erteleme hakkı değişikliği",
+  note: "Not değişikliği",
+  measurements: "Ölçü bilgisi değişikliği",
 };
+
+function readableChangeValue(field: string, value: string) {
+  if (field === "groupId") return getClassGroupById(value)?.label ?? value;
+  if (field === "packageType") {
+    return PACKAGE_TYPE_LABELS[value as keyof typeof PACKAGE_TYPE_LABELS] ?? value;
+  }
+  if (field === "package.paymentStatus") return value === "paid" ? "Ödendi" : "Ödenmedi";
+  if (field === "monthlyPostponeLimit") return `${value} ders`;
+  return value;
+}
 
 export default function StudentDetailPage() {
   const params = useParams<{ id: string }>();
@@ -265,7 +282,7 @@ export default function StudentDetailPage() {
         </Card>
       ) : null}
 
-      {student.changeLog?.length ? <Card className="space-y-3 p-4"><h2 className="font-serif text-xl">Değişiklik günlüğü</h2>{student.changeLog.slice(0, 8).map((entry) => <p key={entry.id} className="text-sm text-muted">{formatLongDate(entry.createdAt.slice(0, 10))} · {getStaffById(entry.actorId)?.name ?? entry.actorId} · {CHANGE_FIELD_LABELS[entry.field] ?? "Bilgi değişikliği"}: {entry.before || "—"} → {entry.after || "—"}</p>)}</Card> : null}
+      {student.changeLog?.length ? <Card className="space-y-3 p-4"><h2 className="font-serif text-xl">Değişiklik günlüğü</h2>{student.changeLog.slice(0, 8).map((entry) => <p key={entry.id} className="text-sm text-muted">{formatLongDate(entry.createdAt.slice(0, 10))} · {getStaffById(entry.actorId)?.name ?? entry.actorId} · {CHANGE_FIELD_LABELS[entry.field] ?? "Bilgi değişikliği"}: {readableChangeValue(entry.field, entry.before) || "—"} → {readableChangeValue(entry.field, entry.after) || "—"}</p>)}</Card> : null}
 
       {student.packageHistory?.length ? (
         <Card className="space-y-3 p-4">
