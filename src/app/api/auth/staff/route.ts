@@ -10,7 +10,16 @@ export async function POST(request: Request) {
     password?: string;
   } | null;
   const staff = body?.email ? getStaffByEmail(body.email) : undefined;
-  const storedPassword = staff ? await resolveStaffPassword(staff.id) : "";
+  let storedPassword = "";
+  try {
+    storedPassword = staff ? await resolveStaffPassword(staff.id) : "";
+  } catch (error) {
+    console.error("Staff authentication storage is unavailable", error);
+    return NextResponse.json(
+      { error: "Giriş servisi şu anda kullanılamıyor. Lütfen tekrar deneyin." },
+      { status: 503 },
+    );
+  }
   if (
     !staff ||
     !body?.password ||

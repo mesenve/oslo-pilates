@@ -356,7 +356,15 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
       body: JSON.stringify({ email, password }),
     });
     const data = (await response.json().catch(() => ({}))) as { error?: string; user?: StudioState["user"] };
-    if (!response.ok || !data.user) return { error: data.error ?? "E-posta veya şifre hatalı." };
+    if (!response.ok || !data.user) {
+      return {
+        error:
+          data.error ??
+          (response.status >= 500
+            ? "Giriş servisi şu anda kullanılamıyor. Lütfen tekrar deneyin."
+            : "E-posta veya şifre hatalı."),
+      };
+    }
     setStudioState((current) => ({ ...current, user: data.user! }));
     return { error: null };
   }, []);
@@ -1467,15 +1475,14 @@ function studentFromInput(
     input.customDays?.length && input.customTime?.trim()
       ? { days: input.customDays, time: input.customTime.trim() }
       : undefined;
-  // A new package period is explicit: changing the start date, lesson count,
-  // package type, group, or custom schedule creates history. Profile and
-  // payment edits keep the current period and therefore do not reset lessons.
+  // A new package period starts only when the package start date, lesson
+  // count, or package type changes. Group/day/time edits are program changes
+  // inside the active package and therefore keep attendance and postpone use.
   const packagePeriodChanged = Boolean(
     previous &&
       packagePeriodKey(previous) !==
         packagePeriodKey({
           packageType: input.packageType,
-          groupId: input.groupId,
           package: {
             startDate,
             totalSessions: input.totalSessions,
