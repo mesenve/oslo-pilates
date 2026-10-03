@@ -11,9 +11,8 @@ import {
 } from "@/lib/server/supabase-rest";
 import { getSessionUser } from "@/lib/server/session";
 import { todayISO } from "@/lib/dates";
-import { getClassGroupById } from "@/data/groups";
-import { remainingPostponeRights } from "@/data/accessors";
-import { isAtLeast24HoursAway, weekdayFromISO } from "@/lib/dates";
+import { remainingPostponeRights, sessionTimeForStudent } from "@/data/accessors";
+import { isAtLeast24HoursAway } from "@/lib/dates";
 import type { Student, StudioState } from "@/types/studio";
 import { NextResponse } from "next/server";
 
@@ -34,11 +33,16 @@ export async function POST(request: Request) {
   const data = studio as {
     students?: Array<{
       id: string;
+      groupId: string;
       instructorId: string;
       monthlyPostponeLimit?: number;
       postponeLessonUsed?: boolean;
       postponeLessonUsedAt?: string;
-      package?: { startDate?: string; endDate?: string };
+      package?: {
+        startDate?: string;
+        endDate?: string;
+        customSchedule?: { time?: string };
+      };
     }>;
     sessions?: Array<{ id: string; studentId: string; groupId: string; date: string; status: string }>;
     postponeRequests?: Array<{ id: string; studentId: string; sessionId: string; reason: string; status: string; createdAt: string }>;
@@ -76,9 +80,7 @@ export async function POST(request: Request) {
     if (session.status !== "upcoming") {
       return NextResponse.json({ error: "Bu ders için erteleme yapılamaz." }, { status: 409 });
     }
-    const group = getClassGroupById(session.groupId) ?? data.customGroups?.find((item) => item.id === session.groupId);
-    const day = weekdayFromISO(session.date);
-    const time = (day && group?.timeByDay?.[day]) ?? group?.time ?? "";
+    const time = sessionTimeForStudent(student, session);
     const hasRight = remainingPostponeRights(
       student as Student,
       (data.postponeRequests ?? []) as StudioState["postponeRequests"],

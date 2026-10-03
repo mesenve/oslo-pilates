@@ -7,10 +7,11 @@ import { EmptyState } from "@/components/ui";
 import {
   postponePendingDateInPackage,
   postponeUsedDateInPackage,
+  sessionTimeForStudent,
   sessionsForStudent,
 } from "@/data/accessors";
 import { getClassGroupById } from "@/data/groups";
-import { isAtLeast24HoursAway, todayISO, weekdayFromISO } from "@/lib/dates";
+import { isAtLeast24HoursAway, todayISO } from "@/lib/dates";
 import { postponeRightLabel } from "@/lib/labels";
 import { type ComponentProps, useMemo, useState, useSyncExternalStore } from "react";
 
@@ -110,7 +111,7 @@ export default function ProgramPage() {
             hasPendingPostpone={postponeRequests.some(
               (request) => request.sessionId === session.id && request.status === "pending",
             )}
-            time={group?.time ?? ""}
+            time={sessionTimeForStudent(student, session)}
             canPostpone={postponeRemaining > 0 && session.date > today}
             canAttend={session.date === today}
             postponeHint={postponeHint}
@@ -140,9 +141,7 @@ function ProgramSessionRow({
   onPostpone,
   onWithdrawPostpone,
 }: ComponentProps<typeof SessionRow>) {
-  const group = getClassGroupById(session.groupId);
-  const day = weekdayFromISO(session.date);
-  const sessionTime = (day && group?.timeByDay?.[day]) ?? group?.time ?? time;
+  const sessionTime = time;
   const canPostponeAtThisTime = canPostpone && isAtLeast24HoursAway(session.date, sessionTime);
   const hint = canPostponeAtThisTime
     ? postponeHint

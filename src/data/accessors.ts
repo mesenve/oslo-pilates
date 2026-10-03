@@ -63,6 +63,21 @@ export function groupLabel(groupId: string) {
   return getClassGroupById(groupId)?.label ?? groupId;
 }
 
+/** Resolve the lesson time from the student's active schedule first. */
+export function sessionTimeForStudent(
+  student: { groupId: string; package?: { customSchedule?: { time?: string } } },
+  session: { groupId: string; date: string },
+) {
+  const customSchedule = student.package?.customSchedule;
+  if (student.groupId === "duzensiz" || session.groupId === "duzensiz") {
+    return customSchedule?.time ?? "";
+  }
+
+  const group = getClassGroupById(session.groupId);
+  const day = weekdayFromISO(session.date);
+  return (day && group?.timeByDay?.[day]) || group?.time || customSchedule?.time || "";
+}
+
 export function studentName(studentId: string, students: Student[]) {
   return students.find((student) => student.id === studentId)?.name ?? studentId;
 }

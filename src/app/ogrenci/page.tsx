@@ -9,6 +9,7 @@ import {
   effectiveSessionStatus,
   postponePendingDateInPackage,
   postponeUsedDateInPackage,
+  sessionTimeForStudent,
   sessionsForStudent,
 } from "@/data/accessors";
 import { getClassGroupById } from "@/data/groups";
@@ -19,7 +20,6 @@ import {
   startOfWeekMonday,
   toISODate,
   todayISO,
-  weekdayFromISO,
 } from "@/lib/dates";
 import { remainingLabel, postponeRightLabel } from "@/lib/labels";
 import Link from "next/link";
@@ -65,9 +65,9 @@ export default function StudentHomePage() {
     selectedStatus === "upcoming" ||
     selectedStatus === "attend_pending" ||
     selectedStatus === "postpone_pending";
-  const selectedDay = selectedSession ? weekdayFromISO(selectedSession.date) : null;
-  const selectedTime =
-    (selectedDay && group?.timeByDay?.[selectedDay]) ?? group?.time ?? "";
+  const selectedTime = selectedSession
+    ? sessionTimeForStudent(student, selectedSession)
+    : "";
   const canPostponeSelected = Boolean(
     selectedSession &&
       selectedStatus === "upcoming" &&
@@ -168,7 +168,7 @@ export default function StudentHomePage() {
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
                     <p className="font-serif text-2xl leading-none tracking-tight tabular-nums">
-                      {group?.time}
+                      {selectedTime}
                     </p>
                     <p className="mt-1 capitalize text-sm text-muted">
                       {formatLongDate(selectedSession.date)}
