@@ -14,7 +14,7 @@ import {
 } from "@/data/groups";
 import { studentsForUser, sessionsForUser, postponeRequestsForUser, canManageStudent, isStaffRole } from "@/lib/access";
 import { fetchAttendanceMarks, pushAttendanceMark } from "@/lib/attendance-client";
-import { mergeActivatedInvites, mergeAttendanceMarks } from "@/lib/attendance-sync";
+import { mergeAttendanceMarks } from "@/lib/attendance-sync";
 import { packagePeriodKey } from "@/lib/package-period";
 import { addDays, startOfWeekMonday, toISODate, todayISO } from "@/lib/dates";
 import {
@@ -26,8 +26,6 @@ import {
 } from "@/lib/student-auth";
 import {
   activateInviteAccount,
-  buildActivatedMerge,
-  fetchActivatedInvites,
   loginStudentAccount,
 } from "@/lib/invite-client";
 import { fetchStudioData } from "@/lib/studio-client";
@@ -245,11 +243,6 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
             ? fetchAttendanceMarks()
             : Promise.resolve([])
       ).catch(() => []);
-      const invitesPromise = (
-        user.role === "super_admin"
-          ? fetchActivatedInvites()
-          : Promise.resolve([])
-      ).catch(() => []);
       const studioPromise =
         user.role === "student"
           ? fetchStudioData({ studentId: user.id, includeBlockedEmails: false })
@@ -275,15 +268,12 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
         markLoadError();
       }
 
-      const [marks, invites] = await Promise.all([marksPromise, invitesPromise]);
-      if (isStale() || (marks.length === 0 && invites.length === 0)) return;
+      const marks = await marksPromise;
+      if (isStale() || marks.length === 0) return;
 
       setStudioState((current) => {
         let next = current;
-        if (invites.length > 0) next = mergeActivatedInvites(next, invites);
-        if (marks.length > 0) {
-          next = { ...next, sessions: mergeAttendanceMarks(next.sessions, marks) };
-        }
+        next = { ...next, sessions: mergeAttendanceMarks(next.sessions, marks) };
         return next;
       });
     } catch {
@@ -406,10 +396,8 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
       return { error: result.error ?? "E-posta veya şifre hatalı." };
     }
 
-    const merge = buildActivatedMerge(result.payload);
     setStudioState((current) => ({
       ...current,
-      ...merge(current),
       user: {
         id: result.payload!.student.id,
         name: result.payload!.student.name,
@@ -430,10 +418,8 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
 
       try {
         const payload = await activateInviteAccount({ token, password, confirmPassword });
-        const merge = buildActivatedMerge(payload);
         setStudioState((current) => ({
           ...current,
-          ...merge(current),
           user: {
             id: payload.student.id,
             name: payload.student.name,

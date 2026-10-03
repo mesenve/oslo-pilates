@@ -1,5 +1,4 @@
-import type { Session, SessionStatus, StudioState } from "@/types/studio";
-import type { StoredInvite } from "@/lib/server/invite-store";
+import type { Session, SessionStatus } from "@/types/studio";
 
 export type AttendanceMark = {
   sessionId: string;
@@ -88,41 +87,4 @@ export function mergeAttendanceMarks(
   // can legitimately remain in the database as history, but they must not
   // resurrect an old lesson in the active student or instructor screens.
   return next;
-}
-
-export function mergeActivatedInvites(
-  state: StudioState,
-  invites: Array<Pick<StoredInvite, "student" | "sessions">>,
-): StudioState {
-  let students = state.students;
-  let sessions = state.sessions;
-  const sessionIds = new Set(sessions.map((session) => session.id));
-
-  for (const invite of invites) {
-    const hasStudent = students.some((student) => student.id === invite.student.id);
-
-    if (!hasStudent) {
-      students = [invite.student, ...students];
-      for (const session of invite.sessions) {
-        if (sessionIds.has(session.id)) continue;
-        sessions = [...sessions, session];
-        sessionIds.add(session.id);
-      }
-      continue;
-    }
-
-    for (const session of invite.sessions) {
-      if (sessionIds.has(session.id)) continue;
-      sessions = [...sessions, session];
-      sessionIds.add(session.id);
-    }
-
-    students = students.map((student) =>
-      student.id === invite.student.id && student.accountStatus !== "active"
-        ? invite.student
-        : student,
-    );
-  }
-
-  return { ...state, students, sessions };
 }

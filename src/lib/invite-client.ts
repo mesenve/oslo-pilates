@@ -101,22 +101,6 @@ async function readJsonResponse<T>(response: Response): Promise<T> {
   }
 }
 
-export async function fetchActivatedInvites(): Promise<
-  Array<{ student: Student; sessions: Session[] }>
-> {
-  const response = await fetch("/api/invite/activated");
-  const data = await readJsonResponse<{
-    invites?: Array<{ student: Student; sessions: Session[] }>;
-    error?: string;
-  }>(response);
-
-  if (!response.ok) {
-    throw new Error(data.error ?? "Aktif öğrenciler alınamadı.");
-  }
-
-  return data.invites ?? [];
-}
-
 export async function sendInviteEmail(input: SendInviteEmailInput) {
   await saveInvite(input, true);
 }
@@ -138,44 +122,3 @@ async function saveInvite(input: SendInviteEmailInput, sendEmail: boolean) {
     throw new Error(data.error ?? "Davet linki kaydedilemedi.");
   }
 }
-
-export type ActivatedStudentPayload = {
-  student: Student;
-  sessions: Session[];
-  password?: string;
-};
-
-export function buildActivatedMerge(
-  payload: ActivatedStudentPayload,
-): (current: {
-  students: Student[];
-  sessions: Session[];
-  studentPasswords: Record<string, string>;
-}) => {
-  students: Student[];
-  sessions: Session[];
-  studentPasswords: Record<string, string>;
-} {
-  return (current) => {
-    const hasStudent = current.students.some((item) => item.id === payload.student.id);
-    const students = hasStudent
-      ? current.students.map((item) =>
-          item.id === payload.student.id ? payload.student : item,
-        )
-      : [payload.student, ...current.students];
-
-    const sessions = [
-      ...current.sessions.filter((item) => item.studentId !== payload.student.id),
-      ...payload.sessions,
-    ];
-
-    return {
-      students,
-      sessions,
-      studentPasswords: payload.password
-        ? { ...current.studentPasswords, [payload.student.id]: payload.password }
-        : current.studentPasswords,
-    };
-  };
-}
-

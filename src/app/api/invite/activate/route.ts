@@ -2,6 +2,7 @@ import { activateInvite, getInviteByToken } from "@/lib/server/invite-store";
 import { validateStudentPassword } from "@/lib/student-auth";
 import { isInviteValid } from "@/lib/student-auth";
 import { sessionCookie } from "@/lib/server/session";
+import { readSupabaseStudioData } from "@/lib/server/supabase-rest";
 import { NextResponse } from "next/server";
 
 type ActivateBody = {
@@ -50,14 +51,20 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Davet linki geçersiz." }, { status: 404 });
   }
 
+  const data = await readSupabaseStudioData();
+  const student = data.students.find((item) => item.id === activated.student.id);
+  if (!student) {
+    return NextResponse.json({ error: "Öğrenci kaydı bulunamadı." }, { status: 404 });
+  }
+
   const response = NextResponse.json({
-    student: activated.student,
-    sessions: activated.sessions,
+    student,
+    sessions: data.sessions.filter((item) => item.studentId === student.id),
   });
   response.cookies.set(sessionCookie({
-    id: activated.student.id,
-    name: activated.student.name,
-    email: activated.student.email,
+    id: student.id,
+    name: student.name,
+    email: student.email,
     role: "student",
   }));
   return response;

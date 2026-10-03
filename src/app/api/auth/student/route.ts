@@ -1,4 +1,5 @@
 import { findActivatedInviteByEmail } from "@/lib/server/invite-store";
+import { readSupabaseStudioData } from "@/lib/server/supabase-rest";
 import { sessionCookie } from "@/lib/server/session";
 import { verifyPassword } from "@/lib/server/staff-credentials";
 import { NextResponse } from "next/server";
@@ -29,14 +30,20 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "E-posta veya şifre hatalı." }, { status: 401 });
   }
 
+  const data = await readSupabaseStudioData();
+  const student = data.students.find((item) => item.id === invite.student.id);
+  if (!student) {
+    return NextResponse.json({ error: "Öğrenci kaydı bulunamadı." }, { status: 404 });
+  }
+
   const response = NextResponse.json({
-    student: invite.student,
-    sessions: invite.sessions,
+    student,
+    sessions: data.sessions.filter((item) => item.studentId === student.id),
   });
   response.cookies.set(sessionCookie({
-    id: invite.student.id,
-    name: invite.student.name,
-    email: invite.student.email,
+    id: student.id,
+    name: student.name,
+    email: student.email,
     role: "student",
   }));
   return response;
