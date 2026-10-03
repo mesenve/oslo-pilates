@@ -193,8 +193,28 @@ export async function POST(request: Request) {
     existing &&
       packagePeriodKey(existing) !== packagePeriodKey(body.student),
   );
+  // remainingSessions is denormalized package metadata. For an existing
+  // package edit, derive it from the submitted canonical session statuses so
+  // stale client data cannot overwrite the real progress.
+  const canonicalRemaining = Math.max(
+    0,
+    body.student.package.totalSessions -
+      body.sessions.filter(
+        (session) =>
+          (session.status === "attended" || session.status === "missed") &&
+          session.date >= body.student!.package.startDate &&
+          session.date <= body.student!.package.endDate,
+      ).length,
+  );
   const studentToSave: Student = {
     ...body.student,
+    package: {
+      ...body.student.package,
+      remainingSessions:
+        existing && !periodChanged
+          ? canonicalRemaining
+          : body.student.package.remainingSessions,
+    },
     email,
     renewalRequest: existing
       ? existing.renewalRequest

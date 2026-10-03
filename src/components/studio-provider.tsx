@@ -1131,8 +1131,14 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
         return { error: "Bu e-posta ile kayıtlı öğrenci var.", id: null };
       }
 
-      const attended =
-        previous.package.totalSessions - previous.package.remainingSessions;
+      // The package counter is denormalized and may be stale. Use
+      // the canonical active-package session statuses when carrying progress
+      // through an ordinary profile/program edit.
+      const currentRemaining = remainingSessions(previous, current.sessions);
+      const attended = Math.max(
+        0,
+        previous.package.totalSessions - currentRemaining,
+      );
       let student = studentFromInput(studentId, normalized, email, previous);
       const periodChanged =
         packagePeriodKey(previous) !== packagePeriodKey(student);
