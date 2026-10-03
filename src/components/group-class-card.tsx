@@ -4,21 +4,35 @@ import { ChevronRightIcon, PilatesIcon, SeatIcon, UsersIcon } from "@/components
 import { Card } from "@/components/ui";
 import { sortByName } from "@/lib/alphabet";
 import { DAY_LABELS } from "@/lib/labels";
-import type { ClassGroup, DayOfWeek, Student } from "@/types/studio";
+import type { ClassGroup, DayOfWeek, Session, Student } from "@/types/studio";
 import Link from "next/link";
 import { useState } from "react";
 
 export function GroupClassCard({
   group,
   day,
+  date,
   students,
+  sessions,
 }: {
   group: ClassGroup;
   day: DayOfWeek | null;
+  date: string;
   students: Student[];
+  sessions: Session[];
 }) {
   const [open, setOpen] = useState(false);
-  const members = sortByName(students.filter((student) => student.groupId === group.id));
+  const sessionStudentIds = new Set(
+    sessions
+      .filter((session) => session.date === date && session.groupId === group.id)
+      .map((session) => session.studentId),
+  );
+  const members = sortByName(
+    students.filter(
+      (student) =>
+        student.groupId === group.id && sessionStudentIds.has(student.id),
+    ),
+  );
   const time = displayGroupTime(group, day);
   const daysLabel = group.days.map((item) => DAY_LABELS[item]).join(" · ");
   const detailLabel = day ? `${DAY_LABELS[day]} ${time}` : group.label;

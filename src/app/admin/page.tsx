@@ -29,8 +29,10 @@ export default function AdminHomePage() {
   const todayDay = weekdayFromISO(today);
   const todayGroups = todayDay ? getClassGroupsForDay(todayDay) : [];
   const attendancePending = pendingAttendanceBatches(visibleSessions, activeIds);
-  const groupsWithStudents = todayGroups.filter((group) =>
-    visibleStudents.some((student) => student.groupId === group.id),
+  const groupsWithSessions = todayGroups.filter((group) =>
+    visibleSessions.some(
+      (session) => session.date === today && session.groupId === group.id,
+    ),
   );
   const specialProgramSessions = visibleSessions.filter(
     (session) => session.date === today && session.groupId === "duzensiz",
@@ -135,16 +137,18 @@ export default function AdminHomePage() {
             Takvime git →
           </Link>
         </div>
-        {groupsWithStudents.length === 0 && specialProgramSessions.length === 0 ? (
+        {groupsWithSessions.length === 0 && specialProgramSessions.length === 0 ? (
           <p className="text-sm text-muted">Bugün dersin yok.</p>
         ) : (
           <div className="flex flex-col gap-3">
-            {groupsWithStudents.map((group) => (
+            {groupsWithSessions.map((group) => (
               <GroupClassCard
                 key={group.id}
                 group={group}
                 day={todayDay}
+                date={today}
                 students={visibleStudents}
+                sessions={visibleSessions}
               />
             ))}
             {specialProgramSessions.length > 0 ? (

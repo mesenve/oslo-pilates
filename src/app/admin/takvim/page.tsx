@@ -4,12 +4,9 @@ import { ClassCalendar } from "@/components/class-calendar";
 import { GroupClassCard } from "@/components/group-class-card";
 import { EmptyState } from "@/components/ui";
 import { useStudio } from "@/components/studio-provider";
-import { getClassGroups, getClassGroupsForDay } from "@/data/groups";
+import { getClassGroupsForDay } from "@/data/groups";
 import { DAY_LABELS } from "@/lib/labels";
 import {
-  addDays,
-  startOfWeekMonday,
-  toISODate,
   todayISO,
   weekdayFromISO,
 } from "@/lib/dates";
@@ -23,29 +20,36 @@ export default function CalendarPage() {
   const [onlyFullGroups, setOnlyFullGroups] = useState(false);
   const day = weekdayFromISO(selectedDate);
   const groups = day ? getClassGroupsForDay(day) : [];
+  const groupsWithSessions = groups.filter((group) =>
+    visibleSessions.some(
+      (session) => session.date === selectedDate && session.groupId === group.id,
+    ),
+  );
   const displayedGroups = onlyFullGroups
-    ? groups.filter(
-        (group) =>
-          visibleStudents.some((student) => student.groupId === group.id),
+    ? groupsWithSessions.filter((group) =>
+        visibleStudents.some(
+          (student) =>
+            student.groupId === group.id &&
+            visibleSessions.some(
+              (session) =>
+                session.date === selectedDate &&
+                session.groupId === group.id &&
+                session.studentId === student.id,
+            ),
+        ),
       )
-    : groups;
+    : groupsWithSessions;
   const specialProgramSessions = visibleSessions.filter(
     (session) => session.date === selectedDate && session.groupId === "duzensiz",
   );
 
   const marks = useMemo(() => {
-    const allGroups = getClassGroups();
-    const origin = startOfWeekMonday();
-    const result: { date: string; count: number }[] = [];
-    for (let i = -35; i < 56; i += 1) {
-      const iso = toISODate(addDays(origin, i));
-      const weekday = weekdayFromISO(iso);
-      if (!weekday) continue;
-      const count = allGroups.filter((group) => group.days.includes(weekday)).length;
-      if (count) result.push({ date: iso, count });
+    const counts = new Map<string, number>();
+    for (const session of visibleSessions) {
+      counts.set(session.date, (counts.get(session.date) ?? 0) + 1);
     }
-    return result;
-  }, [customGroups]);
+    return [...counts.entries()].map(([date, count]) => ({ date, count }));
+  }, [visibleSessions, customGroups]);
 
   return (
     <div className="space-y-5">
@@ -70,7 +74,7 @@ export default function CalendarPage() {
             onChange={(event) => setOnlyFullGroups(event.target.checked)}
             className="h-4 w-4 accent-accent"
           />
-          Sadece dolu gruplar
+          Sadece kayıtlı gruplar
         </label>
       </div>
       {todayDay && selectedDate === today ? (
@@ -79,7 +83,7 @@ export default function CalendarPage() {
 
       {displayedGroups.length === 0 && (!specialProgramSessions.length || onlyFullGroups) ? (
         <EmptyState>
-          {onlyFullGroups ? "Bu günde kayıtlı öğrenci olan grup yok." : "Bu günde grup dersi yok."}
+          {onlyFullGroups ? "Bu günde kayıtlı öğrenci olan grup yok." : "Bu günde planlanmış grup dersi yok."}
         </EmptyState>
       ) : (
         <div className="flex flex-col gap-3">
@@ -88,7 +92,9 @@ export default function CalendarPage() {
               key={group.id}
               group={group}
               day={day}
+              date={selectedDate}
               students={visibleStudents}
+              sessions={visibleSessions}
             />
             ))}
           {specialProgramSessions.length > 0 && !onlyFullGroups ? (

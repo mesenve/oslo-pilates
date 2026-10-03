@@ -37,10 +37,16 @@ export async function fetchAttendanceMarks(input?: {
 export async function pushAttendanceMark(
   mark: Omit<StoredAttendanceMark, "updatedAt">,
 ) {
+  await pushAttendanceMarks([mark]);
+}
+
+export async function pushAttendanceMarks(
+  marks: Array<Omit<StoredAttendanceMark, "updatedAt">>,
+) {
   const response = await fetch("/api/attendance", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(mark),
+    body: JSON.stringify({ marks }),
   });
 
   const data = await readJsonResponse<{ error?: string }>(response);

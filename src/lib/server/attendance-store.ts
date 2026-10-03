@@ -1,7 +1,7 @@
 import {
   isSupabaseConfigured,
   listSupabaseAttendance,
-  saveSupabaseAttendance,
+  saveSupabaseAttendanceBatch,
 } from "@/lib/server/supabase-rest";
 
 export type AttendanceMarkStatus = "attend_pending" | "attended" | "upcoming";
@@ -23,27 +23,31 @@ function requireSupabase() {
   }
 }
 
-export async function saveAttendanceMark(input: {
+export async function saveAttendanceMarks(inputs: Array<{
   sessionId: string;
   studentId: string;
   date: string;
   groupId: string;
   status: AttendanceMarkStatus;
-}) {
+}>) {
   requireSupabase();
-  const mark: StoredAttendanceMark = {
-    ...input,
-    updatedAt: new Date().toISOString(),
-  };
+  const updatedAt = new Date().toISOString();
+  const marks: StoredAttendanceMark[] = inputs.map((input) => ({ ...input, updatedAt }));
+  await saveSupabaseAttendanceBatch(
+    marks.map((mark) => ({
+      session_id: mark.sessionId,
+      student_id: mark.studentId,
+      session_date: mark.date,
+      group_id: mark.groupId,
+      status: mark.status,
+      updated_at: mark.updatedAt,
+    })),
+  );
+  return marks;
+}
 
-  await saveSupabaseAttendance({
-    session_id: mark.sessionId,
-    student_id: mark.studentId,
-    session_date: mark.date,
-    group_id: mark.groupId,
-    status: mark.status,
-    updated_at: mark.updatedAt,
-  });
+export async function saveAttendanceMark(input: Parameters<typeof saveAttendanceMarks>[0][number]) {
+  const [mark] = await saveAttendanceMarks([input]);
   return mark;
 }
 

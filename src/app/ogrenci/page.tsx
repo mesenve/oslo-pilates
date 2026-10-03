@@ -4,7 +4,7 @@ import { DailyQuoteCard } from "@/components/daily-quote-card";
 import { LastWeekCta } from "@/components/last-week-cta";
 import { PilatesIcon } from "@/components/icons";
 import { useCurrentStudent, useStudio } from "@/components/studio-provider";
-import { Button, Card, SessionBadge } from "@/components/ui";
+import { Button, Card, EmptyState, SessionBadge } from "@/components/ui";
 import {
   effectiveSessionStatus,
   postponePendingDateInPackage,
@@ -44,7 +44,7 @@ export default function StudentHomePage() {
   const [attending, setAttending] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
 
-  if (!student) return null;
+  if (!student) return <EmptyState>Programın yükleniyor…</EmptyState>;
 
   const remaining = remainingFor(student.id);
   const group = getClassGroupById(student.groupId);

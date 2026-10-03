@@ -1,5 +1,7 @@
 import { getInviteByStudentId } from "@/lib/server/invite-store";
 import { getSessionUser } from "@/lib/server/session";
+import { canManageStudent } from "@/lib/access";
+import { readSupabaseStudioData } from "@/lib/server/supabase-rest";
 import { NextResponse } from "next/server";
 
 export async function GET(request: Request) {
@@ -14,6 +16,11 @@ export async function GET(request: Request) {
   const studentId = new URL(request.url).searchParams.get("studentId")?.trim();
   if (!studentId) {
     return NextResponse.json({ error: "Öğrenci bilgisi gerekli." }, { status: 400 });
+  }
+
+  const studio = await readSupabaseStudioData();
+  if (!canManageStudent(user, studentId, studio.students)) {
+    return NextResponse.json({ error: "Bu öğrenci için yetkiniz yok." }, { status: 403 });
   }
 
   const invite = await getInviteByStudentId(studentId);

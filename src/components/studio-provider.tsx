@@ -13,7 +13,7 @@ import {
   setCustomGroups,
 } from "@/data/groups";
 import { studentsForUser, sessionsForUser, postponeRequestsForUser, canManageStudent, isStaffRole } from "@/lib/access";
-import { fetchAttendanceMarks, pushAttendanceMark } from "@/lib/attendance-client";
+import { fetchAttendanceMarks, pushAttendanceMark, pushAttendanceMarks } from "@/lib/attendance-client";
 import { mergeAttendanceMarks } from "@/lib/attendance-sync";
 import { packagePeriodKey } from "@/lib/package-period";
 import { addDays, startOfWeekMonday, toISODate, todayISO } from "@/lib/dates";
@@ -573,16 +573,14 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
     if (targets.length === 0) return false;
 
     try {
-      await Promise.all(
-        targets.map((session) =>
-          pushAttendanceMark({
-            sessionId: session.id,
-            studentId: session.studentId,
-            date: session.date,
-            groupId: session.groupId,
-            status: "attended",
-          }),
-        ),
+      await pushAttendanceMarks(
+        targets.map((session) => ({
+          sessionId: session.id,
+          studentId: session.studentId,
+          date: session.date,
+          groupId: session.groupId,
+          status: "attended" as const,
+        })),
       );
       setStudioState((current) => ({
         ...current,
@@ -620,16 +618,14 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
     if (targets.length === 0) return false;
 
     try {
-      await Promise.all(
-        targets.map((session) =>
-          pushAttendanceMark({
-            sessionId: session.id,
-            studentId: session.studentId,
-            date: session.date,
-            groupId: session.groupId,
-            status: "upcoming",
-          }),
-        ),
+      await pushAttendanceMarks(
+        targets.map((session) => ({
+          sessionId: session.id,
+          studentId: session.studentId,
+          date: session.date,
+          groupId: session.groupId,
+          status: "upcoming" as const,
+        })),
       );
       setStudioState((current) => ({
         ...current,

@@ -108,6 +108,22 @@ export async function upsertSupabaseSessionStatus(sessionId: string, status: str
   });
 }
 
+/** Update one status for a validated group of sessions in one PostgREST
+ * statement. The attendance API uses this for bulk approval/rejection so a
+ * browser request cannot leave half the visible rows untouched. */
+export async function patchSupabaseSessionStatuses(
+  sessionIds: string[],
+  status: string,
+) {
+  if (sessionIds.length === 0) return;
+  const filter = sessionIds.map((id) => encodeURIComponent(id)).join(",");
+  await request<unknown>(`sessions?id=in.(${filter})`, {
+    method: "PATCH",
+    headers: { Prefer: "return=minimal" },
+    body: JSON.stringify({ status }),
+  });
+}
+
 /** Keep an existing attendance mark aligned with an instructor's manual result.
  * This intentionally updates only an existing mark; instructor-only changes
  * must not create a student attendance record.
@@ -260,10 +276,15 @@ export type SupabaseAttendanceRow = {
 };
 
 export async function saveSupabaseAttendance(mark: SupabaseAttendanceRow) {
+  await saveSupabaseAttendanceBatch([mark]);
+}
+
+export async function saveSupabaseAttendanceBatch(marks: SupabaseAttendanceRow[]) {
+  if (marks.length === 0) return;
   await request<SupabaseAttendanceRow[]>("attendance_marks?on_conflict=session_id", {
     method: "POST",
     headers: { Prefer: "resolution=merge-duplicates,return=minimal" },
-    body: JSON.stringify([mark]),
+    body: JSON.stringify(marks),
   });
 }
 
@@ -333,11 +354,28 @@ export async function readSupabaseStudioData(): Promise<Pick<StudioState, "stude
   const archivedIds = new Set(
     studentRows.filter((row) => row.archived_at).map((row) => String(row.id)),
   );
+  const activeStudents = allStudents.filter((student) => !archivedIds.has(student.id));
+  const activeStudentById = new Map(activeStudents.map((student) => [student.id, student]));
+  const activeSessions = sessionRows
+    .map(toSession)
+    .filter((session) => {
+      const student = activeStudentById.get(session.studentId);
+      if (!student) return false;
+      const start = student.package.startDate;
+      const end = student.package.endDate;
+      return (!start || session.date >= start) && (!end || session.date <= end);
+    });
+
   return {
-    students: allStudents.filter((student) => !archivedIds.has(student.id)),
+    students: activeStudents,
     archivedStudents: allStudents.filter((student) => archivedIds.has(student.id)),
-    sessions: sessionRows.map(toSession),
-    postponeRequests: postponeRows.map((row) => ({
+    // Old package rows stay in Supabase for history, but are not part of the
+    // active application view. This keeps legacy sessions from leaking into a
+    // newly selected package without destructively deleting data.
+    sessions: activeSessions,
+    postponeRequests: postponeRows
+      .filter((row) => activeStudentById.has(String(row.student_id)) && activeSessions.some((session) => session.id === String(row.session_id)))
+      .map((row) => ({
       id: String(row.id),
       studentId: String(row.student_id),
       sessionId: String(row.session_id),

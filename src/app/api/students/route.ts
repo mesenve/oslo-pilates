@@ -91,10 +91,18 @@ function validateStudentSchedule(
     return "Seans sayısı paket bilgisiyle eşleşmiyor.";
   }
   const uniqueDates = new Set<string>();
+  const packageStart = student.package.startDate;
+  const packageEnd = student.package.endDate;
   for (const session of sessions) {
     if (session.groupId !== student.groupId) return "Ders grubu öğrenci programıyla eşleşmiyor.";
     if (uniqueDates.has(session.date)) return "Aynı tarih için birden fazla seans var.";
     uniqueDates.add(session.date);
+    if (packageStart && session.date < packageStart) {
+      return "Seans tarihi paket başlangıcından önce olamaz.";
+    }
+    if (packageEnd && session.date > packageEnd) {
+      return "Seans tarihi paket bitişinden sonra olamaz.";
+    }
     const date = new Date(`${session.date}T00:00:00Z`);
     const day = DAY_BY_UTC_INDEX[date.getUTCDay()];
     if (!day || !days.includes(day)) {
@@ -285,7 +293,10 @@ export async function PATCH(request: Request) {
 
 export async function DELETE(request: Request) {
   const user = await getSessionUser();
-  if (!isStaff(user)) {
+  // Permanent deletion is intentionally restricted to the archive/admin
+  // workflow. Instructors can archive records, but cannot remove attendance,
+  // invite and session history irreversibly.
+  if (user?.role !== "super_admin") {
     return NextResponse.json({ error: "Yönetici oturumu gerekli." }, { status: 403 });
   }
   const body = (await request.json().catch(() => null)) as { studentId?: string } | null;
@@ -296,11 +307,7 @@ export async function DELETE(request: Request) {
 
   const data = await readSupabaseStudioData();
   const student = findStudent(studentId, data.students, data.archivedStudents);
-  if (
-    !student ||
-    (user!.role === "instructor" &&
-      !canManageStudent(user!, studentId, [...data.students, ...data.archivedStudents]))
-  ) {
+  if (!student) {
     return NextResponse.json({ error: "Bu öğrenci için yetkiniz yok." }, { status: 403 });
   }
   await deleteSupabaseStudent(studentId);

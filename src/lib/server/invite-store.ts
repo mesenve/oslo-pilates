@@ -6,6 +6,7 @@ import {
   deleteSupabaseInvite,
   isSupabaseConfigured,
   listSupabaseInvites,
+  patchSupabaseStudent,
   saveSupabaseInvite,
   type SupabaseInviteRow,
 } from "@/lib/server/supabase-rest";
@@ -88,17 +89,33 @@ export async function activateInvite(token: string, password: string) {
   };
 
   await activateSupabaseStudent(activated.student.id);
-  await saveSupabaseInvite({
-    token: activated.token,
-    student_id: activated.student.id,
-    student: activated.student,
-    sessions: activated.sessions,
-    expires_at: activated.expiresAt,
-    password: activated.password,
-    activated_at: activated.activatedAt,
-    created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString(),
-  });
+  try {
+    await saveSupabaseInvite({
+      token: activated.token,
+      student_id: activated.student.id,
+      student: activated.student,
+      sessions: activated.sessions,
+      expires_at: activated.expiresAt,
+      password: activated.password,
+      activated_at: activated.activatedAt,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    });
+  } catch (error) {
+    // Activation spans the students and invites tables. If the invite write
+    // fails, compensate the student update so a half-activated account cannot
+    // be shown as active while login credentials are missing.
+    try {
+      await patchSupabaseStudent(invite.student.id, {
+        account_status: invite.student.accountStatus,
+        invite_token: invite.student.inviteToken ?? null,
+        invite_expires_at: invite.student.inviteExpiresAt ?? null,
+      });
+    } catch (rollbackError) {
+      console.error("Invite activation rollback failed:", rollbackError);
+    }
+    throw error;
+  }
   return activated;
 }
 
@@ -136,17 +153,30 @@ export async function setInvitePassword(studentId: string, password: string) {
     },
   };
   await activateSupabaseStudent(studentId);
-  await saveSupabaseInvite({
-    token: next.token,
-    student_id: next.student.id,
-    student: next.student,
-    sessions: next.sessions,
-    expires_at: next.expiresAt,
-    password: next.password ?? null,
-    activated_at: next.activatedAt ?? null,
-    created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString(),
-  });
+  try {
+    await saveSupabaseInvite({
+      token: next.token,
+      student_id: next.student.id,
+      student: next.student,
+      sessions: next.sessions,
+      expires_at: next.expiresAt,
+      password: next.password ?? null,
+      activated_at: next.activatedAt ?? null,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    });
+  } catch (error) {
+    try {
+      await patchSupabaseStudent(invite.student.id, {
+        account_status: invite.student.accountStatus,
+        invite_token: invite.student.inviteToken ?? null,
+        invite_expires_at: invite.student.inviteExpiresAt ?? null,
+      });
+    } catch (rollbackError) {
+      console.error("Password reset rollback failed:", rollbackError);
+    }
+    throw error;
+  }
   return next;
 }
 

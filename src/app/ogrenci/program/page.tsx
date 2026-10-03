@@ -78,7 +78,7 @@ export default function ProgramPage() {
       )
     : "";
 
-  if (!student) return null;
+  if (!student) return <EmptyState>Programın yükleniyor…</EmptyState>;
 
   return (
     <div className="space-y-5">
