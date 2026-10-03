@@ -66,6 +66,7 @@ export default function StudentDetailPage() {
     approveRequest,
     markSessionByInstructor,
     setPostponeLessonUsed,
+    setPostponeLessonNote,
     setPostponeRequestReason,
     archiveStudent,
     resendStudentInvite,
@@ -599,20 +600,13 @@ export default function StudentDetailPage() {
               setPostponeLessonUsed(student.id, used, usedAt)
             }
           />
-          <div className="rounded-2xl bg-accent-soft/60 px-3 py-3">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-accent">
-              Not
-            </p>
-            <p className="mt-1 text-sm">
-              {student.note?.trim() || "Bu öğrenci için not eklenmemiş."}
-            </p>
-            <Link
-              href={`/admin/ogrenciler/${student.id}/duzenle`}
-              className="mt-2 inline-block text-xs text-accent underline-offset-2 hover:underline"
-            >
-              Notu düzenle
-            </Link>
-          </div>
+          {!postponeCard ? (
+            <PostponeNoteEditor
+              key={`${student.id}:${student.postponeLessonNote ?? ""}`}
+              initialNote={student.postponeLessonNote ?? ""}
+              onSave={(note) => setPostponeLessonNote(student.id, note)}
+            />
+          ) : null}
         </Card>
 
         {!postponeCard ? (

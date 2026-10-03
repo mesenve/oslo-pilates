@@ -115,6 +115,7 @@ type StudioContextValue = {
     used: boolean,
     usedAt?: string,
   ) => Promise<boolean>;
+  setPostponeLessonNote: (studentId: string, note: string) => Promise<boolean>;
   setPostponeRequestReason: (requestId: string, reason: string) => Promise<boolean>;
   addStudent: (input: NewStudentInput) => Promise<StudentActionResult>;
   archiveStudent: (studentId: string) => Promise<boolean>;
@@ -906,8 +907,39 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
                   postponeLessonUsedAt: used
                     ? (usedAt?.trim() || item.postponeLessonUsedAt || todayISO())
                     : undefined,
-                  postponeLessonNote: used ? item.postponeLessonNote : undefined,
+                  postponeLessonNote: item.postponeLessonNote,
                 }
+              : item,
+          ),
+        };
+      });
+      return true;
+    },
+    [],
+  );
+
+  const setPostponeLessonNote = useCallback(
+    async (studentId: string, note: string) => {
+      const response = await fetch("/api/students", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "postpone-note",
+          studentId,
+          note,
+        }),
+      });
+      if (!response.ok) return false;
+      setStudioState((current) => {
+        const student = current.students.find((item) => item.id === studentId);
+        if (!student || !canManageStudent(current.user, studentId, current.students)) {
+          return current;
+        }
+        return {
+          ...current,
+          students: current.students.map((item) =>
+            item.id === studentId
+              ? { ...item, postponeLessonNote: note.trim() || undefined }
               : item,
           ),
         };
@@ -1307,6 +1339,7 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
       approveRequest,
       markSessionByInstructor,
       setPostponeLessonUsed,
+      setPostponeLessonNote,
       setPostponeRequestReason,
       addStudent,
       archiveStudent,
@@ -1332,6 +1365,7 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
       rejectAttendance,
       markSessionByInstructor,
       setPostponeLessonUsed,
+      setPostponeLessonNote,
       setPostponeRequestReason,
       permanentlyDeleteStudent,
       ready,

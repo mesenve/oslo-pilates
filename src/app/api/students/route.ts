@@ -29,6 +29,11 @@ type PatchBody =
       usedAt?: string;
     }
   | {
+      action?: "postpone-note";
+      studentId?: string;
+      note?: string;
+    }
+  | {
       action?: "invite";
       studentId?: string;
       inviteToken?: string;
@@ -202,7 +207,10 @@ export async function POST(request: Request) {
       existing && !periodChanged
         ? existing.postponeLessonUsedAt
         : body.student.postponeLessonUsedAt,
-    postponeLessonNote: undefined,
+    postponeLessonNote:
+      existing && !periodChanged
+        ? existing.postponeLessonNote
+        : body.student.postponeLessonNote,
     accountStatus:
       existing && existing.email.trim().toLowerCase() === email
         ? existing.accountStatus
@@ -272,7 +280,12 @@ export async function PATCH(request: Request) {
     await patchSupabaseStudentPackage(studentId, {
       postponeLessonUsed: Boolean(body.used),
       postponeLessonUsedAt: body.used ? body.usedAt || new Date().toISOString().slice(0, 10) : null,
-      postponeLessonNote: null,
+    });
+    return NextResponse.json({ ok: true });
+  }
+  if (body.action === "postpone-note") {
+    await patchSupabaseStudentPackage(studentId, {
+      postponeLessonNote: typeof body.note === "string" ? body.note.trim() : "",
     });
     return NextResponse.json({ ok: true });
   }
