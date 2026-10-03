@@ -1,4 +1,4 @@
-import { getClassGroupById } from "@/data/groups";
+import { getClassGroupById, legacyGroupFromId } from "@/data/groups";
 import { todayISO, weekdayFromISO } from "@/lib/dates";
 import { DAY_LABELS } from "@/lib/labels";
 import type {
@@ -73,7 +73,7 @@ export function sessionTimeForStudent(
     return customSchedule?.time ?? "";
   }
 
-  const group = getClassGroupById(session.groupId);
+  const group = getClassGroupById(session.groupId) ?? legacyGroupFromId(session.groupId);
   const day = weekdayFromISO(session.date);
   return (day && group?.timeByDay?.[day]) || group?.time || customSchedule?.time || "";
 }
