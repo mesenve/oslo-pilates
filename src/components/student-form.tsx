@@ -277,7 +277,7 @@ export function StudentForm({
             label="Seans"
             value={form.totalSessions}
             onChange={(value) => update("totalSessions", value)}
-            options={sessionOptionsForPackage(form.packageType)}
+            options={sessionOptionsForPackage()}
           />
         </div>
         <div className="grid grid-cols-2 gap-4">
@@ -395,7 +395,9 @@ function TimePickerField({
   const [rawHour = "", rawMinute = ""] = firstTime.split(/[.:]/);
   const hour = rawHour.padStart(2, "0");
   const minute = rawMinute.padStart(2, "0");
-  const hours = Array.from({ length: 24 }, (_, index) => String(index).padStart(2, "0"));
+  // Gece yarısı saatleri stüdyo programında kullanılmadığı için listelenmez.
+  // Özel programlar için gündüz ve akşam aralığı korunur.
+  const hours = Array.from({ length: 17 }, (_, index) => String(index + 7).padStart(2, "0"));
   const minutes = Array.from({ length: 12 }, (_, index) => String(index * 5).padStart(2, "0"));
   const updateTime = (nextHour: string, nextMinute: string) => {
     if (!nextHour || !nextMinute) {

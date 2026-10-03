@@ -11,23 +11,10 @@ export const PACKAGE_TYPE_LABELS: Record<PackageType, string> = {
 
 export const SESSION_COUNTS = [8, 12, 24, 36] as const;
 
-export const PACKAGE_PRICES: Record<
-  PackageType,
-  Record<(typeof SESSION_COUNTS)[number], number>
-> = {
-  group_5: { 8: 3500, 12: 4500, 24: 9000, 36: 13500 },
-  duet_2: { 8: 5000, 12: 6500, 24: 13000, 36: 19500 },
-  private: { 8: 7000, 12: 9000, 24: 18000, 36: 27000 },
-};
-
-function formatPrice(amount: number) {
-  return amount.toLocaleString("tr-TR");
-}
-
-export function sessionOptionsForPackage(packageType: PackageType) {
+export function sessionOptionsForPackage() {
   return SESSION_COUNTS.map((count) => ({
     value: String(count),
-    label: `${count} seans · ${formatPrice(PACKAGE_PRICES[packageType][count])} ₺`,
+    label: `${count} seans`,
   }));
 }
 

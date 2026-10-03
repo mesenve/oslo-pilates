@@ -282,31 +282,60 @@ export default function StudentDetailPage() {
         </Card>
       ) : null}
 
-      {student.changeLog?.length ? <Card className="space-y-3 p-4"><h2 className="font-serif text-xl">Değişiklik günlüğü</h2>{student.changeLog.slice(0, 8).map((entry) => <p key={entry.id} className="text-sm text-muted">{formatLongDate(entry.createdAt.slice(0, 10))} · {getStaffById(entry.actorId)?.name ?? entry.actorId} · {CHANGE_FIELD_LABELS[entry.field] ?? "Bilgi değişikliği"}: {readableChangeValue(entry.field, entry.before) || "—"} → {readableChangeValue(entry.field, entry.after) || "—"}</p>)}</Card> : null}
+      {student.changeLog?.length ? (
+        <Card className="p-4">
+          <details className="group">
+            <summary className="flex cursor-pointer list-none items-center justify-between gap-3 rounded-2xl text-left [&::-webkit-details-marker]:hidden">
+              <span>
+                <span className="block font-serif text-xl">Değişiklik günlüğü</span>
+                <span className="mt-1 block text-xs text-muted">
+                  Son {Math.min(student.changeLog.length, 8)} kayıt
+                </span>
+              </span>
+              <ChevronDownIcon className="h-5 w-5 shrink-0 text-muted transition-transform group-open:rotate-180" />
+            </summary>
+            <div className="mt-4 space-y-2 border-t border-border/60 pt-4">
+              {student.changeLog.slice(0, 8).map((entry) => (
+                <p key={entry.id} className="text-sm text-muted">
+                  {formatLongDate(entry.createdAt.slice(0, 10))} · {getStaffById(entry.actorId)?.name ?? entry.actorId} · {CHANGE_FIELD_LABELS[entry.field] ?? "Bilgi değişikliği"}: {readableChangeValue(entry.field, entry.before) || "—"} → {readableChangeValue(entry.field, entry.after) || "—"}
+                </p>
+              ))}
+            </div>
+          </details>
+        </Card>
+      ) : null}
 
       {student.packageHistory?.length ? (
-        <Card className="space-y-3 p-4">
-          <div>
-            <h2 className="font-serif text-xl">Paket geçmişi</h2>
-            <p className="mt-1 text-xs text-muted">
-              Önceki paket dönemleri saklanır; mevcut paket düzenlenirken silinmez.
-            </p>
-          </div>
-          <div className="space-y-2">
-            {[...student.packageHistory].reverse().map((item) => (
-              <div
-                key={item.id}
-                className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-surface-muted/50 px-3 py-2 text-sm"
-              >
-                <span>
-                  {formatLongDate(item.startDate)} – {formatLongDate(item.endDate)}
+        <Card className="p-4">
+          <details className="group">
+            <summary className="flex cursor-pointer list-none items-center justify-between gap-3 rounded-2xl text-left [&::-webkit-details-marker]:hidden">
+              <span>
+                <span className="block font-serif text-xl">Paket geçmişi</span>
+                <span className="mt-1 block text-xs text-muted">
+                  {student.packageHistory.length} eski paket kaydı
                 </span>
-                <span className="text-muted">
-                  {item.totalSessions} seans · {item.paymentStatus === "paid" ? "Ödendi" : item.paymentStatus === "pending" ? "Bekliyor" : "Gecikmiş"}
-                </span>
-              </div>
-            ))}
-          </div>
+              </span>
+              <ChevronDownIcon className="h-5 w-5 shrink-0 text-muted transition-transform group-open:rotate-180" />
+            </summary>
+            <div className="mt-4 space-y-2 border-t border-border/60 pt-4">
+              <p className="mb-3 text-xs text-muted">
+                Önceki paket dönemleri saklanır; mevcut paket düzenlenirken silinmez.
+              </p>
+              {[...student.packageHistory].reverse().map((item) => (
+                <div
+                  key={item.id}
+                  className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-surface-muted/50 px-3 py-2 text-sm"
+                >
+                  <span>
+                    {formatLongDate(item.startDate)} – {formatLongDate(item.endDate)}
+                  </span>
+                  <span className="text-muted">
+                    {item.totalSessions} seans · {item.paymentStatus === "paid" ? "Ödendi" : item.paymentStatus === "pending" ? "Bekliyor" : "Gecikmiş"}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </details>
         </Card>
       ) : null}
 
@@ -530,6 +559,62 @@ export default function StudentDetailPage() {
 
       <section className="space-y-3">
         <h2 className="font-serif text-xl">Erteleme</h2>
+        <Card className="space-y-3 p-4">
+          <div>
+            <p className="text-xs uppercase tracking-[0.16em] text-muted">
+              Paket erteleme hakkı
+            </p>
+            <p className="mt-1 text-sm">
+              {postponeRightAdminLabel(
+                student.monthlyPostponeLimit -
+                  remainingPostponeRights(
+                    student,
+                    visiblePostponeRequests,
+                    visibleSessions,
+                  ),
+                student.monthlyPostponeLimit,
+                postponeUsedDateInPackage(
+                  student,
+                  visiblePostponeRequests,
+                  visibleSessions,
+                ),
+                postponePendingDateInPackage(
+                  student,
+                  visiblePostponeRequests,
+                  visibleSessions,
+                ),
+              )}
+            </p>
+          </div>
+          <PostponeUsedFields
+            used={student.postponeLessonUsed ?? false}
+            usedAt={
+              postponeUsedDateInPackage(
+                student,
+                visiblePostponeRequests,
+                visibleSessions,
+              ) ?? student.postponeLessonUsedAt ?? ""
+            }
+            onChange={(used, usedAt) =>
+              setPostponeLessonUsed(student.id, used, usedAt)
+            }
+          />
+          <div className="rounded-2xl bg-accent-soft/60 px-3 py-3">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-accent">
+              Not
+            </p>
+            <p className="mt-1 text-sm">
+              {student.note?.trim() || "Bu öğrenci için not eklenmemiş."}
+            </p>
+            <Link
+              href={`/admin/ogrenciler/${student.id}/duzenle`}
+              className="mt-2 inline-block text-xs text-accent underline-offset-2 hover:underline"
+            >
+              Notu düzenle
+            </Link>
+          </div>
+        </Card>
+
         {!postponeCard ? (
           <EmptyState>Bu öğrencinin erteleme kaydı yok.</EmptyState>
         ) : (
@@ -543,19 +628,6 @@ export default function StudentDetailPage() {
               <RequestBadge status={postponeCard.status} />
             </div>
             {lessonTime ? <p className="text-sm text-muted">{lessonTime}</p> : null}
-            <PostponeUsedFields
-              used={student.postponeLessonUsed ?? false}
-              usedAt={
-                postponeUsedDateInPackage(
-                  student,
-                  visiblePostponeRequests,
-                  visibleSessions,
-                ) ?? student.postponeLessonUsedAt ?? ""
-              }
-              onChange={(used, usedAt) =>
-                setPostponeLessonUsed(student.id, used, usedAt)
-              }
-            />
             <PostponeNoteEditor
               key={`${postponeCard.id}:${postponeCard.reason ?? ""}`}
               initialNote={postponeCard.reason ?? ""}
