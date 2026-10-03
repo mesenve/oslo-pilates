@@ -117,7 +117,9 @@ export default function ProgramPage() {
             postponeHint={postponeHint}
             postponeNote={
               postponeRequests.find((request) => request.sessionId === session.id)?.reason?.trim() ||
-              undefined
+              ((session.status === "postponed" || session.status === "postpone_pending")
+                ? student.postponeLessonNote?.trim()
+                : undefined)
             }
             onAttend={() => markAttended(session.id)}
             onPostpone={(reason) => requestPostpone(session.id, reason)}

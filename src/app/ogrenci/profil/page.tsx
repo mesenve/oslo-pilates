@@ -33,7 +33,7 @@ export default function ProfilePage() {
       request.studentId === student.id &&
       request.reason?.trim() &&
       (request.status === "pending" || request.status === "approved"),
-  )?.reason;
+  )?.reason?.trim() || student.postponeLessonNote?.trim();
 
   return (
     <div className="space-y-5">
