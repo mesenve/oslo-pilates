@@ -54,17 +54,11 @@ export async function getSupabaseInvite(token: string) {
 }
 
 export async function saveSupabaseInvite(invite: SupabaseInviteRow) {
-  await request<SupabaseInviteRow[]>("invites?on_conflict=token", {
+  // One row per student (invites_student_unique): a resend replaces the token in place.
+  await request<SupabaseInviteRow[]>("invites?on_conflict=student_id", {
     method: "POST",
     headers: { Prefer: "resolution=merge-duplicates,return=minimal" },
     body: JSON.stringify([invite]),
-  });
-}
-
-export async function deleteSupabaseInvite(token: string) {
-  await request<unknown>(`invites?token=eq.${encodeURIComponent(token)}`, {
-    method: "DELETE",
-    headers: { Prefer: "return=minimal" },
   });
 }
 

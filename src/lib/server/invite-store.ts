@@ -3,7 +3,6 @@ import { hashPassword } from "@/lib/server/staff-credentials";
 import {
   getSupabaseInvite,
   activateSupabaseStudent,
-  deleteSupabaseInvite,
   isSupabaseConfigured,
   listSupabaseInvites,
   patchSupabaseStudent,
@@ -53,9 +52,6 @@ export async function saveInvite(invite: StoredInvite) {
     created_at: existing?.created_at ?? new Date().toISOString(),
     updated_at: new Date().toISOString(),
   });
-  if (existing && existing.token !== invite.token) {
-    await deleteSupabaseInvite(existing.token);
-  }
 }
 
 export async function getInviteByToken(token: string) {

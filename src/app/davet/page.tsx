@@ -142,11 +142,11 @@ function DavetForm() {
         <div className="space-y-3 text-center">
           <h1 className="font-serif text-2xl">Davet süresi dolmuş</h1>
           <p className="text-sm text-muted">
-            Merhaba {studentName}, linkin süresi dolmuş. Eğitmeninden yeni davet
-            linki isteyebilirsin.
+            Merhaba {studentName}, linkin süresi dolmuş. E-postanı yazarak yeni
+            davet linki alabilirsin.
           </p>
-          <Link href="/giris" className="inline-flex text-sm font-medium text-accent">
-            Giriş sayfasına dön →
+          <Link href="/giris/sifremi-unuttum" className="inline-flex text-sm font-medium text-accent">
+            Yeni davet linki iste →
           </Link>
         </div>
       </InviteShell>

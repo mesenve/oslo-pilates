@@ -159,16 +159,8 @@ function GirisForm() {
     setError(null);
     setPendingLogin(true);
 
-    if (portal === "student") {
-      const result = await loginStudent(email, password);
-      if (result.error) {
-        setPendingLogin(false);
-        setError(result.error);
-      }
-      return;
-    }
-
-    const result = await loginStaff(email, password);
+    const result = await (portal === "student" ? loginStudent : loginStaff)(email, password)
+      .catch(() => ({ error: "Bağlantı kurulamadı. İnternetini kontrol edip tekrar dene." }));
     if (result.error) {
       setPendingLogin(false);
       setError(result.error);
