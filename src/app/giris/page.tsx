@@ -34,7 +34,7 @@ function readRememberData(): RememberData {
 }
 
 function writeRememberData(data: RememberData) {
-  window.localStorage.setItem(REMEMBER_KEY, JSON.stringify(data));
+  try { window.localStorage.setItem(REMEMBER_KEY, JSON.stringify(data)); } catch { /* Browser storage is optional. */ }
 }
 
 export default function GirisPage() {
@@ -53,10 +53,13 @@ export default function GirisPage() {
 
 function GirisForm() {
   const searchParams = useSearchParams();
+  const initialPortal: PortalRole = searchParams.get("rol") === "admin" ? "staff" : "student";
+  return <LoginForm key={initialPortal} initialPortal={initialPortal} />;
+}
+
+function LoginForm({ initialPortal }: { initialPortal: PortalRole }) {
   const router = useRouter();
   const { loginStaff, loginStudent, user, ready } = useStudio();
-  const initialPortal: PortalRole =
-    searchParams.get("rol") === "admin" ? "staff" : "student";
   const [portal, setPortal] = useState<PortalRole>(initialPortal);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -65,28 +68,15 @@ function GirisForm() {
   const [pendingLogin, setPendingLogin] = useState(false);
 
   useEffect(() => {
-    const nextPortal: PortalRole =
-      searchParams.get("rol") === "admin" ? "staff" : "student";
-    setPortal(nextPortal);
-  }, [searchParams]);
-
-  useEffect(() => {
-    const saved = readRememberData();
-    setRememberMe(saved.remember);
-    setEmail(
-      nextPortalEmail(
-        searchParams.get("rol") === "admin" ? "staff" : "student",
-        saved,
-      ),
-    );
-    setPassword("");
-  }, [searchParams]);
-
-  useEffect(() => {
-    const saved = readRememberData();
-    setEmail(nextPortalEmail(portal, saved));
-    setPassword("");
-  }, [portal]);
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (cancelled) return;
+      const saved = readRememberData();
+      setRememberMe(saved.remember);
+      setEmail(saved.remember ? (initialPortal === "student" ? saved.studentEmail : saved.staffEmail) ?? "" : "");
+    });
+    return () => { cancelled = true; };
+  }, [initialPortal]);
 
   useEffect(() => {
     if (!ready || !user) return;
@@ -99,39 +89,6 @@ function GirisForm() {
       router.replace(adminHomeFor(user));
     }
   }, [ready, router, user]);
-
-  useEffect(() => {
-    if (!ready || !user || !pendingLogin) return;
-
-    if (portal === "student") {
-      if (user.role === "student") {
-        persistRememberChoice(email);
-        setPendingLogin(false);
-        router.replace("/ogrenci");
-        return;
-      }
-      setPendingLogin(false);
-      setError("Öğrenci girişi yapılamadı. Sayfayı yenileyip tekrar dene.");
-      return;
-    }
-
-    if (user.role === "super_admin" || user.role === "instructor") {
-      persistRememberChoice(email);
-      setPendingLogin(false);
-      router.replace(adminHomeFor(user));
-      return;
-    }
-
-    setPendingLogin(false);
-    setError("Admin girişi yapılamadı. Sayfayı yenileyip tekrar dene.");
-  }, [email, pendingLogin, portal, ready, router, user]);
-
-  function nextPortalEmail(nextPortal: PortalRole, saved: RememberData) {
-    if (!saved.remember) return "";
-    return nextPortal === "student"
-      ? (saved.studentEmail ?? "")
-      : (saved.staffEmail ?? "");
-  }
 
   function persistRememberChoice(currentEmail: string) {
     if (!rememberMe) {
@@ -150,27 +107,27 @@ function GirisForm() {
 
   function switchPortal(next: PortalRole) {
     setPortal(next);
+    const saved = readRememberData();
+    setEmail(saved.remember ? (next === "student" ? saved.studentEmail : saved.staffEmail) ?? "" : "");
+    setPassword("");
     setError(null);
   }
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
+    if (pendingLogin) return;
     setError(null);
     setPendingLogin(true);
-
-    if (portal === "student") {
-      const result = await loginStudent(email, password);
-      if (result.error) {
-        setPendingLogin(false);
-        setError(result.error);
-      }
-      return;
-    }
-
-    const result = await loginStaff(email, password);
-    if (result.error) {
+    try {
+      const result = portal === "student"
+        ? await loginStudent(email, password, rememberMe)
+        : await loginStaff(email, password, rememberMe);
+      if (result.error) setError(result.error);
+      else persistRememberChoice(email);
+    } catch {
+      setError("Giriş tamamlanamadı. Bağlantınızı kontrol edip tekrar deneyin.");
+    } finally {
       setPendingLogin(false);
-      setError(result.error);
     }
   }
 

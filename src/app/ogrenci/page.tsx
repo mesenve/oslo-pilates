@@ -12,7 +12,6 @@ import {
   sessionTimeForStudent,
   sessionsForStudent,
 } from "@/data/accessors";
-import { getClassGroupById } from "@/data/groups";
 import {
   addDays,
   formatLongDate,
@@ -47,7 +46,6 @@ export default function StudentHomePage() {
   if (!student) return <EmptyState>Programın yükleniyor…</EmptyState>;
 
   const remaining = remainingFor(student.id);
-  const group = getClassGroupById(student.groupId);
   const mine = sessionsForStudent(student.id, sessions, student);
   const monday = startOfWeekMonday();
   const selectedSession = mine.find((session) => session.date === selectedDate);

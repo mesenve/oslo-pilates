@@ -1,11 +1,11 @@
 import {
   type AttendanceMarkStatus,
   listAttendanceMarks,
-  saveAttendanceMarks,
 } from "@/lib/server/attendance-store";
 import {
   readSupabaseStudioData,
-  patchSupabaseSessionStatuses,
+  saveAttendanceBatchRpc,
+  readSupabaseStudent,
 } from "@/lib/server/supabase-rest";
 import { canManageStudent } from "@/lib/access";
 import { todayISO } from "@/lib/dates";
@@ -142,14 +142,16 @@ export async function POST(request: Request) {
   }));
 
   try {
-    const marks = await saveAttendanceMarks(canonicalMarks);
-    // Keep canonical session rows in sync with the attendance marks. All marks
-    // in a batch carry the same status, so this is a single database update.
-    await patchSupabaseSessionStatuses(
-      canonicalMarks.map((mark) => mark.sessionId),
-      canonicalMarks[0].status,
+    await saveAttendanceBatchRpc(canonicalMarks.map((mark) => ({
+      session_id: mark.sessionId, student_id: mark.studentId,
+      session_date: mark.date, group_id: mark.groupId, status: mark.status,
+    })), user);
+    const marks = await listAttendanceMarks();
+    const ids = new Set(canonicalMarks.map((mark) => mark.sessionId));
+    const students = await Promise.all(
+      [...new Set(canonicalMarks.map((mark) => mark.studentId))].map(readSupabaseStudent),
     );
-    return NextResponse.json({ ok: true, marks });
+    return NextResponse.json({ ok: true, marks: marks.filter((mark) => ids.has(mark.sessionId)), students });
   } catch (error) {
     console.error("Attendance save failed:", error);
     return NextResponse.json(

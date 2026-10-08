@@ -4,7 +4,6 @@ import { PasswordField } from "@/components/form-fields";
 import { Button, Card } from "@/components/ui";
 import { useStudio } from "@/components/studio-provider";
 import { fetchInviteByToken, type InviteLookup } from "@/lib/invite-client";
-import { findStudentByInviteToken, isInviteValid } from "@/lib/student-auth";
 import { STUDIO_NAME } from "@/lib/studio";
 import Image from "next/image";
 import Link from "next/link";
@@ -27,10 +26,13 @@ export default function DavetPage() {
 
 function DavetForm() {
   const searchParams = useSearchParams();
-  const router = useRouter();
   const token = searchParams.get("token") ?? "";
-  const { students, activateStudentInvite } = useStudio();
-  const localStudent = token ? findStudentByInviteToken(students, token) : undefined;
+  return <InviteForm key={token} token={token} />;
+}
+
+function InviteForm({ token }: { token: string }) {
+  const router = useRouter();
+  const { activateStudentInvite } = useStudio();
   const [inviteLookup, setInviteLookup] = useState<InviteLookup | null>(null);
   const [lookupError, setLookupError] = useState(false);
   const [password, setPassword] = useState("");
@@ -39,14 +41,8 @@ function DavetForm() {
   const [pending, setPending] = useState(false);
 
   useEffect(() => {
-    if (!token) {
-      setInviteLookup({ found: false, expired: false, active: false });
-      return;
-    }
-
+    if (!token) return;
     let cancelled = false;
-    setLookupError(false);
-    setInviteLookup(null);
 
     fetchInviteByToken(token)
       .then((result) => {
@@ -61,27 +57,11 @@ function DavetForm() {
     };
   }, [token]);
 
-  const studentName =
-    inviteLookup?.student?.name ?? localStudent?.name ?? "";
-  const isActive =
-    inviteLookup?.active === true || localStudent?.accountStatus === "active";
-  const isExpired =
-    inviteLookup?.found === true
-      ? inviteLookup.expired
-      : localStudent
-        ? !isInviteValid(localStudent)
-        : false;
-  const isValidInvite =
-    inviteLookup?.found === true
-      ? !inviteLookup.expired && !inviteLookup.active
-      : Boolean(localStudent && isInviteValid(localStudent));
-  const showInvalid =
-    !token ||
-    lookupError ||
-    (inviteLookup !== null &&
-      !inviteLookup.found &&
-      !localStudent &&
-      inviteLookup !== null);
+  const studentName = inviteLookup?.student?.name ?? "";
+  const isActive = inviteLookup?.active === true;
+  const isExpired = inviteLookup?.expired === true;
+  const isValidInvite = inviteLookup?.found && !isExpired && !isActive;
+  const showInvalid = !token || (inviteLookup !== null && !inviteLookup.found);
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
@@ -110,6 +90,13 @@ function DavetForm() {
         <p className="text-center text-sm text-muted">Davet kontrol ediliyor…</p>
       </InviteShell>
     );
+  }
+
+  if (lookupError) {
+    return <InviteShell>
+      <p className="text-center text-sm text-muted">Davet bilgisine şu anda ulaşılamıyor.</p>
+      <Button className="mt-4 w-full" onClick={() => window.location.reload()}>Tekrar dene</Button>
+    </InviteShell>;
   }
 
   if (showInvalid) {

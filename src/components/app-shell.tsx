@@ -50,6 +50,8 @@ export function AppShell({
   const router = useRouter();
   const { user, logout } = useStudio();
   const [menuOpen, setMenuOpen] = useState(false);
+  const [loggingOut, setLoggingOut] = useState(false);
+  const [logoutError, setLogoutError] = useState(false);
 
   useEffect(() => {
     if (!menuOpen) return;
@@ -67,10 +69,15 @@ export function AppShell({
     };
   }, [menuOpen]);
 
-  function handleLogout() {
+  async function handleLogout() {
+    if (loggingOut) return;
+    setLoggingOut(true);
+    setLogoutError(false);
     setMenuOpen(false);
-    logout();
-    router.replace("/giris");
+    const success = await logout();
+    setLoggingOut(false);
+    if (success) router.replace("/giris");
+    else setLogoutError(true);
   }
 
   function isActive(href: string) {
@@ -113,15 +120,19 @@ export function AppShell({
           <button
             type="button"
             onClick={handleLogout}
+            disabled={loggingOut}
             aria-label={`${user?.name ?? "Hesap"} hesabından çıkış yap`}
             title="Çıkış yap"
             className="inline-flex shrink-0 items-center gap-2 rounded-full bg-gradient-to-r from-[#ec407a] to-accent px-3 py-2 text-sm font-medium text-white shadow-[0_6px_18px_rgba(194,24,91,0.28)] hover:from-accent hover:to-accent-hover"
           >
             <LogOutIcon className="h-4 w-4" />
-            <span>Çıkış yap</span>
+            <span>{loggingOut ? "Çıkış yapılıyor…" : "Çıkış yap"}</span>
           </button>
         </div>
       </header>
+      {logoutError ? <p role="alert" className="px-6 py-3 text-center text-sm text-red-700">
+        Çıkış tamamlanamadı. Bağlantınızı kontrol edip tekrar deneyin.
+      </p> : null}
 
       <div
         className={`fixed inset-0 z-40 md:hidden ${

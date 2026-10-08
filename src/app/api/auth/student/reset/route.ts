@@ -1,13 +1,10 @@
 import { setInvitePassword } from "@/lib/server/invite-store";
 import {
   resolveStaffPassword,
-  setStaffPasswordHash,
 } from "@/lib/server/staff-password-store";
 import { hashPassword, verifyPassword } from "@/lib/server/staff-credentials";
-import {
-  consumePasswordResetToken,
-  verifyPasswordResetToken,
-} from "@/lib/server/password-reset";
+import { verifyPasswordResetToken } from "@/lib/server/password-reset";
+import { resetStaffPasswordRpc } from "@/lib/server/supabase-rest";
 import { validateStudentPassword } from "@/lib/student-auth";
 import { NextResponse } from "next/server";
 
@@ -43,12 +40,11 @@ export async function POST(request: Request) {
         { status: 400 },
       );
     }
-    await setStaffPasswordHash(payload.accountId, await hashPassword(password));
-    await consumePasswordResetToken(token);
+    await resetStaffPasswordRpc(token, await hashPassword(password));
     return NextResponse.json({ ok: true });
   }
 
-  const updated = await setInvitePassword(payload.accountId, password);
+  const updated = await setInvitePassword(payload.accountId, password, token);
   if (!updated) {
     return NextResponse.json(
       { error: "Hesap bulunamadı. Destek için stüdyoyla iletişime geç." },
@@ -56,6 +52,5 @@ export async function POST(request: Request) {
     );
   }
 
-  await consumePasswordResetToken(token);
   return NextResponse.json({ ok: true });
 }

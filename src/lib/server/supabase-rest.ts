@@ -19,6 +19,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
       ...(init?.headers ?? {}),
     },
     cache: "no-store",
+    signal: init?.signal ?? AbortSignal.timeout(15000),
   });
   const body = await response.text();
   if (!response.ok) {
@@ -32,6 +33,94 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     throw new Error(`Supabase isteği başarısız (${response.status}): ${detail}`);
   }
   return (body ? JSON.parse(body) : undefined) as T;
+}
+
+// Read every page; PostgREST's row limit must not silently truncate a programme.
+async function readAll<T>(path: string): Promise<T[]> {
+  const rows: T[] = [];
+  const pageSize = 500;
+  for (let offset = 0; ; offset += pageSize) {
+    const page = await request<T[]>(`${path}&limit=${pageSize}&offset=${offset}`);
+    rows.push(...page);
+    if (page.length < pageSize) return rows;
+  }
+}
+
+export async function getStudentAccount(filter: { id: string } | { email: string }) {
+  const query = "id" in filter
+    ? `id=eq.${encodeURIComponent(filter.id)}`
+    : `email=eq.${encodeURIComponent(filter.email.trim().toLowerCase())}`;
+  const rows = await request<SupabaseRow[]>(`students?${query}&select=*&limit=1`);
+  const row = rows[0];
+  if (!row) return null;
+  const invites = await request<SupabaseInviteRow[]>(
+    `invites?student_id=eq.${encodeURIComponent(String(row.id))}&select=*&limit=1`,
+  );
+  return {
+    student: toStudent(row),
+    archived: Boolean(row.archived_at),
+    version: Number(row.session_version ?? 0),
+    invite: invites[0] ?? null,
+  };
+}
+
+export async function recordLoginEvent(event: {
+  account_id?: string;
+  email: string;
+  role: string;
+  outcome: string;
+}) {
+  // Observability must never turn a successful authentication into a failure.
+  try {
+    await request("login_events", {
+      method: "POST",
+      headers: { Prefer: "return=minimal" },
+      body: JSON.stringify({ ...event, source: process.env.OSLO_TEST_RUN === "1" ? "test" : "web" }),
+    });
+  } catch {
+    console.error("Login audit could not be saved");
+  }
+}
+
+export async function saveAttendanceBatchRpc(
+  marks: SupabaseAttendanceRow[],
+  actor: { id: string; role: string },
+) {
+  await request("rpc/save_attendance_batch", {
+    method: "POST",
+    body: JSON.stringify({ p_marks: marks, p_actor_id: actor.id, p_actor_role: actor.role }),
+  });
+}
+
+export async function setStudentPasswordRpc(input: {
+  studentId: string; passwordHash: string; inviteToken?: string; resetToken?: string;
+}) {
+  await request("rpc/set_student_password", {
+    method: "POST",
+    body: JSON.stringify({
+      p_student_id: input.studentId,
+      p_password: input.passwordHash,
+      p_invite_token: input.inviteToken ?? null,
+      p_reset_token: input.resetToken ?? null,
+    }),
+  });
+}
+
+export async function setSessionOutcomeRpc(sessionId: string, status: string, actor: { id: string; role: string }, reason = "") {
+  await request("rpc/set_session_outcome", {
+    method: "POST",
+    body: JSON.stringify({
+      p_session_id: sessionId, p_status: status,
+      p_actor_id: actor.id, p_actor_role: actor.role, p_reason: reason,
+    }),
+  });
+}
+
+export async function resetStaffPasswordRpc(token: string, passwordHash: string) {
+  await request("rpc/reset_staff_password", {
+    method: "POST",
+    body: JSON.stringify({ p_token: token, p_password_hash: passwordHash }),
+  });
 }
 
 export type SupabaseInviteRow = {
@@ -54,10 +143,13 @@ export async function getSupabaseInvite(token: string) {
 }
 
 export async function saveSupabaseInvite(invite: SupabaseInviteRow) {
-  await request<SupabaseInviteRow[]>("invites?on_conflict=token", {
+  await request("rpc/save_student_invite", {
     method: "POST",
-    headers: { Prefer: "resolution=merge-duplicates,return=minimal" },
-    body: JSON.stringify([invite]),
+    body: JSON.stringify({
+      p_token: invite.token, p_student_id: invite.student_id,
+      p_student: invite.student, p_sessions: invite.sessions,
+      p_expires_at: invite.expires_at,
+    }),
   });
 }
 
@@ -198,22 +290,19 @@ export async function reviewStudentPostponeRpc(input: {
 
 /** Permanently remove one student and all dependent records. */
 export async function deleteSupabaseStudent(studentId: string) {
-  const filter = encodeURIComponent(studentId);
-  // Delete dependants first; sessions are also protected by a database FK.
-  await Promise.all([
-    request<unknown>(`attendance_marks?student_id=eq.${filter}`, {
-      method: "DELETE",
-      headers: { Prefer: "return=minimal" },
-    }),
-    request<unknown>(`invites?student_id=eq.${filter}`, {
-      method: "DELETE",
-      headers: { Prefer: "return=minimal" },
-    }),
-  ]);
-  await request<unknown>(`students?id=eq.${filter}`, {
-    method: "DELETE",
-    headers: { Prefer: "return=minimal" },
+  await request("rpc/delete_student_bundle", {
+    method: "POST", body: JSON.stringify({ p_student_id: studentId }),
   });
+}
+
+export async function readSupabaseStudent(studentId: string) {
+  const rows = await request<SupabaseRow[]>(`students?id=eq.${encodeURIComponent(studentId)}&select=*&limit=1`);
+  return rows[0] ? toStudent(rows[0]) : null;
+}
+
+export async function readSupabaseStudentSessions(studentId: string) {
+  const rows = await readAll<SupabaseRow>(`sessions?student_id=eq.${encodeURIComponent(studentId)}&archived_at=is.null&select=*&order=session_date,id`);
+  return rows.map(toSession);
 }
 
 export async function listSupabaseInvites() {
@@ -289,7 +378,7 @@ export async function saveSupabaseAttendanceBatch(marks: SupabaseAttendanceRow[]
 }
 
 export async function listSupabaseAttendance() {
-  return request<SupabaseAttendanceRow[]>("attendance_marks?select=*&order=updated_at.desc");
+  return readAll<SupabaseAttendanceRow>("attendance_marks?select=*&order=updated_at.desc,session_id");
 }
 
 function toStudent(row: SupabaseRow): Student {
@@ -341,13 +430,13 @@ function toSession(row: SupabaseRow): Session {
 
 export async function readSupabaseStudioData(): Promise<Pick<StudioState, "students" | "archivedStudents" | "sessions" | "postponeRequests" | "customGroups"> & { blockedEmails: string[] }> {
   const [studentRows, sessionRows, postponeRows, groupRows, blockedRows] = await Promise.all([
-    request<SupabaseRow[]>("students?select=*&order=name"),
+    readAll<SupabaseRow>("students?select=*&order=name,id"),
     // Archived sessions remain in Supabase for attendance history, but active
     // screens must only receive the current package-period sessions.
-    request<SupabaseRow[]>("sessions?select=*&archived_at=is.null&order=session_date"),
-    request<SupabaseRow[]>("postpone_requests?select=*&order=created_at.desc"),
-    request<SupabaseRow[]>("custom_groups?select=*&order=label"),
-    request<SupabaseRow[]>("blocked_emails?select=email&order=email"),
+    readAll<SupabaseRow>("sessions?select=*&archived_at=is.null&order=session_date,id"),
+    readAll<SupabaseRow>("postpone_requests?select=*&order=created_at.desc,id"),
+    readAll<SupabaseRow>("custom_groups?select=*&order=label,id"),
+    readAll<SupabaseRow>("blocked_emails?select=email&order=email"),
   ]);
 
   const allStudents = studentRows.map(toStudent);

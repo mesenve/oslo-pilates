@@ -3,6 +3,7 @@ import { todayISO } from "@/lib/dates";
 import {
   patchSupabaseStudentPackage,
   readSupabaseStudioData,
+  readSupabaseStudent,
 } from "@/lib/server/supabase-rest";
 import { getSessionUser } from "@/lib/server/session";
 import type { RenewalRequest } from "@/types/studio";
@@ -29,7 +30,7 @@ export async function POST(request: Request) {
     createdAt: new Date().toISOString(),
   };
   await patchSupabaseStudentPackage(student.id, { renewalRequest });
-  return NextResponse.json({ request: renewalRequest });
+  return NextResponse.json({ request: renewalRequest, student: await readSupabaseStudent(student.id) });
 }
 
 export async function PATCH(request: Request) {
@@ -43,5 +44,5 @@ export async function PATCH(request: Request) {
   if (student.renewalRequest?.status !== "pending") return NextResponse.json({ error: "Bekleyen yenileme talebi yok." }, { status: 409 });
   const renewalRequest = { ...student.renewalRequest, status: body.status, actedAt: new Date().toISOString(), actedBy: user.id } as RenewalRequest;
   await patchSupabaseStudentPackage(student.id, { renewalRequest });
-  return NextResponse.json({ request: renewalRequest });
+  return NextResponse.json({ request: renewalRequest, student: await readSupabaseStudent(student.id) });
 }

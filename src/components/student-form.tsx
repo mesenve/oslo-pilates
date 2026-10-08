@@ -63,6 +63,7 @@ export function StudentForm({
     formFromStudent(student, groups[0]?.value ?? "", defaultInstructorId),
   );
   const [saving, setSaving] = useState(false);
+  const [expectedUpdatedAt] = useState(student?.updatedAt);
   const resolvedMode = mode ?? (student ? "edit" : "create");
   const lockInstructor = !isSuperAdmin && user?.role === "instructor";
   const groupOptions = (() => {
@@ -167,19 +168,25 @@ export function StudentForm({
     }
         : undefined;
     const input = toInput(form, lockInstructor ? user?.id : undefined, newGroup);
+    input.expectedUpdatedAt = expectedUpdatedAt;
     setSaving(true);
-    const result = await (
-      resolvedMode === "restore" && student
-        ? restoreStudent(student.id, input)
-        : resolvedMode === "edit" && student
-          ? updateStudent(student.id, input)
-          : addStudent(input));
-    setSaving(false);
-    if (result.error || !result.id) {
-      setError(result.error ?? "Kayıt yapılamadı.");
-      return;
+    try {
+      const result = await (
+        resolvedMode === "restore" && student
+          ? restoreStudent(student.id, input)
+          : resolvedMode === "edit" && student
+            ? updateStudent(student.id, input)
+            : addStudent(input));
+      if (result.error || !result.id) {
+        setError(result.error ?? "Kayıt yapılamadı.");
+        return;
+      }
+      onSaved?.(result.id, result.inviteUrl);
+    } catch {
+      setError("Kayıt sonucu doğrulanamadı. Bilgileriniz formda korunuyor. Bağlantınızı kontrol edip kayıt durumunu doğrulayın.");
+    } finally {
+      setSaving(false);
     }
-    onSaved?.(result.id, result.inviteUrl);
   }
 
   return (

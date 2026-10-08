@@ -86,6 +86,7 @@ export function DateField({
                 className="relative z-10 w-full max-w-sm rounded-3xl border border-white/80 bg-white p-5 shadow-[0_18px_40px_rgba(194,24,91,0.18)]"
               >
                 <DatePickerPanel
+                  key={value}
                   value={value}
                   onSelect={(iso) => {
                     onChange(iso);
@@ -141,12 +142,6 @@ function DatePickerPanel({
     year: start.getFullYear(),
     month: start.getMonth(),
   });
-
-  useEffect(() => {
-    if (!value) return;
-    const date = parseISODate(value);
-    setCursor({ year: date.getFullYear(), month: date.getMonth() });
-  }, [value]);
 
   const cells = monthGrid(cursor.year, cursor.month);
 

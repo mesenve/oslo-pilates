@@ -1,11 +1,11 @@
-import { createHmac, timingSafeEqual } from "node:crypto";
 import { cookies } from "next/headers";
-import type { AuthUser, Role } from "@/types/studio";
+import { getStaffById } from "@/data/staff";
+import { getStudentAccount } from "@/lib/server/supabase-rest";
+import { resolveStaffPassword } from "@/lib/server/staff-password-store";
+import { credentialStamp, decodeSession, encodeSession, SESSION_SECONDS } from "./session-token";
+import type { AuthUser } from "@/types/studio";
 
 const COOKIE_NAME = "oslo_session";
-const MAX_AGE_SECONDS = 60 * 60 * 24 * 14; // 14 days — editing mid-session must not kick staff to home
-
-type SessionPayload = AuthUser & { exp: number };
 
 function secret() {
   const value = process.env.OSLO_SESSION_SECRET;
@@ -15,57 +15,51 @@ function secret() {
   return value ?? "local-development-session-secret";
 }
 
-function signature(payload: string) {
-  return createHmac("sha256", secret()).update(payload).digest("base64url");
-}
-
-function encode(user: AuthUser) {
-  const payload = Buffer.from(
-    JSON.stringify({ ...user, exp: Math.floor(Date.now() / 1000) + MAX_AGE_SECONDS }),
-  ).toString("base64url");
-  return `${payload}.${signature(payload)}`;
-}
-
-function decode(value: string): AuthUser | null {
-  const [payload, providedSignature] = value.split(".");
-  if (!payload || !providedSignature) return null;
-  const expectedSignature = signature(payload);
-  const received = Buffer.from(providedSignature);
-  const expected = Buffer.from(expectedSignature);
-  if (received.length !== expected.length || !timingSafeEqual(received, expected)) return null;
-
-  try {
-    const session = JSON.parse(Buffer.from(payload, "base64url").toString("utf8")) as SessionPayload;
-    if (!session.id || !session.email || !session.name || !session.role) return null;
-    if (session.exp <= Math.floor(Date.now() / 1000)) return null;
-    if (!["student", "instructor", "super_admin"].includes(session.role as Role)) return null;
-    return { id: session.id, email: session.email, name: session.name, role: session.role };
-  } catch {
-    return null;
+async function currentAccount(user: Pick<AuthUser, "id" | "role">) {
+  if (user.role === "student") {
+    const account = await getStudentAccount({ id: user.id });
+    if (!account || account.archived || account.student.accountStatus !== "active" ||
+        !account.invite?.password || !account.invite.activated_at) return null;
+    return {
+      user: { id: account.student.id, name: account.student.name,
+        email: account.student.email, role: "student" as const },
+      credential: credentialStamp(secret(), account.invite.password, account.version),
+      password: account.invite.password,
+    };
   }
+  const staff = getStaffById(user.id);
+  if (!staff || staff.role !== user.role) return null;
+  const password = await resolveStaffPassword(staff.id);
+  if (!password) return null;
+  return { user: staff, credential: credentialStamp(secret(), password, 0), password };
 }
 
 export async function getSessionUser(): Promise<AuthUser | null> {
   const value = (await cookies()).get(COOKIE_NAME)?.value;
-  return value ? decode(value) : null;
+  if (!value) return null;
+  const session = decodeSession(value, secret());
+  if (!session) return null;
+  const account = await currentAccount(session);
+  return account?.credential === session.credential ? account.user : null;
 }
 
-export function sessionCookie(user: AuthUser) {
+export async function sessionCookie(user: AuthUser, remember = true, expectedPassword?: string) {
+  const account = await currentAccount(user);
+  if (!account) throw new Error("Hesap giriş için aktif değil.");
+  if (expectedPassword && expectedPassword !== account.password) {
+    throw new Error("Giriş bilgileri değişti. Lütfen yeniden giriş yapın.");
+  }
   return {
     name: COOKIE_NAME,
-    value: encode(user),
-    options: {
-      httpOnly: true,
-      sameSite: "lax" as const,
-      secure: process.env.NODE_ENV === "production",
-      path: "/",
-      maxAge: MAX_AGE_SECONDS,
-    },
+    value: encodeSession(account.user, account.credential, secret()),
+    httpOnly: true, sameSite: "lax" as const,
+    secure: process.env.NODE_ENV === "production", path: "/",
+    ...(remember ? { maxAge: SESSION_SECONDS } : {}),
   };
 }
 
 export const clearedSessionCookie = {
-  name: COOKIE_NAME,
-  value: "",
-  options: { httpOnly: true, sameSite: "lax" as const, secure: process.env.NODE_ENV === "production", path: "/", maxAge: 0 },
+  name: COOKIE_NAME, value: "",
+  httpOnly: true, sameSite: "lax" as const,
+  secure: process.env.NODE_ENV === "production", path: "/", maxAge: 0,
 };

@@ -3,7 +3,7 @@ import {
   setStaffPasswordHash,
 } from "@/lib/server/staff-password-store";
 import { hashPassword, verifyPassword } from "@/lib/server/staff-credentials";
-import { getSessionUser } from "@/lib/server/session";
+import { getSessionUser, sessionCookie } from "@/lib/server/session";
 import { NextResponse } from "next/server";
 
 export async function POST(request: Request) {
@@ -55,5 +55,7 @@ export async function POST(request: Request) {
   }
 
   await setStaffPasswordHash(user.id, await hashPassword(body.newPassword));
-  return NextResponse.json({ ok: true });
+  const response = NextResponse.json({ ok: true });
+  response.cookies.set(await sessionCookie(user));
+  return response;
 }

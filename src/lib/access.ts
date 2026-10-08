@@ -4,7 +4,6 @@ import type {
   Role,
   Session,
   Student,
-  StudioState,
 } from "@/types/studio";
 
 const SHARED_INSTRUCTOR_IDS = new Set(["staff-delfin", "staff-elif"]);

@@ -15,12 +15,12 @@ export function RoleGuard({
   role: Role;
   children: React.ReactNode;
 }) {
-  const { ready, sessionChecked, user } = useStudio();
+  const { ready, sessionChecked, sessionError, user } = useStudio();
   const router = useRouter();
   const hadUser = useRef(false);
 
   useEffect(() => {
-    if (!ready || !sessionChecked) return;
+    if (!ready || !sessionChecked || sessionError) return;
     if (user) {
       hadUser.current = true;
       if (user.role !== role) {
@@ -36,7 +36,9 @@ export function RoleGuard({
       router.replace(role === "student" ? "/giris?rol=ogrenci" : "/giris?rol=admin");
     }, SESSION_GRACE_MS);
     return () => window.clearTimeout(timer);
-  }, [ready, role, router, sessionChecked, user]);
+  }, [ready, role, router, sessionChecked, sessionError, user]);
+
+  if (sessionError) return <SessionRetry />;
 
   if (!ready || !sessionChecked || !user || user.role !== role) {
     return (
@@ -50,12 +52,12 @@ export function RoleGuard({
 }
 
 export function AdminGuard({ children }: { children: React.ReactNode }) {
-  const { ready, sessionChecked, user } = useStudio();
+  const { ready, sessionChecked, sessionError, user } = useStudio();
   const router = useRouter();
   const hadUser = useRef(false);
 
   useEffect(() => {
-    if (!ready || !sessionChecked) return;
+    if (!ready || !sessionChecked || sessionError) return;
     if (user) {
       hadUser.current = true;
       if (!isStaffRole(user.role)) {
@@ -71,7 +73,9 @@ export function AdminGuard({ children }: { children: React.ReactNode }) {
       router.replace("/giris?rol=admin");
     }, SESSION_GRACE_MS);
     return () => window.clearTimeout(timer);
-  }, [ready, router, sessionChecked, user]);
+  }, [ready, router, sessionChecked, sessionError, user]);
+
+  if (sessionError) return <SessionRetry />;
 
   if (!ready || !sessionChecked || !user || !isStaffRole(user.role)) {
     return (
@@ -82,4 +86,12 @@ export function AdminGuard({ children }: { children: React.ReactNode }) {
   }
 
   return children;
+}
+function SessionRetry() {
+  return <div className="flex min-h-screen flex-col items-center justify-center gap-4 px-6 text-center text-sm text-muted">
+    <p>Oturumunuz şu anda doğrulanamıyor. Bağlantınızı kontrol edip tekrar deneyin.</p>
+    <button className="rounded-full bg-accent px-5 py-2 text-white" onClick={() => window.location.reload()}>
+      Tekrar dene
+    </button>
+  </div>;
 }

@@ -1,4 +1,5 @@
 import type { StoredAttendanceMark } from "@/lib/server/attendance-store";
+import { studioMutation } from "@/lib/studio-client";
 
 async function readJsonResponse<T>(response: Response): Promise<T> {
   const text = await response.text();
@@ -43,7 +44,7 @@ export async function pushAttendanceMark(
 export async function pushAttendanceMarks(
   marks: Array<Omit<StoredAttendanceMark, "updatedAt">>,
 ) {
-  const response = await fetch("/api/attendance", {
+  const response = await studioMutation("/api/attendance", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ marks }),

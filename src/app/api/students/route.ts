@@ -5,6 +5,7 @@ import {
   patchSupabaseStudent,
   patchSupabaseStudentPackage,
   readSupabaseStudioData,
+  readSupabaseStudent,
   saveSupabaseStudentBundle,
 } from "@/lib/server/supabase-rest";
 import { getSessionUser } from "@/lib/server/session";
@@ -231,10 +232,7 @@ export async function POST(request: Request) {
       existing && !periodChanged
         ? existing.postponeLessonNote
         : body.student.postponeLessonNote,
-    accountStatus:
-      existing && existing.email.trim().toLowerCase() === email
-        ? existing.accountStatus
-        : body.student.accountStatus,
+    accountStatus: existing?.accountStatus ?? "invited",
     inviteToken:
       existing && existing.email.trim().toLowerCase() === email
         ? existing.inviteToken
@@ -301,13 +299,13 @@ export async function PATCH(request: Request) {
       postponeLessonUsed: Boolean(body.used),
       postponeLessonUsedAt: body.used ? body.usedAt || new Date().toISOString().slice(0, 10) : null,
     });
-    return NextResponse.json({ ok: true });
+    return NextResponse.json({ ok: true, student: await readSupabaseStudent(studentId) });
   }
   if (body.action === "postpone-note") {
     await patchSupabaseStudentPackage(studentId, {
       postponeLessonNote: typeof body.note === "string" ? body.note.trim() : "",
     });
-    return NextResponse.json({ ok: true });
+    return NextResponse.json({ ok: true, student: await readSupabaseStudent(studentId) });
   }
   if (body.action === "invite") {
     if (!body.inviteToken || !body.inviteExpiresAt || !body.invitedAt) {
@@ -342,6 +340,9 @@ export async function DELETE(request: Request) {
   const student = findStudent(studentId, data.students, data.archivedStudents);
   if (!student) {
     return NextResponse.json({ error: "Bu öğrenci için yetkiniz yok." }, { status: 403 });
+  }
+  if (data.students.some((item) => item.id === studentId)) {
+    return NextResponse.json({ error: "Kalıcı silmeden önce öğrenciyi arşivleyin." }, { status: 409 });
   }
   await deleteSupabaseStudent(studentId);
   return NextResponse.json({ ok: true });

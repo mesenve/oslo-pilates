@@ -154,6 +154,7 @@ export type AuthUser = {
 };
 
 export type NewStudentInput = {
+  expectedUpdatedAt?: string;
   name: string;
   email: string;
   phone: string;

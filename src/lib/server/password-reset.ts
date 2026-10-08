@@ -75,7 +75,8 @@ export async function verifyPasswordResetToken(
   const value = token.trim();
   if (!value) return null;
 
-  if (isSupabaseConfigured() && !value.includes(".")) {
+  if (isSupabaseConfigured()) {
+    if (value.includes(".")) return null;
     const row = await getSupabasePasswordResetToken(value);
     if (!row || row.used_at) return null;
     const exp = Math.floor(new Date(row.expires_at).getTime() / 1000);

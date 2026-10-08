@@ -1,13 +1,9 @@
 import {
   applyStudentPostponeRpc,
+  setSessionOutcomeRpc,
   isSupabaseConfigured,
-  patchSupabaseAttendanceStatus,
-  patchSupabaseStudentPackage,
   readSupabaseStudioData,
-  patchSupabasePostponeStatus,
-  reviewStudentPostponeRpc,
-  upsertSupabasePostponeRequest,
-  upsertSupabaseSessionStatus,
+  readSupabaseStudent,
   withdrawStudentPostponeRpc,
 } from "@/lib/server/supabase-rest";
 import { getSessionUser } from "@/lib/server/session";
@@ -18,31 +14,6 @@ import type { Student, StudioState } from "@/types/studio";
 import { NextResponse } from "next/server";
 
 const allowedStatuses = new Set(["attended", "postponed", "missed", "upcoming", "postpone_pending"]);
-
-async function syncRemainingSessions(
-  student: {
-    id: string;
-    package?: { totalSessions?: number; startDate?: string; endDate?: string };
-  },
-  sessions: Array<{ id: string; studentId: string; date: string; status: string }>,
-  changedSessionId: string,
-  changedStatus: string,
-) {
-  const totalSessions = Number(student.package?.totalSessions);
-  const startDate = student.package?.startDate;
-  const endDate = student.package?.endDate;
-  if (!Number.isFinite(totalSessions) || !startDate || !endDate) return;
-  const consumed = sessions.filter((item) => {
-    if (item.studentId !== student.id || item.date < startDate || item.date > endDate) {
-      return false;
-    }
-    const status = item.id === changedSessionId ? changedStatus : item.status;
-    return status === "attended" || status === "missed";
-  }).length;
-  await patchSupabaseStudentPackage(student.id, {
-    remainingSessions: Math.max(0, totalSessions - consumed),
-  });
-}
 
 export async function POST(request: Request) {
   const user = await getSessionUser();
@@ -93,7 +64,7 @@ export async function POST(request: Request) {
         requestId: pendingRequest.id,
         studentId: student.id,
       });
-      return NextResponse.json({ ok: true });
+      return NextResponse.json({ ok: true, student: await readSupabaseStudent(student.id) });
     }
     if (body.status !== "postpone_pending") {
       return NextResponse.json({ error: "Bu işlem için yetkiniz yok." }, { status: 403 });
@@ -136,6 +107,7 @@ export async function POST(request: Request) {
     return NextResponse.json({
       ok: true,
       request: nextRequest,
+      student: await readSupabaseStudent(student.id),
     });
   }
 
@@ -147,114 +119,16 @@ export async function POST(request: Request) {
   if (!session || !student || !allowed || !data) {
     return NextResponse.json({ error: "Bu ders için yetkiniz yok." }, { status: 403 });
   }
-  const activePostpone = data.postponeRequests?.find(
-    (item) => item.sessionId === session.id && item.status !== "rejected",
+  if (session.date > todayISO() && (body.status === "attended" || body.status === "missed")) {
+    return NextResponse.json({ error: "Gelecekteki dersler geldi veya yandı olarak işaretlenemez." }, { status: 400 });
+  }
+  if (body.status === "postpone_pending") {
+    return NextResponse.json({ error: "Erteleme talebini öğrenci göndermelidir." }, { status: 400 });
+  }
+  await setSessionOutcomeRpc(session.id, body.status, user, body.reason?.trim());
+  const refreshed = await readSupabaseStudioData();
+  const updatedRequest = refreshed.postponeRequests.find(
+    (item) => item.sessionId === session.id && item.status === "approved",
   );
-  const pendingPostpone = activePostpone?.status === "pending"
-    ? activePostpone
-    : undefined;
-  // Pending request remains the approval source of truth.
-  const approvingPostpone = body.status === "postponed" && Boolean(pendingPostpone);
-  const rejectingPostpone =
-    body.status === "upcoming" && Boolean(pendingPostpone) && session.status === "postpone_pending";
-  if (
-    session.date > todayISO() &&
-    body.status !== "upcoming" &&
-    body.status !== "postponed" &&
-    !approvingPostpone
-  ) {
-    return NextResponse.json(
-      { error: "Gelecekteki dersler yalnızca bekleniyor veya ertelendi olabilir." },
-      { status: 400 },
-    );
-  }
-
-  if (approvingPostpone || rejectingPostpone) {
-    await reviewStudentPostponeRpc({
-      sessionId: session.id,
-      studentId: student.id,
-      requestStatus: approvingPostpone ? "approved" : "rejected",
-      sessionStatus: body.status!,
-    });
-    if (body.status === "upcoming") {
-      await patchSupabaseAttendanceStatus(session.id, "upcoming");
-    }
-    await syncRemainingSessions(student, data.sessions ?? [], session.id, body.status);
-    return NextResponse.json({ ok: true });
-  }
-
-  // Manual status change that should close a dangling pending postpone.
-  if (
-    pendingPostpone &&
-    (body.status === "attended" || body.status === "missed" || body.status === "upcoming")
-  ) {
-    await reviewStudentPostponeRpc({
-      sessionId: session.id,
-      studentId: student.id,
-      requestStatus: "rejected",
-      sessionStatus: body.status,
-    });
-    if (body.status === "attended") {
-      await patchSupabaseAttendanceStatus(session.id, "attended");
-    } else {
-      await patchSupabaseAttendanceStatus(session.id, "upcoming");
-    }
-    await syncRemainingSessions(student, data.sessions ?? [], session.id, body.status);
-    return NextResponse.json({ ok: true });
-  }
-
-  // Instructor manual session outcome (attended / missed / postponed without pending request).
-  if (body.status === "postponed" && !pendingPostpone && activePostpone) {
-    await upsertSupabaseSessionStatus(session.id, "postponed");
-    await patchSupabaseAttendanceStatus(session.id, "upcoming");
-    await syncRemainingSessions(student, data.sessions ?? [], session.id, body.status);
-    return NextResponse.json({ ok: true, request: activePostpone });
-  }
-  if (
-    activePostpone &&
-    (body.status === "attended" || body.status === "missed" || body.status === "upcoming")
-  ) {
-    await patchSupabasePostponeStatus(activePostpone.id, "rejected");
-  }
-  await upsertSupabaseSessionStatus(session.id, body.status!);
-  if (body.status === "attended") {
-    await patchSupabaseAttendanceStatus(session.id, "attended");
-  } else if (body.status === "upcoming" || body.status === "missed" || body.status === "postponed") {
-    // A manual instructor result supersedes a stale student request. Do not
-    // create a mark when none exists; only close an existing one.
-    await patchSupabaseAttendanceStatus(session.id, "upcoming");
-  }
-  await syncRemainingSessions(student, data.sessions ?? [], session.id, body.status);
-  if (body.status === "postponed" && !pendingPostpone) {
-    const createdAt = new Date().toISOString();
-    const request = {
-      id: `req-${session.id}-${Date.now()}`,
-      studentId: student.id,
-      sessionId: session.id,
-      reason: body.reason?.trim() || "Eğitmen erteleme işaretledi.",
-      status: "approved" as const,
-      createdAt,
-    };
-    // Paket başına tek aktif erteleme: eski onaylı/pending talepleri kapat.
-    const otherActive = (data.postponeRequests ?? []).filter(
-      (item) =>
-        item.studentId === student.id &&
-        item.sessionId !== session.id &&
-        item.status !== "rejected",
-    );
-    for (const item of otherActive) {
-      await patchSupabasePostponeStatus(item.id, "rejected");
-      await upsertSupabaseSessionStatus(item.sessionId, "upcoming");
-    }
-    await upsertSupabasePostponeRequest({
-      id: request.id,
-      studentId: request.studentId,
-      sessionId: request.sessionId,
-      reason: request.reason,
-      status: request.status,
-      createdAt: request.createdAt,
-    });
-    return NextResponse.json({ ok: true, request });
-  }
-  return NextResponse.json({ ok: true });
+  return NextResponse.json({ ok: true, request: updatedRequest, student: await readSupabaseStudent(student.id) });
 }

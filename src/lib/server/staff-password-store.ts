@@ -1,4 +1,3 @@
-import { DEFAULT_STAFF_PASSWORDS } from "@/lib/staff-auth";
 import {
   getSupabaseStaffPasswordHash,
   isSupabaseConfigured,
@@ -7,14 +6,15 @@ import {
 
 /**
  * Staff passwords live in Supabase `staff_credentials` (hashed).
- * Until a row exists, login falls back to the bootstrap default in code.
+ * A missing DB row is a service/configuration error, never a default password.
  */
 export async function resolveStaffPassword(staffId: string): Promise<string> {
   if (isSupabaseConfigured()) {
     const stored = await getSupabaseStaffPasswordHash(staffId);
     if (stored) return stored;
+    throw new Error("Eğitmen giriş bilgisi bulunamadı.");
   }
-  return DEFAULT_STAFF_PASSWORDS[staffId] ?? "";
+  throw new Error("Supabase yapılandırılmadı; giriş bilgileri okunamıyor.");
 }
 
 export async function setStaffPasswordHash(staffId: string, hash: string) {

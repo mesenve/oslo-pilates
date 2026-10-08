@@ -61,7 +61,7 @@ export async function POST(request: Request) {
     student,
     sessions: data.sessions.filter((item) => item.studentId === student.id),
   });
-  response.cookies.set(sessionCookie({
+  response.cookies.set(await sessionCookie({
     id: student.id,
     name: student.name,
     email: student.email,

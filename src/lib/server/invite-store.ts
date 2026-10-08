@@ -2,11 +2,10 @@ import type { Session, Student } from "@/types/studio";
 import { hashPassword } from "@/lib/server/staff-credentials";
 import {
   getSupabaseInvite,
-  activateSupabaseStudent,
-  deleteSupabaseInvite,
+  getStudentAccount,
+  setStudentPasswordRpc,
   isSupabaseConfigured,
   listSupabaseInvites,
-  patchSupabaseStudent,
   saveSupabaseInvite,
   type SupabaseInviteRow,
 } from "@/lib/server/supabase-rest";
@@ -39,23 +38,10 @@ function fromSupabaseRow(row: SupabaseInviteRow): StoredInvite {
 
 export async function saveInvite(invite: StoredInvite) {
   requireSupabase();
-  const existing = (await listSupabaseInvites()).find((row) => row.student_id === invite.student.id);
-  // Keep the existing password/activation when re-saving an invite token.
-  // Wiping them on resend locked activated students out of login.
   await saveSupabaseInvite({
-    token: invite.token,
-    student_id: invite.student.id,
-    student: invite.student,
-    sessions: invite.sessions,
-    expires_at: invite.expiresAt,
-    password: invite.password ?? existing?.password ?? null,
-    activated_at: invite.activatedAt ?? existing?.activated_at ?? null,
-    created_at: existing?.created_at ?? new Date().toISOString(),
-    updated_at: new Date().toISOString(),
+    token: invite.token, student_id: invite.student.id,
+    student: invite.student, sessions: invite.sessions, expires_at: invite.expiresAt,
   });
-  if (existing && existing.token !== invite.token) {
-    await deleteSupabaseInvite(existing.token);
-  }
 }
 
 export async function getInviteByToken(token: string) {
@@ -66,67 +52,28 @@ export async function getInviteByToken(token: string) {
 
 export async function getInviteByStudentId(studentId: string) {
   requireSupabase();
-  const rows = await listSupabaseInvites();
-  const row = rows.find((item) => item.student_id === studentId);
-  return row ? fromSupabaseRow(row) : null;
+  const account = await getStudentAccount({ id: studentId });
+  return account?.invite ? {
+    ...fromSupabaseRow(account.invite), student: account.student,
+  } : null;
 }
 
 export async function activateInvite(token: string, password: string) {
   requireSupabase();
   const invite = await getInviteByToken(token);
   if (!invite) return null;
-
-  const activated: StoredInvite = {
-    ...invite,
-    password: await hashPassword(password),
-    activatedAt: new Date().toISOString(),
-    student: {
-      ...invite.student,
-      accountStatus: "active",
-      inviteToken: undefined,
-      inviteExpiresAt: undefined,
-    },
-  };
-
-  await activateSupabaseStudent(activated.student.id);
-  try {
-    await saveSupabaseInvite({
-      token: activated.token,
-      student_id: activated.student.id,
-      student: activated.student,
-      sessions: activated.sessions,
-      expires_at: activated.expiresAt,
-      password: activated.password,
-      activated_at: activated.activatedAt,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    });
-  } catch (error) {
-    // Activation spans the students and invites tables. If the invite write
-    // fails, compensate the student update so a half-activated account cannot
-    // be shown as active while login credentials are missing.
-    try {
-      await patchSupabaseStudent(invite.student.id, {
-        account_status: invite.student.accountStatus,
-        invite_token: invite.student.inviteToken ?? null,
-        invite_expires_at: invite.student.inviteExpiresAt ?? null,
-      });
-    } catch (rollbackError) {
-      console.error("Invite activation rollback failed:", rollbackError);
-    }
-    throw error;
-  }
-  return activated;
+  await setStudentPasswordRpc({
+    studentId: invite.student.id, passwordHash: await hashPassword(password), inviteToken: token,
+  });
+  return getInviteByStudentId(invite.student.id);
 }
 
 export async function findActivatedInviteByEmail(email: string) {
   requireSupabase();
-  const normalized = email.trim().toLowerCase();
-  const rows = await listSupabaseInvites();
-  const row = rows.find(
-    (item) => item.student.email.toLowerCase() === normalized && item.password && item.activated_at,
-  );
-  return row ? fromSupabaseRow(row) : null;
+  const account = await getStudentAccount({ email });
+  if (!account || account.archived || account.student.accountStatus !== "active" ||
+      !account.invite?.password || !account.invite.activated_at) return null;
+  return { ...fromSupabaseRow(account.invite), student: account.student };
 }
 
 export async function listActivatedInvites() {
@@ -136,48 +83,14 @@ export async function listActivatedInvites() {
     .map(fromSupabaseRow);
 }
 
-export async function setInvitePassword(studentId: string, password: string) {
+export async function setInvitePassword(studentId: string, password: string, resetToken?: string) {
   requireSupabase();
   const invite = await getInviteByStudentId(studentId);
   if (!invite) return null;
-  const hashed = await hashPassword(password);
-  const next: StoredInvite = {
-    ...invite,
-    password: hashed,
-    activatedAt: invite.activatedAt ?? new Date().toISOString(),
-    student: {
-      ...invite.student,
-      accountStatus: "active",
-      inviteToken: undefined,
-      inviteExpiresAt: undefined,
-    },
-  };
-  await activateSupabaseStudent(studentId);
-  try {
-    await saveSupabaseInvite({
-      token: next.token,
-      student_id: next.student.id,
-      student: next.student,
-      sessions: next.sessions,
-      expires_at: next.expiresAt,
-      password: next.password ?? null,
-      activated_at: next.activatedAt ?? null,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    });
-  } catch (error) {
-    try {
-      await patchSupabaseStudent(invite.student.id, {
-        account_status: invite.student.accountStatus,
-        invite_token: invite.student.inviteToken ?? null,
-        invite_expires_at: invite.student.inviteExpiresAt ?? null,
-      });
-    } catch (rollbackError) {
-      console.error("Password reset rollback failed:", rollbackError);
-    }
-    throw error;
-  }
-  return next;
+  await setStudentPasswordRpc({
+    studentId, passwordHash: await hashPassword(password), resetToken,
+  });
+  return getInviteByStudentId(studentId);
 }
 
 export function inviteTokenFromUrl(link: string) {

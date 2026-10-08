@@ -1,7 +1,7 @@
 import { inferPackageType } from "@/data/packages";
 import { sortByName } from "@/lib/alphabet";
 import { addDays, startOfWeekMonday, toISODate } from "@/lib/dates";
-import { DEFAULT_INSTRUCTOR_ID, getStaffById } from "@/data/staff";
+import { getStaffById } from "@/data/staff";
 import type { PaymentStatus, Student } from "@/types/studio";
 
 const currentMonday = startOfWeekMonday();

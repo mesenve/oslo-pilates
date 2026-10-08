@@ -49,11 +49,12 @@ export async function activateInviteAccount(input: {
   };
 }
 
-export async function loginStudentAccount(email: string, password: string) {
+export async function loginStudentAccount(email: string, password: string, rememberMe = true) {
   const response = await fetch("/api/auth/student", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ email, password }),
+    body: JSON.stringify({ email, password, rememberMe }),
+    signal: AbortSignal.timeout(30000),
   });
 
   const data = (await response.json()) as {

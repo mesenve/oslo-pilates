@@ -10,6 +10,7 @@ export async function hashPassword(password: string) {
 }
 
 export async function verifyPassword(password: string, stored: string) {
+  if (!stored || typeof password !== "string") return false;
   if (!stored.startsWith("scrypt$")) return password === stored;
   const [, salt, expectedValue] = stored.split("$");
   if (!salt || !expectedValue) return false;

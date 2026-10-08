@@ -3,7 +3,6 @@
 import { remainingPostponeRights, remainingSessions } from "@/data/accessors";
 import {
   DEFAULT_INSTRUCTOR_ID,
-  getStaffById,
 } from "@/data/staff";
 import { buildSessionsForStudent, collectSessionDates } from "@/data/seed";
 import {
@@ -13,13 +12,11 @@ import {
   setCustomGroups,
 } from "@/data/groups";
 import { studentsForUser, sessionsForUser, postponeRequestsForUser, canManageStudent, isStaffRole } from "@/lib/access";
-import { fetchAttendanceMarks, pushAttendanceMark, pushAttendanceMarks } from "@/lib/attendance-client";
-import { mergeAttendanceMarks } from "@/lib/attendance-sync";
+import { pushAttendanceMark, pushAttendanceMarks } from "@/lib/attendance-client";
 import { packagePeriodKey } from "@/lib/package-period";
 import { addDays, startOfWeekMonday, toISODate, todayISO } from "@/lib/dates";
 import {
   createInviteToken,
-  getStudentPassword,
   inviteExpiresAt,
   inviteUrl,
   validateStudentPassword,
@@ -28,7 +25,7 @@ import {
   activateInviteAccount,
   loginStudentAccount,
 } from "@/lib/invite-client";
-import { fetchStudioData } from "@/lib/studio-client";
+import { fetchStudioData, studioMutation } from "@/lib/studio-client";
 import { PACKAGE_TYPE_LABELS } from "@/data/packages";
 import { DAY_LABELS } from "@/lib/labels";
 import {
@@ -39,7 +36,6 @@ import {
 } from "@/lib/store";
 import type {
   NewStudentInput,
-  Role,
   Session,
   Student,
   StudioState,
@@ -67,6 +63,7 @@ type StudentActionResult = {
 type StudioContextValue = {
   ready: boolean;
   sessionChecked: boolean;
+  sessionError: boolean;
   studioDataStatus: "idle" | "loading" | "ready" | "error";
   retryStudioData: () => Promise<void>;
   user: StudioState["user"];
@@ -79,11 +76,11 @@ type StudioContextValue = {
   postponeRequests: StudioState["postponeRequests"];
   visiblePostponeRequests: StudioState["postponeRequests"];
   isSuperAdmin: boolean;
-  loginAs: (role: Role, staffId?: string) => boolean;
-  loginStaff: (email: string, password: string) => Promise<{ error: string | null }>;
+  loginStaff: (email: string, password: string, rememberMe?: boolean) => Promise<{ error: string | null }>;
   loginStudent: (
     email: string,
     password: string,
+    rememberMe?: boolean,
   ) => Promise<{ error: string | null }>;
   activateStudentInvite: (
     token: string,
@@ -97,7 +94,7 @@ type StudioContextValue = {
     newPassword: string,
     confirmPassword: string,
   ) => Promise<{ error: string | null; success: boolean }>;
-  logout: () => void;
+  logout: () => Promise<boolean>;
   markAttended: (sessionId: string) => Promise<boolean>;
   approveAttendance: (sessionIds: string[]) => Promise<boolean>;
   rejectAttendance: (sessionIds: string[]) => Promise<boolean>;
@@ -142,7 +139,7 @@ async function saveStudentBundle(
   sessions: Session[],
   customGroup?: StudioState["customGroups"][number],
 ) {
-  const response = await fetch("/api/students", {
+  const response = await studioMutation("/api/students", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -170,6 +167,7 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
     getServerStudioState,
   );
   const [sessionChecked, setSessionChecked] = useState(false);
+  const [sessionError, setSessionError] = useState(false);
   const [studioLoad, setStudioLoad] = useState<{
     userId: string;
     status: "loading" | "ready" | "error";
@@ -204,20 +202,19 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (!ready) return;
     let cancelled = false;
-    void fetch("/api/auth/session")
-      .then((response) => response.ok ? response.json() : { user: null })
+    void fetch("/api/auth/session", { signal: AbortSignal.timeout(20000) })
+      .then((response) => {
+        if (!response.ok) throw new Error("Oturum servisine ulaşılamadı.");
+        return response.json();
+      })
       .then((data: { user?: StudioState["user"] }) => {
         if (cancelled) return;
-        // Never wipe a hydrated session on a flaky/empty session response —
-        // that kicked staff back to login/home mid-edit.
-        setStudioState((current) => {
-          if (data.user) return { ...current, user: data.user };
-          if (current.user) return current;
-          return { ...current, user: null };
-        });
+        setStudioState((current) => data.user
+          ? { ...current, user: data.user }
+          : { ...getServerStudioState(), user: null });
       })
       .catch(() => {
-        // Keep existing user on network blips.
+        if (!cancelled) setSessionError(true);
       })
       .finally(() => {
         if (!cancelled) setSessionChecked(true);
@@ -237,13 +234,6 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
     );
 
     try {
-      const marksPromise = (
-        user.role === "student"
-          ? fetchAttendanceMarks({ studentId: user.id })
-          : isStaffRole(user.role)
-            ? fetchAttendanceMarks()
-            : Promise.resolve([])
-      ).catch(() => []);
       const studioPromise =
         user.role === "student"
           ? fetchStudioData({ studentId: user.id, includeBlockedEmails: false })
@@ -269,16 +259,13 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
         markLoadError();
       }
 
-      const marks = await marksPromise;
-      if (isStale() || marks.length === 0) return;
-
-      setStudioState((current) => {
-        let next = current;
-        next = { ...next, sessions: mergeAttendanceMarks(next.sessions, marks) };
-        return next;
-      });
-    } catch {
-      if (!isStale()) markLoadError();
+    } catch (error) {
+      if (isStale()) return;
+      if (error instanceof Error && error.message === "SESSION_EXPIRED") {
+        setStudioState({ ...getServerStudioState(), user: null });
+        return;
+      }
+      markLoadError();
     }
   }, []);
 
@@ -314,47 +301,12 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
     await refreshRemoteState(user);
   }, [refreshRemoteState, state.user]);
 
-  const loginAs = useCallback((role: Role, staffId?: string) => {
-    if (role === "super_admin" || role === "instructor") {
-      const staff = staffId ? getStaffById(staffId) : undefined;
-      if (!staff || staff.role !== role) return false;
-      setStudioState((current) => ({
-        ...current,
-        user: {
-          id: staff.id,
-          name: staff.name,
-          email: staff.email,
-          role: staff.role,
-        },
-      }));
-      return true;
-    }
-
-    let ok = false;
-    setStudioState((current) => {
-      const student =
-        current.students.find((item) => item.id === "stu-merve") ??
-        current.students[0];
-      if (!student) return current;
-      ok = true;
-      return {
-        ...current,
-        user: {
-          id: student.id,
-          name: student.name,
-          email: student.email,
-          role: "student",
-        },
-      };
-    });
-    return ok;
-  }, []);
-
-  const loginStaff = useCallback(async (email: string, password: string) => {
+  const loginStaff = useCallback(async (email: string, password: string, rememberMe = true) => {
     const response = await fetch("/api/auth/staff", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, password }),
+      body: JSON.stringify({ email, password, rememberMe }),
+      signal: AbortSignal.timeout(30000),
     });
     const data = (await response.json().catch(() => ({}))) as { error?: string; user?: StudioState["user"] };
     if (!response.ok || !data.user) {
@@ -370,37 +322,8 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
     return { error: null };
   }, []);
 
-  const loginStudent = useCallback(async (email: string, password: string) => {
-    const normalizedEmail = email.trim().toLowerCase();
-    const studio = getStudioState();
-    const localStudent = studio.students.find(
-      (item) => item.email.toLowerCase() === normalizedEmail,
-    );
-
-    // Demo-only shortcut: production authentication always goes through the server.
-    if (process.env.NODE_ENV !== "production" && localStudent) {
-      if (localStudent.accountStatus === "invited") {
-        return {
-          error:
-            "Hesabın henüz aktif değil. E-postadaki davet linkine tıklayarak şifreni oluştur.",
-        };
-      }
-      const stored = getStudentPassword(localStudent.id, studio.studentPasswords);
-      if (stored && password === stored) {
-        setStudioState((current) => ({
-          ...current,
-          user: {
-            id: localStudent.id,
-            name: localStudent.name,
-            email: localStudent.email,
-            role: "student",
-          },
-        }));
-        return { error: null };
-      }
-    }
-
-    const result = await loginStudentAccount(email, password);
+  const loginStudent = useCallback(async (email: string, password: string, rememberMe = true) => {
+    const result = await loginStudentAccount(email, password, rememberMe);
     if (result.error || !result.payload) {
       return { error: result.error ?? "E-posta veya şifre hatalı." };
     }
@@ -471,7 +394,7 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
     const token = createInviteToken();
     const expiresAt = inviteExpiresAt();
     const invitedAt = new Date().toISOString();
-    const response = await fetch("/api/students", {
+    const response = await studioMutation("/api/students", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -529,9 +452,17 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
       : { error: data.error ?? "Şifre güncellenemedi.", success: false };
   }, []);
 
-  const logout = useCallback(() => {
-    void fetch("/api/auth/session", { method: "DELETE" });
-    setStudioState((current) => ({ ...current, user: null }));
+  const logout = useCallback(async () => {
+    try {
+      const response = await fetch("/api/auth/session", {
+        method: "DELETE", signal: AbortSignal.timeout(20000),
+      });
+      if (!response.ok) return false;
+      setStudioState({ ...getServerStudioState(), user: null });
+      return true;
+    } catch {
+      return false;
+    }
   }, []);
 
   const markAttended = useCallback(async (sessionId: string) => {
@@ -651,7 +582,7 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const requestPostpone = useCallback(async (sessionId: string, reason: string) => {
-    const response = await fetch("/api/sessions/status", {
+    const response = await studioMutation("/api/sessions/status", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ sessionId, status: "postpone_pending", reason }),
@@ -673,7 +604,7 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const withdrawPostpone = useCallback(async (sessionId: string) => {
-    const response = await fetch("/api/sessions/status", {
+    const response = await studioMutation("/api/sessions/status", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ sessionId, status: "upcoming" }),
@@ -692,7 +623,7 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const requestRenewal = useCallback(async (requestedStartDate?: string) => {
-    const response = await fetch("/api/renewals", {
+    const response = await studioMutation("/api/renewals", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ requestedStartDate: requestedStartDate || undefined }),
@@ -709,7 +640,7 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const reviewRenewal = useCallback(async (studentId: string, status: "approved" | "rejected") => {
-    const response = await fetch("/api/renewals", {
+    const response = await studioMutation("/api/renewals", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ studentId, status }),
@@ -729,7 +660,7 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
     if (!request || request.status !== "pending" || !canManageStudent(current.user, request.studentId, current.students)) {
       return false;
     }
-    const response = await fetch("/api/sessions/status", {
+    const response = await studioMutation("/api/sessions/status", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ sessionId: request.sessionId, status: "postponed" }),
@@ -764,7 +695,7 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
       ) {
         return false;
       }
-      const response = await fetch("/api/sessions/status", {
+      const response = await studioMutation("/api/sessions/status", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ sessionId, status: outcome }),
@@ -883,7 +814,7 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
 
   const setPostponeLessonUsed = useCallback(
     async (studentId: string, used: boolean, usedAt?: string) => {
-      const response = await fetch("/api/students", {
+      const response = await studioMutation("/api/students", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -920,7 +851,7 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
 
   const setPostponeLessonNote = useCallback(
     async (studentId: string, note: string) => {
-      const response = await fetch("/api/students", {
+      const response = await studioMutation("/api/students", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -951,7 +882,7 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
 
   const setPostponeRequestReason = useCallback(
     async (requestId: string, reason: string) => {
-      const response = await fetch("/api/postpone-requests", {
+      const response = await studioMutation("/api/postpone-requests", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ requestId, reason }),
@@ -1025,7 +956,7 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const archiveStudent = useCallback(async (studentId: string) => {
-    const response = await fetch("/api/students", {
+    const response = await studioMutation("/api/students", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ action: "archive", studentId }),
@@ -1140,6 +1071,7 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
         previous.package.totalSessions - currentRemaining,
       );
       let student = studentFromInput(studentId, normalized, email, previous);
+      student.updatedAt = normalized.expectedUpdatedAt ?? previous.updatedAt;
       const periodChanged =
         packagePeriodKey(previous) !== packagePeriodKey(student);
       student.package.remainingSessions = periodChanged
@@ -1245,7 +1177,7 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
 
   const permanentlyDeleteStudent = useCallback((studentId: string) => {
     void (async () => {
-      const response = await fetch("/api/students", {
+      const response = await studioMutation("/api/students", {
         method: "DELETE",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ studentId }),
@@ -1316,6 +1248,7 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
     () => ({
       ready,
       sessionChecked,
+      sessionError,
       studioDataStatus,
       retryStudioData,
       user: state.user,
@@ -1328,7 +1261,6 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
       postponeRequests: state.postponeRequests,
       visiblePostponeRequests,
       isSuperAdmin,
-      loginAs,
       loginStaff,
       loginStudent,
       activateStudentInvite,
@@ -1360,7 +1292,6 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
       approveRequest,
       archiveStudent,
       changeStaffPassword,
-      loginAs,
       loginStaff,
       loginStudent,
       activateStudentInvite,
@@ -1376,6 +1307,7 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
       permanentlyDeleteStudent,
       ready,
       sessionChecked,
+      sessionError,
       remainingFor,
       remainingPostponeFor,
       retryStudioData,
