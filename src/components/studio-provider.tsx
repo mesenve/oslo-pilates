@@ -16,6 +16,7 @@ import { studentsForUser, sessionsForUser, postponeRequestsForUser, canManageStu
 import { fetchAttendanceMarks, pushAttendanceMark, pushAttendanceMarks } from "@/lib/attendance-client";
 import { mergeAttendanceMarks } from "@/lib/attendance-sync";
 import { packagePeriodKey } from "@/lib/package-period";
+import { INSTRUCTOR_POSTPONE_PLACEHOLDER } from "@/lib/postpone-note";
 import { addDays, startOfWeekMonday, toISODate, todayISO } from "@/lib/dates";
 import {
   createInviteToken,
@@ -99,6 +100,7 @@ type StudioContextValue = {
   ) => Promise<{ error: string | null; success: boolean }>;
   logout: () => void;
   markAttended: (sessionId: string) => Promise<boolean>;
+  withdrawAttendance: (sessionId: string) => Promise<boolean>;
   approveAttendance: (sessionIds: string[]) => Promise<boolean>;
   rejectAttendance: (sessionIds: string[]) => Promise<boolean>;
   requestPostpone: (sessionId: string, reason: string) => Promise<{ error: string | null }>;
@@ -549,6 +551,32 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
+  const withdrawAttendance = useCallback(async (sessionId: string) => {
+    const session = getStudioState().sessions.find((item) => item.id === sessionId);
+    if (!session || session.status !== "attend_pending") return false;
+
+    try {
+      await pushAttendanceMark({
+        sessionId: session.id,
+        studentId: session.studentId,
+        date: session.date,
+        groupId: session.groupId,
+        status: "upcoming",
+      });
+      setStudioState((current) => ({
+        ...current,
+        sessions: current.sessions.map((item) =>
+          item.id === sessionId && item.status === "attend_pending"
+            ? { ...item, status: "upcoming" }
+            : item,
+        ),
+      }));
+      return true;
+    } catch {
+      return false;
+    }
+  }, []);
+
   const approveAttendance = useCallback(async (sessionIds: string[]) => {
     const studio = getStudioState();
     const idSet = new Set(sessionIds);
@@ -691,14 +719,37 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ requestedStartDate: requestedStartDate || undefined }),
     });
-    const data = (await response.json().catch(() => null)) as { error?: string; request?: Student["renewalRequest"] } | null;
+    const data = (await response.json().catch(() => null)) as {
+      error?: string;
+      request?: Student["renewalRequest"];
+      applied?: boolean;
+      student?: Student;
+      sessions?: Session[];
+    } | null;
     if (!response.ok || !data?.request) return { error: data?.error ?? "Yenileme talebi gönderilemedi." };
-    setStudioState((current) => ({
-      ...current,
-      students: current.students.map((student) =>
-        student.id === current.user?.id ? { ...student, renewalRequest: data.request } : student,
-      ),
-    }));
+    setStudioState((current) => {
+      if (data.applied && data.student) {
+        const nextSessions = data.sessions
+          ? [
+              ...current.sessions.filter((session) => session.studentId !== data.student!.id),
+              ...data.sessions,
+            ]
+          : current.sessions;
+        return {
+          ...current,
+          students: current.students.map((student) =>
+            student.id === data.student!.id ? data.student! : student,
+          ),
+          sessions: nextSessions,
+        };
+      }
+      return {
+        ...current,
+        students: current.students.map((student) =>
+          student.id === current.user?.id ? { ...student, renewalRequest: data.request } : student,
+        ),
+      };
+    });
     return { error: null };
   }, []);
 
@@ -855,7 +906,7 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
           id: `req-${sessionId}-inst-${Date.now()}`,
           studentId: session.studentId,
           sessionId,
-          reason: "Eğitmen erteleme işaretledi.",
+          reason: INSTRUCTOR_POSTPONE_PLACEHOLDER,
           status: "approved" as const,
           createdAt: `${todayISO()}T12:00:00`,
         };
@@ -1349,6 +1400,7 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
       changeStaffPassword,
       logout,
       markAttended,
+      withdrawAttendance,
       approveAttendance,
       rejectAttendance,
       requestPostpone,
@@ -1380,6 +1432,7 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
       resendStudentInvite,
       logout,
       markAttended,
+      withdrawAttendance,
       approveAttendance,
       rejectAttendance,
       markSessionByInstructor,

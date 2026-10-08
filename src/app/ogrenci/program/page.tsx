@@ -13,6 +13,7 @@ import {
 import { getClassGroupById } from "@/data/groups";
 import { isAtLeast24HoursAway, todayISO } from "@/lib/dates";
 import { postponeRightLabel } from "@/lib/labels";
+import { studentVisiblePostponeNote } from "@/lib/postpone-note";
 import { type ComponentProps, useMemo, useState, useSyncExternalStore } from "react";
 
 function subscribeToLocation(onChange: () => void) {
@@ -30,6 +31,7 @@ export default function ProgramPage() {
     sessions,
     postponeRequests,
     markAttended,
+    withdrawAttendance,
     requestPostpone,
     withdrawPostpone,
     remainingPostponeFor,
@@ -115,13 +117,14 @@ export default function ProgramPage() {
             canPostpone={postponeRemaining > 0 && session.date > today}
             canAttend={session.date === today}
             postponeHint={postponeHint}
-            postponeNote={
-              postponeRequests.find((request) => request.sessionId === session.id)?.reason?.trim() ||
-              ((session.status === "postponed" || session.status === "postpone_pending")
-                ? student.postponeLessonNote?.trim()
-                : undefined)
-            }
+            postponeNote={studentVisiblePostponeNote(
+              postponeRequests.find((request) => request.sessionId === session.id)?.reason,
+              session.status === "postponed" || session.status === "postpone_pending"
+                ? student.postponeLessonNote
+                : undefined,
+            )}
             onAttend={() => markAttended(session.id)}
+            onWithdrawAttendance={() => withdrawAttendance(session.id)}
             onPostpone={(reason) => requestPostpone(session.id, reason)}
             onWithdrawPostpone={() => withdrawPostpone(session.id)}
           />
@@ -144,11 +147,14 @@ function ProgramSessionRow({
   onWithdrawPostpone,
 }: ComponentProps<typeof SessionRow>) {
   const sessionTime = time;
-  const canPostponeAtThisTime = canPostpone && isAtLeast24HoursAway(session.date, sessionTime);
+  const canPostponeAtThisTime =
+    canPostpone && Boolean(sessionTime.trim()) && isAtLeast24HoursAway(session.date, sessionTime);
   const hint = canPostponeAtThisTime
     ? postponeHint
     : canPostpone
-      ? "Ders başlangıcına 24 saatten az kaldığı için ertelenemez."
+      ? sessionTime.trim()
+        ? "Ders başlangıcına 24 saatten az kaldığı için ertelenemez."
+        : "Ders saati tanımlı değil. Erteleme için stüdyoyla iletişime geç."
       : postponeHint;
 
   return (

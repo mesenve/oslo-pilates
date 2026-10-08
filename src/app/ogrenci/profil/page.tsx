@@ -9,6 +9,7 @@ import {
 import { getClassGroupById } from "@/data/groups";
 import { formatLongDate } from "@/lib/dates";
 import { postponeRightLabel, remainingLabel } from "@/lib/labels";
+import { studentVisiblePostponeNote } from "@/lib/postpone-note";
 
 export default function ProfilePage() {
   const student = useCurrentStudent();
@@ -28,12 +29,14 @@ export default function ProfilePage() {
     postponeRequests,
     sessions,
   );
-  const postponeNote = postponeRequests.find(
-    (request) =>
-      request.studentId === student.id &&
-      request.reason?.trim() &&
-      (request.status === "pending" || request.status === "approved"),
-  )?.reason?.trim() || student.postponeLessonNote?.trim();
+  const postponeNote = studentVisiblePostponeNote(
+    postponeRequests.find(
+      (request) =>
+        request.studentId === student.id &&
+        (request.status === "pending" || request.status === "approved"),
+    )?.reason,
+    student.postponeLessonNote,
+  );
 
   return (
     <div className="space-y-5">

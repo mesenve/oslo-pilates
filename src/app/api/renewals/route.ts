@@ -14,6 +14,18 @@ function validDate(value: unknown) {
   return typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value) ? value : undefined;
 }
 
+function isScheduledApproval(student: {
+  package: { startDate: string };
+  renewalRequest?: RenewalRequest | null;
+}) {
+  const scheduled = student.renewalRequest;
+  return Boolean(
+    scheduled?.status === "approved" &&
+      scheduled.startDate &&
+      scheduled.startDate > student.package.startDate,
+  );
+}
+
 export async function POST(request: Request) {
   const user = await getSessionUser();
   if (!user || user.role !== "student") return NextResponse.json({ error: "Öğrenci oturumu gerekli." }, { status: 403 });
@@ -21,13 +33,42 @@ export async function POST(request: Request) {
   const data = await readSupabaseStudioData();
   const student = data.students.find((item) => item.id === user.id);
   if (!student) return NextResponse.json({ error: "Öğrenci bulunamadı." }, { status: 404 });
-  if (student.renewalRequest?.status === "pending") return NextResponse.json({ error: "Bekleyen yenileme talebiniz zaten var." }, { status: 409 });
-  const scheduled = student.renewalRequest;
-  if (scheduled?.status === "approved" && scheduled.startDate && scheduled.startDate > student.package.startDate) {
-    return NextResponse.json({ error: "Yenilemen zaten onaylandı." }, { status: 409 });
+  if (student.renewalRequest?.status === "pending") {
+    return NextResponse.json({ error: "Bekleyen yenileme talebiniz zaten var." }, { status: 409 });
   }
+
+  const scheduled = student.renewalRequest;
+  if (isScheduledApproval(student) && scheduled?.startDate) {
+    // Still in the future: member must wait.
+    if (scheduled.startDate > todayISO()) {
+      return NextResponse.json({ error: "Yenilemen zaten onaylandı." }, { status: 409 });
+    }
+    // Due but not applied (silent applyDueRenewals failure): retry, then clear the stuck approval.
+    try {
+      const result = await startRenewedPackage(student, data, {
+        ...scheduled,
+        startDate: scheduled.startDate,
+      });
+      if (!("error" in result)) {
+        const refreshed = await readSupabaseStudioData();
+        return NextResponse.json({
+          request: scheduled,
+          applied: true,
+          student: refreshed.students.find((item) => item.id === student.id),
+          sessions: refreshed.sessions.filter((item) => item.studentId === student.id),
+        });
+      }
+      console.error(`Stuck renewal retry failed for ${student.id}: ${result.error}`);
+    } catch (error) {
+      console.error(`Stuck renewal retry failed for ${student.id}:`, error);
+    }
+    // Fall through and replace the stuck approval with a fresh pending request.
+  }
+
   const requestedStartDate = validDate(body?.requestedStartDate);
-  if (requestedStartDate && requestedStartDate < todayISO()) return NextResponse.json({ error: "Başlangıç tarihi bugün veya sonrası olmalı." }, { status: 400 });
+  if (requestedStartDate && requestedStartDate < todayISO()) {
+    return NextResponse.json({ error: "Başlangıç tarihi bugün veya sonrası olmalı." }, { status: 400 });
+  }
   const renewalRequest: RenewalRequest = {
     id: `renew-${student.id}-${Date.now()}`,
     requestedStartDate,

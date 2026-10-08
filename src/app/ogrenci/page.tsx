@@ -22,6 +22,7 @@ import {
   todayISO,
 } from "@/lib/dates";
 import { remainingLabel, postponeRightLabel } from "@/lib/labels";
+import { studentVisiblePostponeNote } from "@/lib/postpone-note";
 import Link from "next/link";
 import { useState } from "react";
 
@@ -33,6 +34,7 @@ export default function StudentHomePage() {
     remainingFor,
     remainingPostponeFor,
     markAttended,
+    withdrawAttendance,
     requestPostpone,
     withdrawPostpone,
     requestRenewal,
@@ -242,6 +244,31 @@ export default function StudentHomePage() {
                     ) : null}
                   </div>
                 ) : null}
+                {selectedStatus === "attend_pending" ? (
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <Button
+                      variant="ghost"
+                      disabled={attending}
+                      onClick={() => {
+                        if (attending) return;
+                        setActionError(null);
+                        setAttending(true);
+                        void withdrawAttendance(selectedSession.id)
+                          .then((ok) => {
+                            if (!ok) {
+                              setActionError("Geldim işareti geri alınamadı. Tekrar dene.");
+                            }
+                          })
+                          .catch(() => {
+                            setActionError("Geldim işareti geri alınamadı. Tekrar dene.");
+                          })
+                          .finally(() => setAttending(false));
+                      }}
+                    >
+                      {attending ? "Geri alınıyor…" : "Geldim’i geri al"}
+                    </Button>
+                  </div>
+                ) : null}
                 {hasPendingPostpone ? (
                   <div className="mt-3 flex flex-wrap gap-2">
                     <Button
@@ -279,24 +306,33 @@ export default function StudentHomePage() {
                   <p className="mt-3 text-sm text-muted">
                     {remainingPostponeFor(student.id) <= 0
                       ? "Bu pakette erteleme hakkın kalmadı."
-                      : "Ders başlangıcına 24 saatten az kaldığı için ertelenemez."}
+                      : !selectedTime.trim()
+                        ? "Ders saati tanımlı değil. Erteleme için stüdyoyla iletişime geç."
+                        : "Ders başlangıcına 24 saatten az kaldığı için ertelenemez."}
                   </p>
                 ) : null}
               </div>
             ) : null}
-            {(selectedStatus === "postponed" || selectedStatus === "postpone_pending") &&
-            (postponeRequests.find((r) => r.sessionId === selectedSession.id)?.reason?.trim() ||
-              student.postponeLessonNote?.trim()) ? (
-              <div className="border-t border-border/60 px-4 py-3">
-                <p className="text-xs uppercase tracking-[0.16em] text-muted">
-                  Erteleme notu
-                </p>
-                <p className="mt-1 text-sm">
-                  {postponeRequests.find((r) => r.sessionId === selectedSession.id)?.reason?.trim() ||
-                    student.postponeLessonNote?.trim()}
-                </p>
-              </div>
-            ) : null}
+            {(() => {
+              const note = studentVisiblePostponeNote(
+                postponeRequests.find((r) => r.sessionId === selectedSession.id)?.reason,
+                student.postponeLessonNote,
+              );
+              if (
+                !(selectedStatus === "postponed" || selectedStatus === "postpone_pending") ||
+                !note
+              ) {
+                return null;
+              }
+              return (
+                <div className="border-t border-border/60 px-4 py-3">
+                  <p className="text-xs uppercase tracking-[0.16em] text-muted">
+                    Erteleme notu
+                  </p>
+                  <p className="mt-1 text-sm">{note}</p>
+                </div>
+              );
+            })()}
             <div className="border-t border-border/60 px-4 py-3">
               <Link
                 href="/ogrenci/program"

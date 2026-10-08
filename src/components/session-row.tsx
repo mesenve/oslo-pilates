@@ -19,6 +19,7 @@ export function SessionRow({
   postponeHint,
   postponeNote,
   onAttend,
+  onWithdrawAttendance,
   onPostpone,
   onWithdrawPostpone,
 }: {
@@ -30,6 +31,7 @@ export function SessionRow({
   postponeHint: string;
   postponeNote?: string;
   onAttend: () => void | Promise<boolean | void>;
+  onWithdrawAttendance?: () => void | Promise<boolean | void>;
   onPostpone: (reason: string) => Promise<{ error: string | null }>;
   onWithdrawPostpone?: () => Promise<{ error: string | null }>;
 }) {
@@ -66,6 +68,29 @@ export function SessionRow({
           {displayStatus === "attend_pending" ||
           displayStatus === "postpone_pending" ? (
             <p className="text-xs text-muted">Hocanın onayı bekleniyor.</p>
+          ) : null}
+          {displayStatus === "attend_pending" && onWithdrawAttendance ? (
+            <Button
+              variant="ghost"
+              disabled={attending}
+              onClick={() => {
+                if (attending) return;
+                setActionError(null);
+                setAttending(true);
+                void Promise.resolve(onWithdrawAttendance())
+                  .then((ok) => {
+                    if (ok === false) {
+                      setActionError("Geldim işareti geri alınamadı. Tekrar dene.");
+                    }
+                  })
+                  .catch(() => {
+                    setActionError("Geldim işareti geri alınamadı. Tekrar dene.");
+                  })
+                  .finally(() => setAttending(false));
+              }}
+            >
+              {attending ? "Geri alınıyor…" : "Geldim’i geri al"}
+            </Button>
           ) : null}
           {hasPendingPostpone && onWithdrawPostpone ? (
             <Button
@@ -132,6 +157,10 @@ export function SessionRow({
           <span className="text-muted">Erteleme notu: </span>
           {postponeNote}
         </p>
+      ) : null}
+
+      {locked && displayStatus === "upcoming" && isBefore(session.date, todayISO()) ? (
+        <p className="mt-3 text-sm text-muted">Bu dersin yoklaması henüz girilmedi.</p>
       ) : null}
 
       {actionError ? <p className="mt-3 text-sm text-red-700">{actionError}</p> : null}

@@ -25,7 +25,7 @@ export async function POST(request: Request) {
   const ok = NextResponse.json({
     ok: true,
     message:
-      "Talep alındı. E-posta kayıtlıysa kısa süre içinde şifre bağlantısı gelir. Gelen kutunu ve spam klasörünü kontrol et.",
+      "Talep alındı. E-posta kayıtlıysa kısa süre içinde şifre veya davet bağlantısı gelir. Gelen kutunu ve spam klasörünü kontrol et.",
   });
 
   if (!email) {

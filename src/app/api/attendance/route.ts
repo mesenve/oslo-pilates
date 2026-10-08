@@ -126,8 +126,14 @@ export async function POST(request: Request) {
   if (user.role === "student") {
     const validStudentMarks = inputMarks.every((mark, index) => {
       const session = sessions[index];
-      return mark.studentId === user.id && mark.status === "attend_pending" &&
-        Boolean(session && session.studentId === user.id && session.status === "upcoming" && mark.date === todayISO());
+      if (!session || session.studentId !== user.id || mark.studentId !== user.id || mark.date !== todayISO()) {
+        return false;
+      }
+      // Geldim
+      if (mark.status === "attend_pending" && session.status === "upcoming") return true;
+      // Geldim geri al (hoca onaylamadan önce)
+      if (mark.status === "upcoming" && session.status === "attend_pending") return true;
+      return false;
     });
     if (!validStudentMarks) {
       return NextResponse.json({ error: "Bu ders için yoklama onayı verilemez." }, { status: 403 });

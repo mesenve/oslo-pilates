@@ -1,3 +1,5 @@
+import { todayISO } from "@/lib/dates";
+import { countRemainingSessions } from "@/lib/remaining";
 import { patchSupabaseStudentPackage } from "@/lib/server/supabase-rest";
 
 /** Recompute denormalized package.remainingSessions from canonical session rows. */
@@ -15,15 +17,19 @@ export async function syncRemainingSessions(
   if (!Number.isFinite(totalSessions) || !startDate || !endDate) return;
 
   const overrideById = new Map(overrides.map((item) => [item.sessionId, item.status]));
-  const consumed = sessions.filter((item) => {
-    if (item.studentId !== student.id || item.date < startDate || item.date > endDate) {
-      return false;
-    }
-    const status = overrideById.get(item.id) ?? item.status;
-    return status === "attended" || status === "missed";
-  }).length;
+  const inPeriod = sessions
+    .filter(
+      (item) =>
+        item.studentId === student.id &&
+        item.date >= startDate &&
+        item.date <= endDate,
+    )
+    .map((item) => ({
+      date: item.date,
+      status: overrideById.get(item.id) ?? item.status,
+    }));
 
   await patchSupabaseStudentPackage(student.id, {
-    remainingSessions: Math.max(0, totalSessions - consumed),
+    remainingSessions: countRemainingSessions(totalSessions, inPeriod, todayISO()),
   });
 }

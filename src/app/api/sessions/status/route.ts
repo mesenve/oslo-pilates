@@ -14,6 +14,7 @@ import { getSessionUser } from "@/lib/server/session";
 import { todayISO } from "@/lib/dates";
 import { remainingPostponeRights, sessionTimeForStudent } from "@/data/accessors";
 import { isAtLeast24HoursAway } from "@/lib/dates";
+import { INSTRUCTOR_POSTPONE_PLACEHOLDER } from "@/lib/postpone-note";
 import type { Student, StudioState } from "@/types/studio";
 import { NextResponse } from "next/server";
 
@@ -90,6 +91,12 @@ export async function POST(request: Request) {
     ) > 0;
     if (!hasRight) {
       return NextResponse.json({ error: "Bu pakette erteleme hakkın kalmadı." }, { status: 409 });
+    }
+    if (!time.trim()) {
+      return NextResponse.json(
+        { error: "Ders saati tanımlı değil. Erteleme için stüdyoyla iletişime geç." },
+        { status: 409 },
+      );
     }
     if (!isAtLeast24HoursAway(session.date, time)) {
       return NextResponse.json({ error: "Ders başlangıcına 24 saatten az kaldığı için ertelenemez." }, { status: 409 });
@@ -217,7 +224,7 @@ export async function POST(request: Request) {
       id: `req-${session.id}-${Date.now()}`,
       studentId: student.id,
       sessionId: session.id,
-      reason: body.reason?.trim() || "Eğitmen erteleme işaretledi.",
+      reason: body.reason?.trim() || INSTRUCTOR_POSTPONE_PLACEHOLDER,
       status: "approved" as const,
       createdAt,
     };

@@ -50,8 +50,8 @@ export default function SifremiUnuttumPage() {
               <h1 className="font-serif text-2xl">Talep alındı</h1>
               <p className="text-sm text-muted">
                 <span className="font-medium text-foreground">{email.trim()}</span>{" "}
-                adresine kayıtlı bir hesap varsa sıfırlama bağlantısı kısa süre
-                içinde gelir. Gelen kutunu ve spam klasörünü kontrol et.
+                adresine kayıtlı bir hesap varsa şifre veya davet bağlantısı kısa
+                süre içinde gelir. Gelen kutunu ve spam klasörünü kontrol et.
               </p>
               <Link
                 href="/giris"
@@ -65,7 +65,7 @@ export default function SifremiUnuttumPage() {
               <div>
                 <h1 className="font-serif text-2xl">Şifremi unuttum</h1>
                 <p className="mt-2 text-sm text-muted">
-                  Öğrenci veya eğitmen e-postanı yaz; sıfırlama bağlantısı
+                  Öğrenci veya eğitmen e-postanı yaz; şifre veya davet bağlantısı
                   mailine gelecek.
                 </p>
               </div>

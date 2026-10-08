@@ -1,6 +1,7 @@
 import { getClassGroupById, legacyGroupFromId } from "@/data/groups";
 import { todayISO, weekdayFromISO } from "@/lib/dates";
 import { DAY_LABELS } from "@/lib/labels";
+import { countRemainingSessions } from "@/lib/remaining";
 import type {
   PostponeRequest,
   Session,
@@ -21,10 +22,11 @@ export function remainingSessions(
   student: Student,
   sessions: Session[],
 ): number {
-  const consumed = sessionsForStudent(student.id, sessions, student).filter(
-    (session) => session.status === "attended" || session.status === "missed",
-  ).length;
-  return Math.max(0, student.package.totalSessions - consumed);
+  return countRemainingSessions(
+    student.package.totalSessions,
+    sessionsForStudent(student.id, sessions, student),
+    todayISO(),
+  );
 }
 
 export function lastAttendanceLabel(
