@@ -30,8 +30,8 @@ export function SessionRow({
   postponeHint: string;
   postponeNote?: string;
   onAttend: () => void | Promise<boolean | void>;
-  onPostpone: (reason: string) => void | Promise<boolean | void>;
-  onWithdrawPostpone?: () => void | Promise<boolean | void>;
+  onPostpone: (reason: string) => Promise<{ error: string | null }>;
+  onWithdrawPostpone?: () => Promise<{ error: string | null }>;
 }) {
   const [open, setOpen] = useState(false);
   const [reason, setReason] = useState("");
@@ -75,11 +75,9 @@ export function SessionRow({
                 if (withdrawing) return;
                 setActionError(null);
                 setWithdrawing(true);
-                void Promise.resolve(onWithdrawPostpone())
-                  .then((ok) => {
-                    if (ok === false) {
-                      setActionError("Erteleme talebi geri alınamadı. Tekrar dene.");
-                    }
+                void onWithdrawPostpone()
+                  .then((result) => {
+                    if (result.error) setActionError(result.error);
                   })
                   .catch(() => {
                     setActionError("Erteleme talebi geri alınamadı. Tekrar dene.");
@@ -146,10 +144,10 @@ export function SessionRow({
             if (submitting) return;
             setActionError(null);
             setSubmitting(true);
-            void Promise.resolve(onPostpone(reason))
-              .then((ok) => {
-                if (ok === false) {
-                  setActionError("Erteleme talebi gönderilemedi. Tekrar dene.");
+            void onPostpone(reason)
+              .then((result) => {
+                if (result.error) {
+                  setActionError(result.error);
                   return;
                 }
                 setReason("");

@@ -56,10 +56,13 @@ export default function StudentHomePage() {
       (request) => request.sessionId === selectedSession.id && request.status === "pending",
     ),
   );
+  // An unmarked past lesson is not "Yandı" for the student; the takvim page shows it the same way.
   const selectedStatus = selectedSession
     ? hasPendingPostpone
       ? "postpone_pending"
-      : effectiveSessionStatus(selectedSession)
+      : selectedSession.status === "upcoming"
+        ? "upcoming"
+        : effectiveSessionStatus(selectedSession)
     : null;
   const isActiveSelected =
     selectedStatus === "upcoming" ||
@@ -223,12 +226,8 @@ export default function StudentHomePage() {
                           setActionError(null);
                           setPostponing(true);
                           void requestPostpone(selectedSession.id, "")
-                            .then((ok) => {
-                              if (!ok) {
-                                setActionError(
-                                  "Erteleme talebi gönderilemedi. Tekrar dene.",
-                                );
-                              }
+                            .then((result) => {
+                              if (result.error) setActionError(result.error);
                             })
                             .catch(() => {
                               setActionError(
@@ -253,12 +252,8 @@ export default function StudentHomePage() {
                         setActionError(null);
                         setWithdrawing(true);
                         void withdrawPostpone(selectedSession.id)
-                          .then((ok) => {
-                            if (!ok) {
-                              setActionError(
-                                "Erteleme talebi geri alınamadı. Tekrar dene.",
-                              );
-                            }
+                          .then((result) => {
+                            if (result.error) setActionError(result.error);
                           })
                           .catch(() => {
                             setActionError(
@@ -274,6 +269,9 @@ export default function StudentHomePage() {
                 ) : null}
                 {actionError ? (
                   <p className="mt-3 text-sm text-red-700">{actionError}</p>
+                ) : null}
+                {selectedDate < today && selectedStatus === "upcoming" ? (
+                  <p className="mt-3 text-sm text-muted">Bu dersin yoklaması henüz girilmedi.</p>
                 ) : null}
                 {selectedDate > today &&
                 selectedStatus === "upcoming" &&

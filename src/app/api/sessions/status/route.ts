@@ -88,8 +88,11 @@ export async function POST(request: Request) {
       (data.postponeRequests ?? []) as StudioState["postponeRequests"],
       (data.sessions ?? []) as StudioState["sessions"],
     ) > 0;
-    if (!hasRight || !isAtLeast24HoursAway(session.date, time)) {
-      return NextResponse.json({ error: "Erteleme koşulları sağlanmıyor." }, { status: 409 });
+    if (!hasRight) {
+      return NextResponse.json({ error: "Bu pakette erteleme hakkın kalmadı." }, { status: 409 });
+    }
+    if (!isAtLeast24HoursAway(session.date, time)) {
+      return NextResponse.json({ error: "Ders başlangıcına 24 saatten az kaldığı için ertelenemez." }, { status: 409 });
     }
     const nextRequest = {
       id: `req-${session.id}-${Date.now()}`,

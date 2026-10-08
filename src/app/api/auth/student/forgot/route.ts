@@ -1,10 +1,12 @@
-import { sendPasswordResetEmail } from "@/lib/email";
+import { sendPasswordResetEmail, sendWelcomeInviteEmail } from "@/lib/email";
 import { getStaffByEmail } from "@/data/staff";
 import {
   findActivatedInviteByEmail,
   getInviteByStudentId,
+  saveInvite,
 } from "@/lib/server/invite-store";
-import { readSupabaseStudioData } from "@/lib/server/supabase-rest";
+import { createInviteToken, inviteExpiresAt, inviteUrl } from "@/lib/student-auth";
+import { patchSupabaseStudent, readSupabaseStudioData } from "@/lib/server/supabase-rest";
 import {
   createPasswordResetToken,
   passwordResetUrl,
@@ -23,7 +25,7 @@ export async function POST(request: Request) {
   const ok = NextResponse.json({
     ok: true,
     message:
-      "Talep alındı. E-posta kayıtlıysa kısa süre içinde sıfırlama bağlantısı gelir. Gelen kutunu ve spam klasörünü kontrol et.",
+      "Talep alındı. E-posta kayıtlıysa kısa süre içinde şifre bağlantısı gelir. Gelen kutunu ve spam klasörünü kontrol et.",
   });
 
   if (!email) {
@@ -66,6 +68,42 @@ export async function POST(request: Request) {
           );
         }
         return ok;
+      }
+      return ok;
+    }
+
+    // Never activated (or invite lost/expired): a reset link is useless, send a fresh invite.
+    if (liveStudent) {
+      const token = createInviteToken();
+      const expiresAt = inviteExpiresAt();
+      const invitedAt = new Date().toISOString();
+      await saveInvite({
+        token,
+        student: {
+          ...liveStudent,
+          accountStatus: "invited",
+          inviteToken: token,
+          inviteExpiresAt: expiresAt,
+          invitedAt,
+        },
+        sessions: studio.sessions.filter((item) => item.studentId === liveStudent.id),
+        expiresAt,
+      });
+      await patchSupabaseStudent(liveStudent.id, {
+        account_status: "invited",
+        invite_token: token,
+        invite_expires_at: expiresAt,
+        invited_at: invitedAt,
+      });
+      const sent = await sendWelcomeInviteEmail(
+        { name: liveStudent.name, email: liveStudent.email },
+        inviteUrl(token, appOrigin),
+      );
+      if (!sent.ok) {
+        console.error("Invite resend email failed:", sent.error);
+        if (isAdmin) {
+          return NextResponse.json({ error: `Mail gönderilemedi: ${sent.error}` }, { status: 502 });
+        }
       }
       return ok;
     }

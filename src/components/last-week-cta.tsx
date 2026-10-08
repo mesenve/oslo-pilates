@@ -2,6 +2,7 @@
 
 import { DateField } from "@/components/date-field";
 import { Button } from "@/components/ui";
+import { formatLongDate } from "@/lib/dates";
 import type { Student } from "@/types/studio";
 import { useState } from "react";
 
@@ -9,7 +10,12 @@ export function LastWeekCta({ student, remaining, onRequestRenewal }: { student:
   const [date, setDate] = useState("");
   const [status, setStatus] = useState<"idle" | "sending" | "sent" | "error">("idle");
   const [error, setError] = useState<string | null>(null);
-  const pending = student.renewalRequest?.status === "pending";
+  const request = student.renewalRequest;
+  const pending = request?.status === "pending";
+  const scheduledStart =
+    request?.status === "approved" && request.startDate && request.startDate > student.package.startDate
+      ? request.startDate
+      : null;
   async function submit() {
     setStatus("sending");
     setError(null);
@@ -28,7 +34,8 @@ export function LastWeekCta({ student, remaining, onRequestRenewal }: { student:
       <p className="mt-1 text-xs text-white/80">
         Ders programınızın kesintisiz devamı için yenileme talebinizi iletmek ister misiniz?
       </p>
-      {pending || status === "sent" ? <p className="mt-3 rounded-xl bg-white/15 px-3 py-2 text-sm">Yenileme talebiniz öğretmeninize iletildi.</p> : <>
+      {pending || status === "sent" ? <p className="mt-3 rounded-xl bg-white/15 px-3 py-2 text-sm">Yenileme talebiniz öğretmeninize iletildi.</p> : scheduledStart ? <p className="mt-3 rounded-xl bg-white/15 px-3 py-2 text-sm">Yenileme talebiniz onaylandı. Yeni paketiniz {formatLongDate(scheduledStart)} tarihinde başlıyor.</p> : <>
+        {request?.status === "rejected" ? <p className="mt-3 rounded-xl bg-white/15 px-3 py-2 text-sm">Son yenileme talebiniz onaylanmadı. Detay için stüdyoyla iletişime geçebilir veya yeniden talep gönderebilirsiniz.</p> : null}
         <div className="mt-3 rounded-2xl bg-white/10 p-2"><DateField label="Tercih edilen başlangıç tarihi (isteğe bağlı)" value={date} onChange={setDate} /></div>
         <Button className="mt-3 self-start bg-white text-accent hover:bg-white/90" onClick={() => void submit()} disabled={status === "sending"}>{status === "sending" ? "Gönderiliyor…" : "Yenileme talebi gönder"}</Button>
         {error ? <p className="mt-2 text-xs text-white">{error}</p> : null}

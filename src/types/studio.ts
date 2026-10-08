@@ -28,6 +28,8 @@ export type RenewalRequestStatus = "pending" | "approved" | "rejected";
 export type RenewalRequest = {
   id: string;
   requestedStartDate?: string;
+  /** Set on approval; the new package period begins on this date. */
+  startDate?: string;
   status: RenewalRequestStatus;
   createdAt: string;
   actedAt?: string;

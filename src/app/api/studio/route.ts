@@ -2,6 +2,7 @@ import {
   isSupabaseConfigured,
   readSupabaseStudioData,
 } from "@/lib/server/supabase-rest";
+import { applyDueRenewals } from "@/lib/server/renewal";
 import { getSessionUser } from "@/lib/server/session";
 import { NextResponse } from "next/server";
 
@@ -15,10 +16,11 @@ export async function GET() {
   if (!user) {
     return NextResponse.json({ error: "Oturum gerekli." }, { status: 401 });
   }
-  const data = await readStudioData();
+  let data = await readStudioData();
   if (!data) {
     return NextResponse.json({ configured: false, data: null });
   }
+  if (await applyDueRenewals(data)) data = await readSupabaseStudioData();
 
   const visibleStudentIds = new Set(
     user.role === "super_admin"

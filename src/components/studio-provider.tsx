@@ -27,7 +27,7 @@ import {
   activateInviteAccount,
   loginStudentAccount,
 } from "@/lib/invite-client";
-import { fetchStudioData } from "@/lib/studio-client";
+import { fetchStudioData, SESSION_EXPIRED } from "@/lib/studio-client";
 import { PACKAGE_TYPE_LABELS } from "@/data/packages";
 import { DAY_LABELS } from "@/lib/labels";
 import {
@@ -101,8 +101,8 @@ type StudioContextValue = {
   markAttended: (sessionId: string) => Promise<boolean>;
   approveAttendance: (sessionIds: string[]) => Promise<boolean>;
   rejectAttendance: (sessionIds: string[]) => Promise<boolean>;
-  requestPostpone: (sessionId: string, reason: string) => Promise<boolean>;
-  withdrawPostpone: (sessionId: string) => Promise<boolean>;
+  requestPostpone: (sessionId: string, reason: string) => Promise<{ error: string | null }>;
+  withdrawPostpone: (sessionId: string) => Promise<{ error: string | null }>;
   requestRenewal: (requestedStartDate?: string) => Promise<{ error: string | null }>;
   reviewRenewal: (studentId: string, status: "approved" | "rejected") => Promise<{ error: string | null }>;
   approveRequest: (requestId: string) => Promise<boolean>;
@@ -234,7 +234,9 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
     user: NonNullable<StudioState["user"]>,
     isCancelled: () => boolean = () => false,
   ) => {
-    const isStale = () => isCancelled() || getStudioState().user?.id !== user.id;
+    const epoch = loginEpochRef.current;
+    const isStale = () =>
+      isCancelled() || getStudioState().user?.id !== user.id || loginEpochRef.current !== epoch;
     const markLoadError = () => setStudioLoad((current) =>
       current?.userId === user.id && current.status === "ready"
         ? current
@@ -282,8 +284,16 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
         next = { ...next, sessions: mergeAttendanceMarks(next.sessions, marks) };
         return next;
       });
-    } catch {
-      if (!isStale()) markLoadError();
+    } catch (error) {
+      if (isStale()) return;
+      if (error instanceof Error && error.message === SESSION_EXPIRED) {
+        // RoleGuard sends the user back to /giris once the user is cleared.
+        setStudioState((current) =>
+          current.user?.id === user.id ? { ...current, user: null } : current,
+        );
+        return;
+      }
+      markLoadError();
     }
   }, []);
 
@@ -635,12 +645,14 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ sessionId, status: "postpone_pending", reason }),
     });
-    if (!response.ok) return false;
     const data = (await response.json().catch(() => null)) as {
+      error?: string;
       request?: StudioState["postponeRequests"][number];
     } | null;
     const request = data?.request;
-    if (!request) return false;
+    if (!response.ok || !request) {
+      return { error: data?.error ?? "Erteleme talebi gönderilemedi. Tekrar dene." };
+    }
     setStudioState((current) => ({
       ...current,
       sessions: current.sessions.map((item) =>
@@ -648,7 +660,7 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
       ),
       postponeRequests: [request, ...current.postponeRequests.filter((item) => item.id !== request.id)],
     }));
-    return true;
+    return { error: null };
   }, []);
 
   const withdrawPostpone = useCallback(async (sessionId: string) => {
@@ -657,7 +669,10 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ sessionId, status: "upcoming" }),
     });
-    if (!response.ok) return false;
+    if (!response.ok) {
+      const data = (await response.json().catch(() => null)) as { error?: string } | null;
+      return { error: data?.error ?? "Erteleme talebi geri alınamadı. Tekrar dene." };
+    }
     setStudioState((current) => ({
       ...current,
       sessions: current.sessions.map((item) =>
@@ -667,7 +682,7 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
         (item) => !(item.sessionId === sessionId && item.status === "pending"),
       ),
     }));
-    return true;
+    return { error: null };
   }, []);
 
   const requestRenewal = useCallback(async (requestedStartDate?: string) => {

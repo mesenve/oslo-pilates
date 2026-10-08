@@ -252,6 +252,9 @@ export default function StudentDetailPage() {
         <Card className="space-y-3 p-4">
           <div className="flex items-center justify-between gap-3"><h2 className="font-serif text-xl">Yenileme talebi</h2><RequestBadge status={student.renewalRequest.status === "pending" ? "pending" : student.renewalRequest.status} /></div>
           <p className="text-sm text-muted">{student.renewalRequest.requestedStartDate ? `Tercih edilen başlangıç: ${formatLongDate(student.renewalRequest.requestedStartDate)}` : "Başlangıç tarihi belirtilmedi."}</p>
+          {student.renewalRequest.status === "approved" && student.renewalRequest.startDate && student.renewalRequest.startDate > student.package.startDate ? (
+            <p className="text-sm">Yeni paket {formatLongDate(student.renewalRequest.startDate)} tarihinde başlayacak.</p>
+          ) : null}
           {student.renewalRequest.status === "pending" ? (
             <div className="flex flex-wrap gap-2">
               <Button

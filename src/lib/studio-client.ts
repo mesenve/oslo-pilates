@@ -7,6 +7,8 @@ export type RemoteStudioData = Pick<
   blockedEmails?: string[];
 };
 
+export const SESSION_EXPIRED = "session-expired";
+
 export async function fetchStudioData(input?: {
   studentId?: string;
   includeBlockedEmails?: boolean;
@@ -18,6 +20,7 @@ export async function fetchStudioData(input?: {
   }
   const query = params.toString();
   const response = await fetch(`/api/studio${query ? `?${query}` : ""}`);
+  if (response.status === 401) throw new Error(SESSION_EXPIRED);
   const data = (await response.json()) as {
     configured?: boolean;
     data?: RemoteStudioData | null;

@@ -42,6 +42,16 @@ export async function POST(request: Request) {
       }
     }
 
+    if (student && (!invite?.password || !invite.activatedAt)) {
+      return NextResponse.json(
+        {
+          error:
+            "Hesabın henüz aktif değil. Davet e-postandaki linkten şifreni oluştur. Link elinde yoksa “Şifremi unuttum” ile yeni davet linki iste.",
+        },
+        { status: 401 },
+      );
+    }
+
     if (
       !student ||
       !invite?.password ||

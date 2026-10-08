@@ -1,14 +1,13 @@
 import { canManageStudent } from "@/lib/access";
-import { getClassGroupById, isPresetGroupId } from "@/data/groups";
-import { buildSessionsForStudent } from "@/data/seed";
 import { todayISO } from "@/lib/dates";
+import { renewalStartDate } from "@/lib/package-period";
+import { startRenewedPackage } from "@/lib/server/renewal";
 import {
   patchSupabaseStudentPackage,
   readSupabaseStudioData,
-  saveSupabaseStudentBundle,
 } from "@/lib/server/supabase-rest";
 import { getSessionUser } from "@/lib/server/session";
-import type { PackageHistoryEntry, RenewalRequest, Student } from "@/types/studio";
+import type { RenewalRequest } from "@/types/studio";
 import { NextResponse } from "next/server";
 
 function validDate(value: unknown) {
@@ -23,6 +22,10 @@ export async function POST(request: Request) {
   const student = data.students.find((item) => item.id === user.id);
   if (!student) return NextResponse.json({ error: "Öğrenci bulunamadı." }, { status: 404 });
   if (student.renewalRequest?.status === "pending") return NextResponse.json({ error: "Bekleyen yenileme talebiniz zaten var." }, { status: 409 });
+  const scheduled = student.renewalRequest;
+  if (scheduled?.status === "approved" && scheduled.startDate && scheduled.startDate > student.package.startDate) {
+    return NextResponse.json({ error: "Yenilemen zaten onaylandı." }, { status: 409 });
+  }
   const requestedStartDate = validDate(body?.requestedStartDate);
   if (requestedStartDate && requestedStartDate < todayISO()) return NextResponse.json({ error: "Başlangıç tarihi bugün veya sonrası olmalı." }, { status: 400 });
   const renewalRequest: RenewalRequest = {
@@ -65,56 +68,19 @@ export async function PATCH(request: Request) {
 
   if (body.status === "rejected") {
     await patchSupabaseStudentPackage(student.id, { renewalRequest });
-    return NextResponse.json({ request: renewalRequest, student });
+    return NextResponse.json({ request: renewalRequest, student: { ...student, renewalRequest } });
   }
 
-  // Approve = start a new package period (not just flip the request flag).
-  const startDate =
-    validDate(student.renewalRequest.requestedStartDate) &&
-    student.renewalRequest.requestedStartDate! >= todayISO()
-      ? student.renewalRequest.requestedStartDate!
-      : todayISO();
-  const historyEntry: PackageHistoryEntry = {
-    ...student.package,
-    id: `pkg-${student.id}-${student.package.startDate}`,
-    createdAt: student.package.startDate,
-    endedAt: new Date().toISOString(),
-  };
-  const renewed: Student = {
-    ...student,
-    package: {
-      ...student.package,
-      startDate,
-      remainingSessions: student.package.totalSessions,
-      isLastWeek: false,
-      paymentStatus: student.package.paymentStatus,
-    },
-    packageHistory: [historyEntry, ...(student.packageHistory ?? [])],
-    renewalRequest,
-    postponeLessonUsed: false,
-    postponeLessonUsedAt: undefined,
-    postponeLessonNote: undefined,
-  };
-  const group = isPresetGroupId(renewed.groupId)
-    ? getClassGroupById(renewed.groupId)
-    : data.customGroups.find((item) => item.id === renewed.groupId);
-  const sessions = buildSessionsForStudent(renewed, {
-    fromPackageStart: true,
-    group,
-  });
-  if (sessions.length !== renewed.package.totalSessions) {
-    return NextResponse.json(
-      { error: "Yeni paket seansları oluşturulamadı. Program günlerini kontrol et." },
-      { status: 400 },
-    );
+  // The current package keeps its remaining lessons; the new one starts once it ends.
+  const approved = { ...renewalRequest, startDate: renewalStartDate(student, todayISO()) };
+  if (approved.startDate > todayISO()) {
+    await patchSupabaseStudentPackage(student.id, { renewalRequest: approved });
+    return NextResponse.json({ request: approved, student: { ...student, renewalRequest: approved } });
   }
-  renewed.package.endDate = sessions.at(-1)!.date;
 
   try {
-    await saveSupabaseStudentBundle({
-      student: renewed,
-      sessions,
-    });
+    const result = await startRenewedPackage(student, data, approved);
+    if ("error" in result) return NextResponse.json({ error: result.error }, { status: 400 });
   } catch (error) {
     console.error("Renewal approve failed:", error);
     return NextResponse.json(
@@ -124,14 +90,9 @@ export async function PATCH(request: Request) {
   }
 
   const refreshed = await readSupabaseStudioData();
-  const persisted =
-    refreshed.students.find((item) => item.id === student.id) ?? renewed;
-  const persistedSessions = refreshed.sessions.filter(
-    (item) => item.studentId === student.id,
-  );
   return NextResponse.json({
-    request: renewalRequest,
-    student: persisted,
-    sessions: persistedSessions,
+    request: approved,
+    student: refreshed.students.find((item) => item.id === student.id),
+    sessions: refreshed.sessions.filter((item) => item.studentId === student.id),
   });
 }
