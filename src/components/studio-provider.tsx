@@ -19,7 +19,6 @@ import { packagePeriodKey } from "@/lib/package-period";
 import { addDays, startOfWeekMonday, toISODate, todayISO } from "@/lib/dates";
 import {
   createInviteToken,
-  getStudentPassword,
   inviteExpiresAt,
   inviteUrl,
   validateStudentPassword,
@@ -50,6 +49,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   useSyncExternalStore,
 } from "react";
@@ -170,6 +170,8 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
     getServerStudioState,
   );
   const [sessionChecked, setSessionChecked] = useState(false);
+  /** Bumped on login so an in-flight GET /api/auth/session cannot clobber it. */
+  const loginEpochRef = useRef(0);
   const [studioLoad, setStudioLoad] = useState<{
     userId: string;
     status: "loading" | "ready" | "error";
@@ -204,15 +206,16 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (!ready) return;
     let cancelled = false;
+    const startedAt = Date.now();
     void fetch("/api/auth/session")
-      .then((response) => response.ok ? response.json() : { user: null })
-      .then((data: { user?: StudioState["user"] }) => {
-        if (cancelled) return;
-        // Never wipe a hydrated session on a flaky/empty session response —
-        // that kicked staff back to login/home mid-edit.
+      .then((response) => (response.ok ? response.json() : null))
+      .then((data: { user?: StudioState["user"] } | null) => {
+        if (cancelled || !data) return;
         setStudioState((current) => {
+          // A login that finished after this check started wins.
+          if (loginEpochRef.current > startedAt && current.user) return current;
           if (data.user) return { ...current, user: data.user };
-          if (current.user) return current;
+          // Authoritative empty session (expired/missing cookie).
           return { ...current, user: null };
         });
       })
@@ -222,7 +225,9 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
       .finally(() => {
         if (!cancelled) setSessionChecked(true);
       });
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [ready]);
 
   const refreshRemoteState = useCallback(async (
@@ -366,45 +371,18 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
             : "E-posta veya şifre hatalı."),
       };
     }
+    loginEpochRef.current = Date.now();
     setStudioState((current) => ({ ...current, user: data.user! }));
     return { error: null };
   }, []);
 
   const loginStudent = useCallback(async (email: string, password: string) => {
-    const normalizedEmail = email.trim().toLowerCase();
-    const studio = getStudioState();
-    const localStudent = studio.students.find(
-      (item) => item.email.toLowerCase() === normalizedEmail,
-    );
-
-    // Demo-only shortcut: production authentication always goes through the server.
-    if (process.env.NODE_ENV !== "production" && localStudent) {
-      if (localStudent.accountStatus === "invited") {
-        return {
-          error:
-            "Hesabın henüz aktif değil. E-postadaki davet linkine tıklayarak şifreni oluştur.",
-        };
-      }
-      const stored = getStudentPassword(localStudent.id, studio.studentPasswords);
-      if (stored && password === stored) {
-        setStudioState((current) => ({
-          ...current,
-          user: {
-            id: localStudent.id,
-            name: localStudent.name,
-            email: localStudent.email,
-            role: "student",
-          },
-        }));
-        return { error: null };
-      }
-    }
-
     const result = await loginStudentAccount(email, password);
     if (result.error || !result.payload) {
       return { error: result.error ?? "E-posta veya şifre hatalı." };
     }
 
+    loginEpochRef.current = Date.now();
     setStudioState((current) => ({
       ...current,
       user: {
@@ -427,6 +405,7 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
 
       try {
         const payload = await activateInviteAccount({ token, password, confirmPassword });
+        loginEpochRef.current = Date.now();
         setStudioState((current) => ({
           ...current,
           user: {
@@ -714,12 +693,31 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ studentId, status }),
     });
-    const data = (await response.json().catch(() => null)) as { error?: string; request?: Student["renewalRequest"] } | null;
-    if (!response.ok || !data?.request) return { error: data?.error ?? "Yenileme talebi güncellenemedi." };
-    setStudioState((current) => ({
-      ...current,
-      students: current.students.map((student) => student.id === studentId ? { ...student, renewalRequest: data.request } : student),
-    }));
+    const data = (await response.json().catch(() => null)) as {
+      error?: string;
+      request?: Student["renewalRequest"];
+      student?: Student;
+      sessions?: Session[];
+    } | null;
+    if (!response.ok || !data?.request) {
+      return { error: data?.error ?? "Yenileme talebi güncellenemedi." };
+    }
+    setStudioState((current) => {
+      const nextStudents = current.students.map((student) => {
+        if (student.id !== studentId) return student;
+        if (data.student) return data.student;
+        return { ...student, renewalRequest: data.request };
+      });
+      if (!data.sessions) {
+        return { ...current, students: nextStudents };
+      }
+      const kept = current.sessions.filter((session) => session.studentId !== studentId);
+      return {
+        ...current,
+        students: nextStudents,
+        sessions: [...kept, ...data.sessions],
+      };
+    });
     return { error: null };
   }, []);
 
@@ -1578,7 +1576,7 @@ function studentFromInput(
       customSchedule,
     },
     packageHistory: packageHistory.length > 0 ? packageHistory : undefined,
-    renewalRequest: previous?.renewalRequest,
+    renewalRequest: packagePeriodChanged ? undefined : previous?.renewalRequest,
     changeLog: previous?.changeLog,
     monthlyPostponeLimit: Number.isFinite(input.monthlyPostponeLimit)
       ? Math.max(0, Math.round(input.monthlyPostponeLimit))

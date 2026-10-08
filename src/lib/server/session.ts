@@ -7,6 +7,16 @@ const MAX_AGE_SECONDS = 60 * 60 * 24 * 14; // 14 days — editing mid-session mu
 
 type SessionPayload = AuthUser & { exp: number };
 
+export type SessionCookie = {
+  name: string;
+  value: string;
+  httpOnly: boolean;
+  sameSite: "lax";
+  secure: boolean;
+  path: string;
+  maxAge: number;
+};
+
 function secret() {
   const value = process.env.OSLO_SESSION_SECRET;
   if (!value && process.env.NODE_ENV === "production") {
@@ -50,22 +60,25 @@ export async function getSessionUser(): Promise<AuthUser | null> {
   return value ? decode(value) : null;
 }
 
-export function sessionCookie(user: AuthUser) {
+/** Flat cookie attrs — Next `cookies.set` ignores a nested `options` object. */
+export function sessionCookie(user: AuthUser): SessionCookie {
   return {
     name: COOKIE_NAME,
     value: encode(user),
-    options: {
-      httpOnly: true,
-      sameSite: "lax" as const,
-      secure: process.env.NODE_ENV === "production",
-      path: "/",
-      maxAge: MAX_AGE_SECONDS,
-    },
+    httpOnly: true,
+    sameSite: "lax",
+    secure: process.env.NODE_ENV === "production",
+    path: "/",
+    maxAge: MAX_AGE_SECONDS,
   };
 }
 
-export const clearedSessionCookie = {
+export const clearedSessionCookie: SessionCookie = {
   name: COOKIE_NAME,
   value: "",
-  options: { httpOnly: true, sameSite: "lax" as const, secure: process.env.NODE_ENV === "production", path: "/", maxAge: 0 },
+  httpOnly: true,
+  sameSite: "lax",
+  secure: process.env.NODE_ENV === "production",
+  path: "/",
+  maxAge: 0,
 };

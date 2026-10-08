@@ -1,10 +1,7 @@
--- Keep retired package sessions as history instead of deleting them.
--- Applied to Supabase project hiopdvoxhslgqpvoaaza on 2026-10-02.
-alter table public.sessions
-  add column if not exists archived_at timestamptz;
-
-create index if not exists sessions_student_active_idx
-  on public.sessions (student_id, archived_at, session_date);
+-- Re-apply save_student_bundle so schedule edits no longer hard-delete
+-- postpone_requests for retired session IDs. Source of truth matches
+-- SUPABASE_SESSION_ARCHIVE_MIGRATION.sql after the postpone-history fix.
+-- Run in the Supabase SQL editor once.
 
 create or replace function public.save_student_bundle(
   p_student jsonb,
@@ -95,15 +92,11 @@ begin
     archived_at = excluded.archived_at,
     updated_at = now();
 
-  -- Only wipe postpone rows when a brand-new package explicitly clears them.
-  -- Retiring old session IDs on a schedule edit must keep postpone history.
   if p_clear_postpones then
     delete from public.postpone_requests
     where student_id = v_student_id;
   end if;
 
-  -- Retire old sessions instead of deleting them. Attendance history keeps a
-  -- valid session target, while active reads exclude archived_at rows.
   update public.sessions
   set archived_at = now(), updated_at = now()
   where student_id = v_student_id
@@ -135,7 +128,6 @@ begin
 end;
 $function$;
 
--- The bundle RPC is server-only; the Netlify server uses service_role.
 revoke execute on function public.save_student_bundle(jsonb, jsonb, jsonb, boolean, timestamptz)
   from public, anon, authenticated;
 grant execute on function public.save_student_bundle(jsonb, jsonb, jsonb, boolean, timestamptz)

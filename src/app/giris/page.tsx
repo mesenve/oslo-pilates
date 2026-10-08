@@ -54,7 +54,7 @@ export default function GirisPage() {
 function GirisForm() {
   const searchParams = useSearchParams();
   const router = useRouter();
-  const { loginStaff, loginStudent, user, ready } = useStudio();
+  const { loginStaff, loginStudent, user, ready, sessionChecked } = useStudio();
   const initialPortal: PortalRole =
     searchParams.get("rol") === "admin" ? "staff" : "student";
   const [portal, setPortal] = useState<PortalRole>(initialPortal);
@@ -89,7 +89,7 @@ function GirisForm() {
   }, [portal]);
 
   useEffect(() => {
-    if (!ready || !user) return;
+    if (!ready || !sessionChecked || !user || pendingLogin) return;
 
     if (user.role === "student") {
       router.replace("/ogrenci");
@@ -98,10 +98,10 @@ function GirisForm() {
     if (isStaffRole(user.role)) {
       router.replace(adminHomeFor(user));
     }
-  }, [ready, router, user]);
+  }, [pendingLogin, ready, router, sessionChecked, user]);
 
   useEffect(() => {
-    if (!ready || !user || !pendingLogin) return;
+    if (!ready || !sessionChecked || !user || !pendingLogin) return;
 
     if (portal === "student") {
       if (user.role === "student") {
@@ -124,7 +124,7 @@ function GirisForm() {
 
     setPendingLogin(false);
     setError("Admin girişi yapılamadı. Sayfayı yenileyip tekrar dene.");
-  }, [email, pendingLogin, portal, ready, router, user]);
+  }, [email, pendingLogin, portal, ready, router, sessionChecked, user]);
 
   function nextPortalEmail(nextPortal: PortalRole, saved: RememberData) {
     if (!saved.remember) return "";
@@ -155,6 +155,7 @@ function GirisForm() {
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
+    if (!sessionChecked || pendingLogin) return;
     setError(null);
     setPendingLogin(true);
 
@@ -287,8 +288,16 @@ function GirisForm() {
               Beni hatırla
             </label>
             {error ? <p className="text-sm text-red-700">{error}</p> : null}
-            <Button type="submit" className="w-full" disabled={pendingLogin}>
-              {pendingLogin ? "Giriş yapılıyor…" : "Giriş yap"}
+            <Button
+              type="submit"
+              className="w-full"
+              disabled={pendingLogin || !sessionChecked}
+            >
+              {pendingLogin
+                ? "Giriş yapılıyor…"
+                : !sessionChecked
+                  ? "Yükleniyor…"
+                  : "Giriş yap"}
             </Button>
           </form>
         </Card>

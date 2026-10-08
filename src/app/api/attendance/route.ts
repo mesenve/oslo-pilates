@@ -7,10 +7,12 @@ import {
   readSupabaseStudioData,
   patchSupabaseSessionStatuses,
 } from "@/lib/server/supabase-rest";
+import { syncRemainingSessions } from "@/lib/server/remaining-sessions";
 import { canManageStudent } from "@/lib/access";
 import { todayISO } from "@/lib/dates";
 import { NextResponse } from "next/server";
 import { getSessionUser } from "@/lib/server/session";
+import type { Student } from "@/types/studio";
 
 function isAttendanceMarkStatus(value: string): value is AttendanceMarkStatus {
   return value === "attend_pending" || value === "attended" || value === "upcoming";
@@ -102,7 +104,7 @@ export async function POST(request: Request) {
   }
 
   const data = await readSupabaseStudioData() as {
-    students?: Array<{ id: string; instructorId: string }>;
+    students?: Array<Pick<Student, "id" | "instructorId" | "package">>;
     sessions?: Array<{ id: string; studentId: string; date: string; groupId: string; status: string }>;
   } | null;
   const sessions = inputMarks.map((mark) => data?.sessions?.find((item) => item.id === mark.sessionId));
@@ -149,6 +151,15 @@ export async function POST(request: Request) {
       canonicalMarks.map((mark) => mark.sessionId),
       canonicalMarks[0].status,
     );
+    const touchedStudentIds = [...new Set(canonicalMarks.map((mark) => mark.studentId))];
+    for (const studentId of touchedStudentIds) {
+      const student = data?.students?.find((item) => item.id === studentId);
+      if (!student) continue;
+      const studentOverrides = canonicalMarks
+        .filter((mark) => mark.studentId === studentId)
+        .map((mark) => ({ sessionId: mark.sessionId, status: mark.status }));
+      await syncRemainingSessions(student, data?.sessions ?? [], studentOverrides);
+    }
     return NextResponse.json({ ok: true, marks });
   } catch (error) {
     console.error("Attendance save failed:", error);

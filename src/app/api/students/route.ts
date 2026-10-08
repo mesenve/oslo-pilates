@@ -7,6 +7,7 @@ import {
   readSupabaseStudioData,
   saveSupabaseStudentBundle,
 } from "@/lib/server/supabase-rest";
+import { syncInviteStudentProfile } from "@/lib/server/invite-store";
 import { getSessionUser } from "@/lib/server/session";
 import type { ClassGroup, DayOfWeek, Session, Student } from "@/types/studio";
 import { NextResponse } from "next/server";
@@ -216,8 +217,11 @@ export async function POST(request: Request) {
           : body.student.package.remainingSessions,
     },
     email,
+    // A real package-period change clears any sticky pending renewal request.
     renewalRequest: existing
-      ? existing.renewalRequest
+      ? periodChanged
+        ? undefined
+        : existing.renewalRequest
       : body.student.renewalRequest,
     postponeLessonUsed:
       existing && !periodChanged
@@ -268,7 +272,13 @@ export async function POST(request: Request) {
   // current optimistic-lock token instead of the pre-save timestamp.
   const refreshed = await readSupabaseStudioData();
   const persistedStudent = findStudent(body.student.id, refreshed.students, refreshed.archivedStudents);
-  return NextResponse.json({ ok: true, student: persistedStudent ?? studentToSave });
+  const forInvite = persistedStudent ?? studentToSave;
+  try {
+    await syncInviteStudentProfile(forInvite);
+  } catch (error) {
+    console.error("Invite profile sync failed:", error);
+  }
+  return NextResponse.json({ ok: true, student: forInvite });
 }
 
 export async function PATCH(request: Request) {

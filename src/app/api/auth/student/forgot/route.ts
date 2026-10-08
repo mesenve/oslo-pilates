@@ -1,6 +1,10 @@
 import { sendPasswordResetEmail } from "@/lib/email";
 import { getStaffByEmail } from "@/data/staff";
-import { findActivatedInviteByEmail } from "@/lib/server/invite-store";
+import {
+  findActivatedInviteByEmail,
+  getInviteByStudentId,
+} from "@/lib/server/invite-store";
+import { readSupabaseStudioData } from "@/lib/server/supabase-rest";
 import {
   createPasswordResetToken,
   passwordResetUrl,
@@ -33,16 +37,24 @@ export async function POST(request: Request) {
     const origin = new URL(request.url).origin;
     const appOrigin = process.env.NEXT_PUBLIC_APP_URL || origin;
 
-    const invite = await findActivatedInviteByEmail(email);
-    if (invite?.password) {
+    const normalized = email.toLowerCase();
+    const studio = await readSupabaseStudioData();
+    const liveStudent = studio.students.find(
+      (item) => item.email.trim().toLowerCase() === normalized,
+    );
+    const invite = liveStudent
+      ? await getInviteByStudentId(liveStudent.id)
+      : await findActivatedInviteByEmail(email);
+    const account = liveStudent ?? invite?.student;
+    if (invite?.password && invite.activatedAt && account) {
       const token = await createPasswordResetToken(
         "student",
-        invite.student.id,
-        invite.student.email,
+        account.id,
+        account.email,
       );
       const resetUrl = passwordResetUrl(token, appOrigin);
       const sent = await sendPasswordResetEmail(
-        { name: invite.student.name, email: invite.student.email },
+        { name: account.name, email: account.email },
         resetUrl,
       );
       if (!sent.ok) {

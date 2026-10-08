@@ -2,7 +2,6 @@ import {
   applyStudentPostponeRpc,
   isSupabaseConfigured,
   patchSupabaseAttendanceStatus,
-  patchSupabaseStudentPackage,
   readSupabaseStudioData,
   patchSupabasePostponeStatus,
   reviewStudentPostponeRpc,
@@ -10,6 +9,7 @@ import {
   upsertSupabaseSessionStatus,
   withdrawStudentPostponeRpc,
 } from "@/lib/server/supabase-rest";
+import { syncRemainingSessions } from "@/lib/server/remaining-sessions";
 import { getSessionUser } from "@/lib/server/session";
 import { todayISO } from "@/lib/dates";
 import { remainingPostponeRights, sessionTimeForStudent } from "@/data/accessors";
@@ -18,31 +18,6 @@ import type { Student, StudioState } from "@/types/studio";
 import { NextResponse } from "next/server";
 
 const allowedStatuses = new Set(["attended", "postponed", "missed", "upcoming", "postpone_pending"]);
-
-async function syncRemainingSessions(
-  student: {
-    id: string;
-    package?: { totalSessions?: number; startDate?: string; endDate?: string };
-  },
-  sessions: Array<{ id: string; studentId: string; date: string; status: string }>,
-  changedSessionId: string,
-  changedStatus: string,
-) {
-  const totalSessions = Number(student.package?.totalSessions);
-  const startDate = student.package?.startDate;
-  const endDate = student.package?.endDate;
-  if (!Number.isFinite(totalSessions) || !startDate || !endDate) return;
-  const consumed = sessions.filter((item) => {
-    if (item.studentId !== student.id || item.date < startDate || item.date > endDate) {
-      return false;
-    }
-    const status = item.id === changedSessionId ? changedStatus : item.status;
-    return status === "attended" || status === "missed";
-  }).length;
-  await patchSupabaseStudentPackage(student.id, {
-    remainingSessions: Math.max(0, totalSessions - consumed),
-  });
-}
 
 export async function POST(request: Request) {
   const user = await getSessionUser();
@@ -179,7 +154,9 @@ export async function POST(request: Request) {
     if (body.status === "upcoming") {
       await patchSupabaseAttendanceStatus(session.id, "upcoming");
     }
-    await syncRemainingSessions(student, data.sessions ?? [], session.id, body.status);
+    await syncRemainingSessions(student, data.sessions ?? [], [
+      { sessionId: session.id, status: body.status },
+    ]);
     return NextResponse.json({ ok: true });
   }
 
@@ -199,7 +176,9 @@ export async function POST(request: Request) {
     } else {
       await patchSupabaseAttendanceStatus(session.id, "upcoming");
     }
-    await syncRemainingSessions(student, data.sessions ?? [], session.id, body.status);
+    await syncRemainingSessions(student, data.sessions ?? [], [
+      { sessionId: session.id, status: body.status },
+    ]);
     return NextResponse.json({ ok: true });
   }
 
@@ -207,7 +186,9 @@ export async function POST(request: Request) {
   if (body.status === "postponed" && !pendingPostpone && activePostpone) {
     await upsertSupabaseSessionStatus(session.id, "postponed");
     await patchSupabaseAttendanceStatus(session.id, "upcoming");
-    await syncRemainingSessions(student, data.sessions ?? [], session.id, body.status);
+    await syncRemainingSessions(student, data.sessions ?? [], [
+      { sessionId: session.id, status: body.status },
+    ]);
     return NextResponse.json({ ok: true, request: activePostpone });
   }
   if (
@@ -224,7 +205,9 @@ export async function POST(request: Request) {
     // create a mark when none exists; only close an existing one.
     await patchSupabaseAttendanceStatus(session.id, "upcoming");
   }
-  await syncRemainingSessions(student, data.sessions ?? [], session.id, body.status);
+  await syncRemainingSessions(student, data.sessions ?? [], [
+      { sessionId: session.id, status: body.status },
+    ]);
   if (body.status === "postponed" && !pendingPostpone) {
     const createdAt = new Date().toISOString();
     const request = {

@@ -129,6 +129,39 @@ export async function findActivatedInviteByEmail(email: string) {
   return row ? fromSupabaseRow(row) : null;
 }
 
+/** Keep invite.student JSON aligned with the live students row (email/name/phone). */
+export async function syncInviteStudentProfile(student: Student) {
+  requireSupabase();
+  const invite = await getInviteByStudentId(student.id);
+  if (!invite) return;
+  const nextStudent: Student = {
+    ...invite.student,
+    name: student.name,
+    email: student.email,
+    phone: student.phone,
+    accountStatus: student.accountStatus,
+  };
+  if (
+    nextStudent.name === invite.student.name &&
+    nextStudent.email === invite.student.email &&
+    nextStudent.phone === invite.student.phone &&
+    nextStudent.accountStatus === invite.student.accountStatus
+  ) {
+    return;
+  }
+  await saveSupabaseInvite({
+    token: invite.token,
+    student_id: student.id,
+    student: nextStudent,
+    sessions: invite.sessions,
+    expires_at: invite.expiresAt,
+    password: invite.password ?? null,
+    activated_at: invite.activatedAt ?? null,
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  });
+}
+
 export async function listActivatedInvites() {
   requireSupabase();
   return (await listSupabaseInvites())
