@@ -143,6 +143,7 @@ function ProgramSessionRow({
   postponeHint,
   postponeNote,
   onAttend,
+  onWithdrawAttendance,
   onPostpone,
   onWithdrawPostpone,
 }: ComponentProps<typeof SessionRow>) {
@@ -167,6 +168,7 @@ function ProgramSessionRow({
       postponeHint={hint}
       postponeNote={postponeNote}
       onAttend={onAttend}
+      onWithdrawAttendance={onWithdrawAttendance}
       onPostpone={onPostpone}
       onWithdrawPostpone={onWithdrawPostpone}
     />

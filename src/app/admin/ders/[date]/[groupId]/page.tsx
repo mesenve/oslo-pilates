@@ -5,7 +5,7 @@ import { Button, Card, EmptyState, SessionBadge } from "@/components/ui";
 import { useStudio } from "@/components/studio-provider";
 import { effectiveSessionStatus, studentName } from "@/data/accessors";
 import { getClassGroupById } from "@/data/groups";
-import { formatLongDate } from "@/lib/dates";
+import { formatLongDate, todayISO } from "@/lib/dates";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useState } from "react";
@@ -106,6 +106,9 @@ export default function InstructorLessonPage() {
                   <p className="text-sm text-amber-800">
                     Öğrenci Geldim işaretledi.
                   </p>
+                ) : null}
+                {session.status === "upcoming" && session.date < todayISO() ? (
+                  <p className="text-sm text-muted">Yoklama henüz girilmedi.</p>
                 ) : null}
                 {pendingPostpone ? (
                   <p className="text-sm text-amber-800">

@@ -64,6 +64,7 @@ export default function StudentDetailPage() {
     remainingFor,
     visiblePostponeRequests,
     approveRequest,
+    rejectRequest,
     markSessionByInstructor,
     setPostponeLessonUsed,
     setPostponeLessonNote,
@@ -543,6 +544,9 @@ export default function StudentDetailPage() {
               {status === "missed" ? (
                 <p className="text-sm text-rose-700">Bu ders yanmış.</p>
               ) : null}
+              {session.status === "upcoming" && session.date < today ? (
+                <p className="text-sm text-muted">Yoklama henüz girilmedi.</p>
+              ) : null}
               {status === "attend_pending" ? (
                 <p className="text-sm text-amber-800">
                   Geldim işaretledi. Grup onayı bekleniyor.
@@ -636,24 +640,45 @@ export default function StudentDetailPage() {
               onSave={(reason) => setPostponeRequestReason(postponeCard.id, reason)}
             />
             {postponeCard.status === "pending" ? (
-              <Button
-                disabled={approvingId === postponeCard.id}
-                onClick={() => {
-                  if (approvingId) return;
-                  setActionError(null);
-                  setApprovingId(postponeCard.id);
-                  void approveRequest(postponeCard.id)
-                    .then((ok) => {
-                      if (!ok) setActionError("Talep onaylanamadı. Tekrar dene.");
-                    })
-                    .catch(() => {
-                      setActionError("Talep onaylanamadı. Tekrar dene.");
-                    })
-                    .finally(() => setApprovingId(null));
-                }}
-              >
-                {approvingId === postponeCard.id ? "Onaylanıyor…" : "Onayla"}
-              </Button>
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  disabled={approvingId === postponeCard.id}
+                  onClick={() => {
+                    if (approvingId) return;
+                    setActionError(null);
+                    setApprovingId(postponeCard.id);
+                    void approveRequest(postponeCard.id)
+                      .then((ok) => {
+                        if (!ok) setActionError("Talep onaylanamadı. Tekrar dene.");
+                      })
+                      .catch(() => {
+                        setActionError("Talep onaylanamadı. Tekrar dene.");
+                      })
+                      .finally(() => setApprovingId(null));
+                  }}
+                >
+                  {approvingId === postponeCard.id ? "İşleniyor…" : "Onayla"}
+                </Button>
+                <Button
+                  variant="secondary"
+                  disabled={approvingId === postponeCard.id}
+                  onClick={() => {
+                    if (approvingId) return;
+                    setActionError(null);
+                    setApprovingId(postponeCard.id);
+                    void rejectRequest(postponeCard.id)
+                      .then((ok) => {
+                        if (!ok) setActionError("Talep reddedilemedi. Tekrar dene.");
+                      })
+                      .catch(() => {
+                        setActionError("Talep reddedilemedi. Tekrar dene.");
+                      })
+                      .finally(() => setApprovingId(null));
+                  }}
+                >
+                  Reddet
+                </Button>
+              </div>
             ) : null}
             {postponeCard.actedAt ? (
               <p className="text-xs text-muted">

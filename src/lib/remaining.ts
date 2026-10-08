@@ -10,11 +10,11 @@ export function countRemainingSessions(
 ) {
   const consumed = sessions.filter((session) => {
     if (session.status === "attended" || session.status === "missed") return true;
+    // Past unmarked / stale Geldim: not shown as Yandı, but not still available.
+    // Past postpone_pending keeps the seat until the studio acts (approve → postponed).
     if (
       session.date < today &&
-      (session.status === "upcoming" ||
-        session.status === "postpone_pending" ||
-        session.status === "attend_pending")
+      (session.status === "upcoming" || session.status === "attend_pending")
     ) {
       return true;
     }

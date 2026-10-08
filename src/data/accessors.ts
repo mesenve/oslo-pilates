@@ -93,9 +93,8 @@ export function effectiveSessionStatus(session: Session): SessionStatus {
   ) {
     return "upcoming";
   }
-  if (session.status === "upcoming" && session.date < todayISO()) {
-    return "missed";
-  }
+  // Past unmarked stays "upcoming" for both student and admin — studio marks
+  // Yandı explicitly. Do not auto-promote to missed in the UI layer.
   return session.status;
 }
 

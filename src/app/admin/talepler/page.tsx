@@ -10,18 +10,47 @@ import { postponeRightAdminLabel } from "@/lib/labels";
 import { useState } from "react";
 
 export default function RequestsPage() {
-  const { visiblePostponeRequests, visibleSessions, visibleStudents, approveRequest } =
-    useStudio();
+  const {
+    visiblePostponeRequests,
+    visibleSessions,
+    visibleStudents,
+    approveRequest,
+    rejectRequest,
+  } = useStudio();
   const visibleRequests = visiblePostponeRequests;
-  const [approvingId, setApprovingId] = useState<string | null>(null);
+  const [actingId, setActingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  async function act(requestId: string, action: "approve" | "reject") {
+    if (actingId) return;
+    setError(null);
+    setActingId(requestId);
+    try {
+      const ok = await (action === "approve" ? approveRequest : rejectRequest)(requestId);
+      if (!ok) {
+        setError(
+          action === "approve"
+            ? "Talep onaylanamadı. Tekrar dene."
+            : "Talep reddedilemedi. Tekrar dene.",
+        );
+      }
+    } catch {
+      setError(
+        action === "approve"
+          ? "Talep onaylanamadı. Tekrar dene."
+          : "Talep reddedilemedi. Tekrar dene.",
+      );
+    } finally {
+      setActingId(null);
+    }
+  }
 
   return (
     <div className="space-y-8">
       <header>
         <h1 className="font-serif text-3xl">Talepler</h1>
         <p className="mt-1 text-sm text-muted">
-          Öğrenci paket başına hakkıyla talep gönderir; sen onaylarsın.
+          Öğrenci paket başına hakkıyla talep gönderir; sen onaylar veya reddedersin.
         </p>
       </header>
 
@@ -89,26 +118,19 @@ export default function RequestsPage() {
                   <RequestBadge status={request.status} />
                 </div>
                 {pending ? (
-                  <div className="mt-4">
+                  <div className="mt-4 flex flex-wrap gap-2">
                     <Button
-                      disabled={approvingId === request.id}
-                      onClick={() => {
-                        if (approvingId) return;
-                        setError(null);
-                        setApprovingId(request.id);
-                        void approveRequest(request.id)
-                          .then((ok) => {
-                            if (!ok) {
-                              setError("Talep onaylanamadı. Tekrar dene.");
-                            }
-                          })
-                          .catch(() => {
-                            setError("Talep onaylanamadı. Tekrar dene.");
-                          })
-                          .finally(() => setApprovingId(null));
-                      }}
+                      disabled={actingId === request.id}
+                      onClick={() => void act(request.id, "approve")}
                     >
-                      {approvingId === request.id ? "Onaylanıyor…" : "Onayla"}
+                      {actingId === request.id ? "İşleniyor…" : "Onayla"}
+                    </Button>
+                    <Button
+                      variant="secondary"
+                      disabled={actingId === request.id}
+                      onClick={() => void act(request.id, "reject")}
+                    >
+                      Reddet
                     </Button>
                   </div>
                 ) : null}

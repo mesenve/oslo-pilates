@@ -16,7 +16,9 @@ export function LastWeekCta({
   onRequestRenewal: (date?: string) => Promise<{ error: string | null }>;
 }) {
   const [date, setDate] = useState("");
-  const [status, setStatus] = useState<"idle" | "sending" | "sent" | "error">("idle");
+  const [status, setStatus] = useState<"idle" | "sending" | "sent" | "applied" | "error">(
+    "idle",
+  );
   const [error, setError] = useState<string | null>(null);
   const request = student.renewalRequest;
   const pending = request?.status === "pending";
@@ -29,6 +31,7 @@ export function LastWeekCta({
   const stuckScheduled = Boolean(scheduledStart && scheduledStart <= todayISO());
 
   async function submit() {
+    const retryingStuck = stuckScheduled;
     setStatus("sending");
     setError(null);
     const result = await onRequestRenewal(date || undefined);
@@ -37,7 +40,7 @@ export function LastWeekCta({
       setStatus("error");
       return;
     }
-    setStatus("sent");
+    setStatus(retryingStuck ? "applied" : "sent");
   }
 
   return (
@@ -51,7 +54,11 @@ export function LastWeekCta({
       <p className="mt-1 text-xs text-white/80">
         Ders programınızın kesintisiz devamı için yenileme talebinizi iletmek ister misiniz?
       </p>
-      {pending || (status === "sent" && !stuckScheduled) ? (
+      {status === "applied" ? (
+        <p className="mt-3 rounded-xl bg-white/15 px-3 py-2 text-sm">
+          Yeni paketiniz başlatıldı. Programınız güncellendi.
+        </p>
+      ) : pending || status === "sent" ? (
         <p className="mt-3 rounded-xl bg-white/15 px-3 py-2 text-sm">
           Yenileme talebiniz öğretmeninize iletildi.
         </p>

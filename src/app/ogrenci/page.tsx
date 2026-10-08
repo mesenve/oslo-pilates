@@ -244,7 +244,7 @@ export default function StudentHomePage() {
                     ) : null}
                   </div>
                 ) : null}
-                {selectedStatus === "attend_pending" ? (
+                {selectedStatus === "attend_pending" && selectedDate === today ? (
                   <div className="mt-3 flex flex-wrap gap-2">
                     <Button
                       variant="ghost"
@@ -268,6 +268,11 @@ export default function StudentHomePage() {
                       {attending ? "Geri alınıyor…" : "Geldim’i geri al"}
                     </Button>
                   </div>
+                ) : null}
+                {selectedStatus === "attend_pending" && selectedDate < today ? (
+                  <p className="mt-3 text-sm text-muted">
+                    Geldim işaretin hoca onayı bekliyor.
+                  </p>
                 ) : null}
                 {hasPendingPostpone ? (
                   <div className="mt-3 flex flex-wrap gap-2">

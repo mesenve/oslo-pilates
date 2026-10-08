@@ -108,6 +108,7 @@ type StudioContextValue = {
   requestRenewal: (requestedStartDate?: string) => Promise<{ error: string | null }>;
   reviewRenewal: (studentId: string, status: "approved" | "rejected") => Promise<{ error: string | null }>;
   approveRequest: (requestId: string) => Promise<boolean>;
+  rejectRequest: (requestId: string) => Promise<boolean>;
   markSessionByInstructor: (
     sessionId: string,
     outcome: "attended" | "postponed" | "missed" | "upcoming",
@@ -811,6 +812,35 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
     return true;
   }, []);
 
+  const rejectRequest = useCallback(async (requestId: string) => {
+    const current = getStudioState();
+    const request = current.postponeRequests.find((item) => item.id === requestId);
+    if (!request || request.status !== "pending" || !canManageStudent(current.user, request.studentId, current.students)) {
+      return false;
+    }
+    const response = await fetch("/api/sessions/status", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ sessionId: request.sessionId, status: "upcoming" }),
+    });
+    if (!response.ok) return false;
+    setStudioState((state) => ({
+      ...state,
+      postponeRequests: state.postponeRequests.map((item) =>
+        item.id === requestId
+          ? { ...item, status: "rejected", actedAt: new Date().toISOString(), actedBy: current.user?.id }
+          : item,
+      ),
+      sessions: state.sessions.map((session) =>
+        session.id === request.sessionId &&
+        (session.status === "postpone_pending" || session.status === "upcoming")
+          ? { ...session, status: "upcoming" }
+          : session,
+      ),
+    }));
+    return true;
+  }, []);
+
   const markSessionByInstructor = useCallback(
     async (
       sessionId: string,
@@ -915,15 +945,14 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
           ...current,
           sessions: current.sessions.map((item) => {
             if (item.id === sessionId) return { ...item, status: "postponed" };
-            if (
-              item.studentId === session.studentId &&
-              current.postponeRequests.some(
-                (request) =>
-                  request.sessionId === item.id &&
-                  request.studentId === session.studentId &&
-                  request.status !== "rejected",
-              )
-            ) {
+            // Only reopen sessions waiting on a pending request — keep prior postponed lessons.
+            const pendingOther = current.postponeRequests.find(
+              (request) =>
+                request.sessionId === item.id &&
+                request.studentId === session.studentId &&
+                request.status === "pending",
+            );
+            if (pendingOther && item.status === "postpone_pending") {
               return { ...item, status: "upcoming" };
             }
             return item;
@@ -1408,6 +1437,7 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
       requestRenewal,
       reviewRenewal,
       approveRequest,
+      rejectRequest,
       markSessionByInstructor,
       setPostponeLessonUsed,
       setPostponeLessonNote,
@@ -1423,6 +1453,7 @@ export function StudioProvider({ children }: { children: React.ReactNode }) {
     [
       addStudent,
       approveRequest,
+      rejectRequest,
       archiveStudent,
       changeStaffPassword,
       loginAs,

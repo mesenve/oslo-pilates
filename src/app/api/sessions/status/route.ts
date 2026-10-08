@@ -228,7 +228,8 @@ export async function POST(request: Request) {
       status: "approved" as const,
       createdAt,
     };
-    // Paket başına tek aktif erteleme: eski onaylı/pending talepleri kapat.
+    // Paket başına tek aktif erteleme hakkı: diğer talepleri kapat.
+    // Already-postponed lessons must stay postponed — only reopen pending waits.
     const otherActive = (data.postponeRequests ?? []).filter(
       (item) =>
         item.studentId === student.id &&
@@ -237,7 +238,12 @@ export async function POST(request: Request) {
     );
     for (const item of otherActive) {
       await patchSupabasePostponeStatus(item.id, "rejected");
-      await upsertSupabaseSessionStatus(item.sessionId, "upcoming");
+      if (item.status === "pending") {
+        const otherSession = data.sessions?.find((row) => row.id === item.sessionId);
+        if (otherSession?.status === "postpone_pending") {
+          await upsertSupabaseSessionStatus(item.sessionId, "upcoming");
+        }
+      }
     }
     await upsertSupabasePostponeRequest({
       id: request.id,

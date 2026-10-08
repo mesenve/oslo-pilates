@@ -76,11 +76,6 @@ export default function ProfilePage() {
             <Field label="Erteleme notu" value={postponeNote} />
           </div>
         ) : null}
-        {student.note?.trim() ? (
-          <div className="sm:col-span-2">
-            <Field label="Not" value={student.note} />
-          </div>
-        ) : null}
       </Card>
 
       <section>
