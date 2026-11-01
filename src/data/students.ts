@@ -12,7 +12,7 @@ export const DEMO_ACCOUNTS = {
   student: { email: "merve@oslo", password: "pilates" },
   super_admin: { email: "ecenazkara@hotmail.com", password: "ece123" },
   instructor_elif: { email: "elifbeytas86@gmail.com", password: "elif123" },
-  instructor_delfin: { email: "21141025@lhu.edu.tr", password: "delfin123" },
+  instructor_ayse: { email: "ayse_1114@icloud.com", password: "ayse123" },
 } as const;
 
 export function getStudents(): Student[] {
@@ -64,7 +64,7 @@ const FEATURED: Student[] = [
     email: "merve@oslo",
     phone: "0532 111 22 33",
     groupId: "pzt-car-cum-1000",
-    instructorId: "staff-delfin",
+    instructorId: "staff-ayse",
     packageType: "duet_2",
     note: "Son haftası. Paket uzatma konuşulacak.",
     measurements: {
@@ -118,7 +118,7 @@ const FEATURED: Student[] = [
     email: "deniz@oslo",
     phone: "0534 333 44 55",
     groupId: "sal-per-1800",
-    instructorId: "staff-delfin",
+    instructorId: "staff-ayse",
     packageType: "duet_2",
     note: "Ödeme gecikmesi hatırlatılacak.",
     measurements: {
@@ -241,7 +241,7 @@ function dummyStudent(name: string, index: number): Student {
     email: `${first}@oslo`,
     phone: `053${2 + (index % 8)} ${String(500 + index).padStart(3, "0")} ${String(10 + index).padStart(2, "0")} ${String(20 + index).padStart(2, "0")}`,
     groupId,
-    instructorId: index % 2 === 0 ? "staff-elif" : "staff-delfin",
+    instructorId: index % 2 === 0 ? "staff-elif" : "staff-ayse",
     packageType: inferPackageType(groupId),
     note: NOTES[index % NOTES.length],
     measurements: {

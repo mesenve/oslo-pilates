@@ -3,7 +3,7 @@ import { DEMO_ACCOUNTS } from "@/data/students";
 export const DEFAULT_STAFF_PASSWORDS: Record<string, string> = {
   "staff-ece": DEMO_ACCOUNTS.super_admin.password,
   "staff-elif": DEMO_ACCOUNTS.instructor_elif.password,
-  "staff-delfin": DEMO_ACCOUNTS.instructor_delfin.password,
+  "staff-ayse": DEMO_ACCOUNTS.instructor_ayse.password,
 };
 
 export function getStaffPassword(

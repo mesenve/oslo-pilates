@@ -1,3 +1,4 @@
+import { isSharedInstructorId } from "@/data/staff";
 import type {
   AuthUser,
   PostponeRequest,
@@ -7,17 +8,15 @@ import type {
   StudioState,
 } from "@/types/studio";
 
-const SHARED_INSTRUCTOR_IDS = new Set(["staff-delfin", "staff-elif"]);
-
 export function isStudentAssignedToInstructor(
-  student: Student,
+  student: Pick<Student, "instructorId">,
   instructorId: string,
 ) {
   if (student.instructorId === instructorId) return true;
 
   return (
-    SHARED_INSTRUCTOR_IDS.has(student.instructorId) &&
-    SHARED_INSTRUCTOR_IDS.has(instructorId)
+    isSharedInstructorId(student.instructorId) &&
+    isSharedInstructorId(instructorId)
   );
 }
 

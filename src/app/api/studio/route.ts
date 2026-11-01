@@ -1,3 +1,4 @@
+import { studentsForUser } from "@/lib/access";
 import {
   isSupabaseConfigured,
   readSupabaseStudioData,
@@ -23,18 +24,7 @@ export async function GET() {
   if (await applyDueRenewals(data)) data = await readSupabaseStudioData();
 
   const visibleStudentIds = new Set(
-    user.role === "super_admin"
-      ? data.students.map((student) => student.id)
-      : user.role === "student"
-        ? [user.id]
-        : data.students
-            .filter(
-              (student) =>
-                student.instructorId === user.id ||
-                (["staff-delfin", "staff-elif"].includes(student.instructorId) &&
-                  ["staff-delfin", "staff-elif"].includes(user.id)),
-            )
-            .map((student) => student.id),
+    studentsForUser(user, data.students).map((student) => student.id),
   );
 
   return NextResponse.json({

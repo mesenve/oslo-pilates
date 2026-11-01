@@ -8,7 +8,7 @@ import {
   patchSupabaseSessionStatuses,
 } from "@/lib/server/supabase-rest";
 import { syncRemainingSessions } from "@/lib/server/remaining-sessions";
-import { canManageStudent } from "@/lib/access";
+import { canManageStudent, isStudentAssignedToInstructor } from "@/lib/access";
 import { todayISO } from "@/lib/dates";
 import { NextResponse } from "next/server";
 import { getSessionUser } from "@/lib/server/session";
@@ -111,16 +111,13 @@ export async function POST(request: Request) {
   const sessionStudents = sessions.map((session) =>
     data?.students?.find((item) => item.id === session?.studentId),
   );
-  const sharedPair = ["staff-delfin", "staff-elif"];
   const managed = sessions.every((session, index) => {
     const sessionStudent = sessionStudents[index];
     return Boolean(
       session &&
         sessionStudent &&
         (user.role === "super_admin" ||
-          sessionStudent.instructorId === user.id ||
-          (sharedPair.includes(sessionStudent.instructorId) &&
-            sharedPair.includes(user.id))),
+          isStudentAssignedToInstructor(sessionStudent, user.id)),
     );
   });
   if (user.role === "student") {

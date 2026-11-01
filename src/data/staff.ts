@@ -3,6 +3,9 @@ import type { StaffUser } from "@/types/studio";
 /** Tek süper admin hesabı — e-posta ile girişte rol buradan gelir. */
 export const SUPER_ADMIN_EMAIL = "ecenazkara@hotmail.com";
 
+/** Ortak çalışan eğitmen çifti — ikisi de birbirinin öğrencilerini yönetir. */
+export const SHARED_INSTRUCTOR_IDS = ["staff-elif", "staff-ayse"] as const;
+
 export const STAFF: StaffUser[] = [
   {
     id: "staff-ece",
@@ -17,20 +20,24 @@ export const STAFF: StaffUser[] = [
     role: "instructor",
   },
   {
-    id: "staff-delfin",
-    name: "Delfin",
-    email: "21141025@lhu.edu.tr",
+    id: "staff-ayse",
+    name: "Ayşe",
+    email: "ayse_1114@icloud.com",
     role: "instructor",
   },
 ];
+
+export function isSharedInstructorId(id: string) {
+  return (SHARED_INSTRUCTOR_IDS as readonly string[]).includes(id);
+}
 
 export function getStaffById(id: string): StaffUser | undefined {
   return STAFF.find((member) => member.id === id);
 }
 
 export function instructorLabelForId(id: string) {
-  if (id === "staff-delfin" || id === "staff-elif") {
-    return "Delfin & Elif";
+  if (isSharedInstructorId(id)) {
+    return "Elif & Ayşe";
   }
   return getStaffById(id)?.name ?? "—";
 }
@@ -40,7 +47,7 @@ export function getStaffByEmail(email: string): StaffUser | undefined {
   return STAFF.find((member) => member.email.toLowerCase() === normalized);
 }
 
-export function isSuperAdminEmail(email: string): boolean {
+export function isSuperAdminEmail(email: string) {
   return email.trim().toLowerCase() === SUPER_ADMIN_EMAIL.toLowerCase();
 }
 
@@ -53,4 +60,4 @@ export function getAssignableInstructors(): StaffUser[] {
   return [...STAFF].sort((a, b) => a.name.localeCompare(b.name, "tr"));
 }
 
-export const DEFAULT_INSTRUCTOR_ID = "staff-delfin";
+export const DEFAULT_INSTRUCTOR_ID = "staff-elif";

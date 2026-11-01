@@ -13,6 +13,7 @@ import { syncRemainingSessions } from "@/lib/server/remaining-sessions";
 import { getSessionUser } from "@/lib/server/session";
 import { todayISO } from "@/lib/dates";
 import { remainingPostponeRights, sessionTimeForStudent } from "@/data/accessors";
+import { isStudentAssignedToInstructor } from "@/lib/access";
 import { isAtLeast24HoursAway } from "@/lib/dates";
 import { INSTRUCTOR_POSTPONE_PLACEHOLDER } from "@/lib/postpone-note";
 import type { Student, StudioState } from "@/types/studio";
@@ -124,11 +125,9 @@ export async function POST(request: Request) {
     });
   }
 
-  const sharedPair = ["staff-delfin", "staff-elif"];
-  const allowed = user.role === "super_admin" || Boolean(student && (
-    student.instructorId === user.id ||
-    (sharedPair.includes(student.instructorId) && sharedPair.includes(user.id))
-  ));
+  const allowed =
+    user.role === "super_admin" ||
+    Boolean(student && isStudentAssignedToInstructor(student, user.id));
   if (!session || !student || !allowed || !data) {
     return NextResponse.json({ error: "Bu ders için yetkiniz yok." }, { status: 403 });
   }
